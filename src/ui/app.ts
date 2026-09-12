@@ -300,13 +300,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     row.className = `item${parts.className ? ` ${parts.className}` : ''}`;
     row.dataset.key = key;
     row.innerHTML = `
-      <span class="item-emoji" aria-hidden="true">${parts.emoji}</span>
-      <span class="item-body">
-        <span class="item-name">${parts.name}<span class="owned"></span></span>
-        <span class="item-desc">${parts.desc}</span>
-        <span class="item-cost"></span>
-      </span>
-      <span class="${parts.trailingClass ?? 'item-action'}" aria-hidden="true"></span>`;
+        <span class="item-emoji" aria-hidden="true">${parts.emoji}</span>
+        <span class="item-body">
+          <span class="item-name"><span class="item-name-label">${parts.name}</span><span class="owned"></span></span>
+          <span class="item-desc">${parts.desc}</span>
+          <span class="item-cost"></span>
+        </span>
+        <span class="${parts.trailingClass ?? 'item-action'}" aria-hidden="true"></span>`;
     if (parts.onClick) row.addEventListener('click', parts.onClick);
     return row;
   }

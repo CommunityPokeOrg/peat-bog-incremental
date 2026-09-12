@@ -316,8 +316,9 @@ kbd {
 }
 
 .item {
-  display: flex;
-  gap: 0.7rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.7rem;
   align-items: center;
   text-align: left;
   width: 100%;
@@ -329,6 +330,7 @@ kbd {
   color: var(--text);
   cursor: default;
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 button.item {
@@ -350,19 +352,30 @@ button.item:hover:not(:disabled) {
 }
 
 .item-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  display: grid;
+  min-width: 0;
+  row-gap: 0.15rem;
 }
 
 .item-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.5rem;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.item-name-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .owned {
   color: var(--coolant);
   font-family: var(--mono);
   font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
   min-width: 5ch;
   visibility: visible;
 }
@@ -370,28 +383,28 @@ button.item:hover:not(:disabled) {
 .item-desc {
   color: var(--text-dim);
   font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
 .item-cost {
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--moss-bright);
+  font-variant-numeric: tabular-nums;
   min-width: 12ch;
-}
-
-.item-body {
-  flex: 1;
 }
 
 .item-action {
   flex-shrink: 0;
   align-self: center;
+  justify-self: end;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--moss);
   color: var(--moss-bright);
   font-size: 0.75rem;
   font-weight: 600;
+  text-align: center;
   white-space: nowrap;
   min-width: 8ch;
 }
@@ -430,6 +443,7 @@ button.item:hover:not(:disabled) .item-action {
 
 .docket-badge {
   flex-shrink: 0;
+  justify-self: end;
   color: var(--text-dim);
   font-size: 0.75rem;
   white-space: nowrap;
@@ -451,6 +465,12 @@ button.item:hover:not(:disabled) .item-action {
   font-size: 0.85rem;
   text-align: center;
   padding: 2rem 1rem;
+}
+
+.owned-drawer,
+.section-heading,
+.empty-note {
+  flex-shrink: 0;
 }
 
 .section-heading {
@@ -693,6 +713,17 @@ button.item:hover:not(:disabled) .item-action {
   }
   .tab-content {
     max-height: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .item-action {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

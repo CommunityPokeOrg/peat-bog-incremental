@@ -85,6 +85,29 @@ describe('UI list reconciliation', () => {
     expect(root.querySelector<HTMLButtonElement>('[data-key="dredger"]')).not.toBeNull();
   });
 
+  it('keeps large owned counts inside the item name structure', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const ui = createUi(root, {
+      onHarvest: () => {},
+      onPrestige: () => {},
+      onSaveNow: () => {},
+      onExport: () => '',
+      onImport: () => false,
+      onHardReset: () => {},
+    });
+    const state = createInitialState();
+    state.buildings.harvester = 12_345;
+    ui.renderLists(state);
+
+    const row = root.querySelector('[data-key="harvester"]')!;
+    const name = row.querySelector('.item-name')!;
+    const owned = row.querySelector('.owned')!;
+    expect(owned.textContent).toBe('×12345');
+    expect(name.textContent).toContain('Peat Harvester');
+    expect(name.contains(owned)).toBe(true);
+  });
+
   it('moves purchased upgrades into an owned drawer and preserves its open state', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
