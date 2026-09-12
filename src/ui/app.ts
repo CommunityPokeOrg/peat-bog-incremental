@@ -6,7 +6,6 @@ import {
   DOCKET,
   RESEARCH,
   UPGRADES,
-  type ResourceCost,
 } from '../game/data';
 import {
   bulkCost,
@@ -153,6 +152,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         b.setAttribute('aria-selected', String(b === btn)),
       );
       qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
+      forceRebuild = true;
       if (currentState) renderLists(currentState);
     });
   });
@@ -163,6 +163,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       root.querySelectorAll('#qty-selector [data-qty]').forEach((b) =>
         b.setAttribute('aria-pressed', String(b === btn)),
       );
+      forceRebuild = true;
       if (currentState) renderLists(currentState);
     });
   });
@@ -170,6 +171,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   prestigeBtn.addEventListener('click', () => hooks.onPrestige());
 
   let currentState: GameState | null = null;
+  let forceRebuild = true;
+  let renderedRows = new Map<string, HTMLElement>();
 
   function spawnFloat(amount: number): void {
     const el = document.createElement('span');
@@ -185,6 +188,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const owned = state.buildings[buildingId] ?? 0;
     if (buyQty === 'max') return Math.max(1, maxAffordable(def, owned, state));
     return buyQty;
+  }
+
+  function currentDocket(state: GameState) {
+    const id = DOCKET.find((itemId) => !state.achievements.includes(itemId));
+    return id ? ACHIEVEMENT_BY_ID[id] : undefined;
   }
 
   function renderCounters(state: GameState): void {
@@ -236,159 +244,278 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     );
   }
 
-  function itemRow(opts: {
+  interface RowStaticParts {
     emoji: string;
     name: string;
     desc: string;
-    cost: ResourceCost;
+    className?: string;
+    trailingClass?: string;
+    onClick?: () => void;
+  }
+
+  interface RowUpdate {
+    cost?: string;
     owned?: string;
     action?: string;
-    disabled: boolean;
-    label: string;
-    onBuy(): void;
-  }): HTMLButtonElement {
-    const btn = document.createElement('button');
-    btn.className = 'item';
-    btn.disabled = opts.disabled;
-    btn.setAttribute('aria-label', opts.label);
-    btn.innerHTML = `
-      <span class="item-emoji" aria-hidden="true">${opts.emoji}</span>
+    disabled?: boolean;
+    label?: string;
+    desc?: string;
+    emoji?: string;
+    status?: string;
+    badge?: string;
+  }
+
+  interface RowEntry {
+    key: string;
+    create(): HTMLElement;
+    update(row: HTMLElement): void;
+  }
+
+  function createRow(key: string, parts: RowStaticParts): HTMLElement {
+    const row = parts.onClick ? document.createElement('button') : document.createElement('div');
+    row.className = `item${parts.className ? ` ${parts.className}` : ''}`;
+    row.dataset.key = key;
+    row.innerHTML = `
+      <span class="item-emoji" aria-hidden="true">${parts.emoji}</span>
       <span class="item-body">
-        <span class="item-name">${opts.name}${opts.owned ? ` <span class="owned">${opts.owned}</span>` : ''}</span>
-        <span class="item-desc">${opts.desc}</span>
-        <span class="item-cost">${formatCost(opts.cost)}</span>
+        <span class="item-name">${parts.name}<span class="owned"></span></span>
+        <span class="item-desc">${parts.desc}</span>
+        <span class="item-cost"></span>
       </span>
-      ${opts.action ? `<span class="item-action" aria-hidden="true">${opts.action}</span>` : ''}`;
-    btn.addEventListener('click', opts.onBuy);
-    return btn;
+      <span class="${parts.trailingClass ?? 'item-action'}" aria-hidden="true"></span>`;
+    if (parts.onClick) row.addEventListener('click', parts.onClick);
+    return row;
+  }
+
+  function updateRow(row: HTMLElement, update: RowUpdate): void {
+    const button = row as HTMLButtonElement;
+    if (update.disabled !== undefined && button.disabled !== update.disabled) {
+      button.disabled = update.disabled;
+    }
+    if (update.label !== undefined && row.getAttribute('aria-label') !== update.label) {
+      row.setAttribute('aria-label', update.label);
+    }
+    const emoji = row.querySelector<HTMLElement>('.item-emoji');
+    if (emoji && update.emoji !== undefined && emoji.textContent !== update.emoji) {
+      emoji.textContent = update.emoji;
+    }
+    const desc = row.querySelector<HTMLElement>('.item-desc');
+    if (desc && update.desc !== undefined && desc.textContent !== update.desc) {
+      desc.textContent = update.desc;
+    }
+    const cost = row.querySelector<HTMLElement>('.item-cost');
+    const costText = update.cost ?? '';
+    if (cost && cost.textContent !== costText) cost.textContent = costText;
+    const owned = row.querySelector<HTMLElement>('.owned');
+    const ownedText = update.owned ?? '';
+    if (owned && owned.textContent !== ownedText) owned.textContent = ownedText;
+    const action = row.querySelector<HTMLElement>('.item-action, .docket-badge');
+    const actionText = update.action ?? update.badge ?? '';
+    if (action && action.textContent !== actionText) action.textContent = actionText;
+    if (update.status !== undefined && row.dataset.status !== update.status) {
+      for (const status of ['done', 'current', 'upcoming', 'locked', 'unlocked']) {
+        row.classList.remove(status);
+      }
+      row.classList.add(update.status);
+      row.dataset.status = update.status;
+    }
+  }
+
+  function reconcileRows(entries: RowEntry[]): void {
+    const keys = entries.map((entry) => entry.key);
+    const keySignature = keys.join('|');
+    const shouldRebuild =
+      forceRebuild ||
+      tabContent.dataset.tab !== activeTab ||
+      tabContent.dataset.keys !== keySignature;
+    if (shouldRebuild) {
+      const frag = document.createDocumentFragment();
+      renderedRows = new Map<string, HTMLElement>();
+      for (const entry of entries) {
+        const row = entry.create();
+        entry.update(row);
+        renderedRows.set(entry.key, row);
+        frag.appendChild(row);
+      }
+      tabContent.replaceChildren(frag);
+      tabContent.dataset.tab = activeTab;
+      tabContent.dataset.keys = keySignature;
+      forceRebuild = false;
+      return;
+    }
+    for (const entry of entries) {
+      const row = renderedRows.get(entry.key);
+      if (row) entry.update(row);
+    }
   }
 
   function renderBuildings(state: GameState): void {
-    const frag = document.createDocumentFragment();
-    for (const def of BUILDINGS) {
-      const owned = state.buildings[def.id] ?? 0;
-      const qty = effectiveQty(state, def.id);
-      const cost = bulkCost(def, owned, qty);
-      const perUnit: string[] = [];
-      if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
-      if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
-      if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
-      if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
-      frag.appendChild(
-        itemRow({
-          emoji: def.emoji,
-          name: def.name,
-          desc: `${def.description} ${perUnit.join(', ')}.`,
-          cost,
-          owned: `×${owned}`,
-          action: `Buy ×${qty}`,
-          disabled: !canAfford(state, cost),
-          label: `Buy ${qty} ${def.name} for ${formatCost(cost)}`,
-          onBuy: () => {
-            if (buyBuilding(state, def.id, qty)) renderLists(state);
-          },
-        }),
-      );
-    }
-    tabContent.replaceChildren(frag);
-  }
-
-  function currentDocket(state: GameState) {
-    const id = DOCKET.find((itemId) => !state.achievements.includes(itemId));
-    return id ? ACHIEVEMENT_BY_ID[id] : undefined;
+    const entries: RowEntry[] = BUILDINGS.map((def) => {
+      const desc = (): string => {
+        const perUnit: string[] = [];
+        if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
+        if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
+        if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
+        if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
+        return `${def.description} ${perUnit.join(', ')}.`;
+      };
+      return {
+        key: def.id,
+        create: () =>
+          createRow(def.id, {
+            emoji: def.emoji,
+            name: def.name,
+            desc: desc(),
+            onClick: () => {
+              const latest = currentState;
+              if (!latest) return;
+              const qty = effectiveQty(latest, def.id);
+              if (buyBuilding(latest, def.id, qty)) renderLists(latest);
+            },
+          }),
+        update: (row) => {
+          const latest = currentState ?? state;
+          const owned = latest.buildings[def.id] ?? 0;
+          const qty = effectiveQty(latest, def.id);
+          const cost = bulkCost(def, owned, qty);
+          updateRow(row, {
+            cost: formatCost(cost),
+            owned: `×${owned}`,
+            action: `Buy ×${qty}`,
+            disabled: !canAfford(latest, cost),
+            label: `Buy ${qty} ${def.name} for ${formatCost(cost)}`,
+            desc: desc(),
+          });
+        },
+      };
+    });
+    reconcileRows(entries);
   }
 
   function renderDocket(state: GameState): void {
     const currentId = DOCKET.find((id) => !state.achievements.includes(id));
-    const frag = document.createDocumentFragment();
-    for (const id of DOCKET) {
+    const entries: RowEntry[] = DOCKET.map((id) => {
       const achievement = ACHIEVEMENT_BY_ID[id];
-      const done = state.achievements.includes(id);
-      const status = done ? 'done' : id === currentId ? 'current' : 'upcoming';
-      const row = document.createElement('div');
-      row.className = `item docket-row ${status}`;
-      row.innerHTML = `
-        <span class="item-emoji" aria-hidden="true">${achievement.emoji}</span>
-        <span class="item-body">
-          <span class="item-name">${achievement.name}</span>
-          <span class="item-desc">${achievement.description}</span>
-        </span>
-        <span class="docket-badge">${done ? 'Filed ✓' : status === 'current' ? 'In progress' : 'Pending'}</span>`;
-      frag.appendChild(row);
-    }
-    tabContent.replaceChildren(frag);
+      return {
+        key: id,
+        create: () =>
+          createRow(id, {
+            emoji: achievement.emoji,
+            name: achievement.name,
+            desc: achievement.description,
+            className: 'docket-row',
+            trailingClass: 'docket-badge',
+          }),
+        update: (row) => {
+          const done = state.achievements.includes(id);
+          const status = done ? 'done' : id === currentId ? 'current' : 'upcoming';
+          updateRow(row, {
+            status,
+            badge: done ? 'Filed ✓' : status === 'current' ? 'In progress' : 'Pending',
+          });
+        },
+      };
+    });
+    reconcileRows(entries);
   }
 
   function renderUpgrades(state: GameState): void {
-    const frag = document.createDocumentFragment();
     const visible = UPGRADES.filter((u) => upgradeVisible(state, u));
-    for (const u of visible) {
-      const owned = state.upgrades.includes(u.id);
-      frag.appendChild(
-        itemRow({
+    const entries: RowEntry[] = visible.map((u) => ({
+      key: u.id,
+      create: () =>
+        createRow(u.id, {
           emoji: u.emoji,
           name: u.name,
           desc: u.description,
-          cost: u.cost,
-          owned: owned ? '✓ owned' : undefined,
-          action: owned ? undefined : 'Buy',
-          disabled: owned || !canAfford(state, u.cost),
-          label: owned ? `${u.name} (owned)` : `Buy upgrade ${u.name} for ${formatCost(u.cost)}`,
-          onBuy: () => {
-            if (buyUpgrade(state, u.id)) renderLists(state);
+          onClick: () => {
+            const latest = currentState;
+            if (latest && buyUpgrade(latest, u.id)) renderLists(latest);
           },
         }),
-      );
+      update: (row) => {
+        const latest = currentState ?? state;
+        const owned = latest.upgrades.includes(u.id);
+        updateRow(row, {
+          cost: formatCost(u.cost),
+          owned: owned ? '✓ owned' : '',
+          action: owned ? '' : 'Buy',
+          disabled: owned || !canAfford(latest, u.cost),
+          label: owned ? `${u.name} (owned)` : `Buy upgrade ${u.name} for ${formatCost(u.cost)}`,
+        });
+      },
+    }));
+    if (entries.length === 0) {
+      entries.push({
+        key: 'empty',
+        create: () => emptyNote('No upgrades available yet — keep building.'),
+        update: () => {},
+      });
     }
-    if (visible.length === 0) {
-      frag.appendChild(emptyNote('No upgrades available yet — keep building.'));
-    }
-    tabContent.replaceChildren(frag);
+    reconcileRows(entries);
   }
 
   function renderResearch(state: GameState): void {
-    const frag = document.createDocumentFragment();
-    for (const r of RESEARCH) {
-      const owned = state.research.includes(r.id);
-      frag.appendChild(
-        itemRow({
+    const entries: RowEntry[] = RESEARCH.map((r) => ({
+      key: r.id,
+      create: () =>
+        createRow(r.id, {
           emoji: r.emoji,
           name: r.name,
           desc: r.description,
-          cost: r.cost,
-          owned: owned ? '✓ done' : undefined,
-          action: owned ? undefined : 'Research',
-          disabled: owned || !canAfford(state, r.cost),
-          label: owned ? `${r.name} (researched)` : `Research ${r.name} for ${formatCost(r.cost)}`,
-          onBuy: () => {
-            if (buyResearch(state, r.id)) renderLists(state);
+          onClick: () => {
+            const latest = currentState;
+            if (latest && buyResearch(latest, r.id)) renderLists(latest);
           },
         }),
-      );
-    }
-    tabContent.replaceChildren(frag);
+      update: (row) => {
+        const latest = currentState ?? state;
+        const owned = latest.research.includes(r.id);
+        updateRow(row, {
+          cost: formatCost(r.cost),
+          owned: owned ? '✓ done' : '',
+          action: owned ? '' : 'Research',
+          disabled: owned || !canAfford(latest, r.cost),
+          label: owned ? `${r.name} (researched)` : `Research ${r.name} for ${formatCost(r.cost)}`,
+        });
+      },
+    }));
+    reconcileRows(entries);
   }
 
   function renderAchievements(state: GameState): void {
-    const frag = document.createDocumentFragment();
-    for (const a of ACHIEVEMENTS) {
-      const done = state.achievements.includes(a.id);
-      const div = document.createElement('div');
-      div.className = `item achievement ${done ? 'unlocked' : 'locked'}`;
-      div.innerHTML = `
-        <span class="item-emoji" aria-hidden="true">${done ? a.emoji : '🔒'}</span>
-        <span class="item-body">
-          <span class="item-name">${a.name}</span>
-          <span class="item-desc">${a.description} <em>+1% all production</em></span>
-        </span>`;
-      frag.appendChild(div);
-    }
-    tabContent.replaceChildren(frag);
+    const entries: RowEntry[] = ACHIEVEMENTS.map((a) => ({
+      key: a.id,
+      create: () =>
+        createRow(a.id, {
+          emoji: state.achievements.includes(a.id) ? a.emoji : '🔒',
+          name: a.name,
+          desc: `${a.description} +1% all production`,
+          className: 'achievement',
+        }),
+      update: (row) => {
+        const done = state.achievements.includes(a.id);
+        updateRow(row, {
+          emoji: done ? a.emoji : '🔒',
+          status: done ? 'unlocked' : 'locked',
+          desc: `${a.description} +1% all production`,
+        });
+      },
+    }));
+    reconcileRows(entries);
   }
 
   function renderSettings(): void {
+    const keySignature = 'settings';
+    if (
+      !forceRebuild &&
+      tabContent.dataset.tab === activeTab &&
+      tabContent.dataset.keys === keySignature
+    ) {
+      return;
+    }
     const wrap = document.createElement('div');
-      wrap.className = 'settings';
+    wrap.className = 'settings';
     wrap.innerHTML = `
       <p class="persistence-status">Persistence: ${hooks.persistenceBackend ?? 'IndexedDB (idb) · slot main'}</p>
       <button class="btn" id="set-save">Save now</button>
@@ -414,6 +541,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     });
     wrap.querySelector('#set-reset')!.addEventListener('click', () => hooks.onHardReset());
     tabContent.replaceChildren(wrap);
+    renderedRows = new Map();
+    tabContent.dataset.tab = activeTab;
+    tabContent.dataset.keys = keySignature;
+    forceRebuild = false;
   }
 
   function toast(message: string): void {
