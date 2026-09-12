@@ -383,6 +383,12 @@ button.item:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.item-action:empty,
+.item-cost:empty,
+.owned:empty {
+  display: none;
+}
+
 button.item:hover:not(:disabled) .item-action {
   background: var(--moss);
   color: #10180f;

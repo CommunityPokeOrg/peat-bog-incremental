@@ -490,7 +490,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         createRow(a.id, {
           emoji: state.achievements.includes(a.id) ? a.emoji : '🔒',
           name: a.name,
-          desc: `${a.description} +1% all production`,
+          desc: `${a.description} <em>+1% all production</em>`,
           className: 'achievement',
         }),
       update: (row) => {
@@ -498,7 +498,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         updateRow(row, {
           emoji: done ? a.emoji : '🔒',
           status: done ? 'unlocked' : 'locked',
-          desc: `${a.description} +1% all production`,
         });
       },
     }));
