@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDING_BY_ID } from '../src/game/data';
+import { BUILDING_BY_ID, UPGRADE_BY_ID } from '../src/game/data';
 import {
   buildingCost,
+  buildingMultiplier,
+  buildingVisible,
   bulkCost,
   buyBuilding,
   checkAchievements,
@@ -11,10 +13,12 @@ import {
   prestige,
   prestigeGain,
   productionPerSecond,
+  revealBuildings,
   thermalFactor,
   tick,
   totalCooling,
   totalHeat,
+  upgradeVisible,
 } from '../src/game/engine';
 import { formatNumber } from '../src/game/format';
 import {
@@ -126,6 +130,51 @@ describe('economy', () => {
     state.upgrades.push('spade', 'gloves');
     expect(clickPower(state)).toBeCloseTo(4);
   });
+
+  it('multiplies a building for each owned overclock tier', () => {
+    const state = createInitialState();
+    state.buildings.harvester = 5;
+    state.upgrades.push('boost-harvester', 'boost-harvester-50');
+    expect(buildingMultiplier(state, 'harvester')).toBe(4);
+    expect(productionPerSecond(state).brothPerSecond).toBeCloseTo(10);
+  });
+});
+
+describe('progressive building gating', () => {
+  it('reveals buildings when production thresholds are met', () => {
+    const state = createInitialState();
+    expect(buildingVisible(state, BUILDING_BY_ID.dredger)).toBe(false);
+    state.buildings.harvester = 100;
+    expect(revealBuildings(state)).toContain('dredger');
+    expect(buildingVisible(state, BUILDING_BY_ID.dredger)).toBe(true);
+  });
+
+  it('refuses to buy hidden buildings', () => {
+    const state = createInitialState();
+    state.broth = 100_000;
+    expect(buyBuilding(state, 'dredger', 1)).toBe(false);
+    state.buildings.harvester = 100;
+    revealBuildings(state);
+    expect(buyBuilding(state, 'dredger', 1)).toBe(true);
+  });
+
+  it('requires all building requirements for an upgrade', () => {
+    const state = createInitialState();
+    const upgrade = UPGRADE_BY_ID['fry-oil-coolant'];
+    state.buildings.chiller = 25;
+    expect(upgradeVisible(state, upgrade)).toBe(false);
+    state.buildings.fryer = 1;
+    expect(upgradeVisible(state, upgrade)).toBe(true);
+  });
+
+  it('applies thermal upgrade multipliers', () => {
+    const state = createInitialState();
+    state.buildings.rack = 10;
+    state.buildings.chiller = 4;
+    state.upgrades.push('fry-oil-coolant', 'dawn-shift');
+    expect(totalHeat(state)).toBeCloseTo(80 * 0.9);
+    expect(totalCooling(state)).toBeCloseTo(40 * 1.25);
+  });
 });
 
 describe('save', () => {
@@ -134,6 +183,27 @@ describe('save', () => {
     expect(deserialize('not json')).toBeNull();
     expect(deserialize('{"a":1}')).toBeNull();
     expect(deserialize('42')).toBeNull();
+  });
+
+  it('loads a literal version 1 save without revealed buildings', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      broth: 12,
+      compute: 3,
+      bogCores: 0,
+      totalBrothEarned: 12,
+      totalComputeEarned: 3,
+      totalComputeThisRun: 3,
+      totalClicks: 2,
+      buildings: { harvester: 1 },
+      upgrades: [],
+      research: [],
+      achievements: [],
+      lastSaveTime: 123,
+    });
+    const loaded = deserialize(raw);
+    expect(loaded?.broth).toBe(12);
+    expect(loaded?.revealed).toEqual([]);
   });
   it('roundtrips a real state', () => {
     const state = createInitialState();

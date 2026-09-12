@@ -1,11 +1,12 @@
 import './style.css';
-import { ACHIEVEMENT_BY_ID } from './game/data';
+import { ACHIEVEMENT_BY_ID, BUILDING_BY_ID } from './game/data';
 import {
   canPrestige,
   checkAchievements,
   click,
   prestige,
   prestigeGain,
+  revealBuildings,
   tick,
 } from './game/engine';
 import {
@@ -61,6 +62,13 @@ async function init(): Promise<void> {
     for (const id of checkAchievements(state)) {
       const a = ACHIEVEMENT_BY_ID[id];
       ui.toast(`Achievement: ${a.emoji} ${a.name} — +1% production`);
+    }
+  }
+
+  function revealBuildingsNow(): void {
+    for (const id of revealBuildings(state)) {
+      const building = BUILDING_BY_ID[id];
+      ui.toast(`New blueprint: ${building.emoji} ${building.name}`);
     }
   }
 
@@ -197,6 +205,7 @@ async function init(): Promise<void> {
     if (dt > 0) {
       tick(state, dt);
       checkAchievementsNow();
+      revealBuildingsNow();
     }
     ui.renderCounters(state);
     if (now - lastListRender > 250) {

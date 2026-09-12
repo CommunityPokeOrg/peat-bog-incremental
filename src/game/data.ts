@@ -9,6 +9,11 @@ export interface BuildingDef {
   emoji: string;
   description: string;
   baseCost: ResourceCost;
+  category: 'broth' | 'cooling' | 'compute';
+  unlock?: {
+    brothPerSecond?: number;
+    computePerSecond?: number;
+  };
   brothPerSecond?: number;
   computePerSecond?: number;
   cooling?: number;
@@ -18,89 +23,32 @@ export interface BuildingDef {
 export const COST_SCALE = 1.15;
 
 export const BUILDINGS: BuildingDef[] = [
-  {
-    id: 'harvester',
-    name: 'Peat Harvester',
-    emoji: '🪵',
-    description: 'A hardy cutter dragging rich peat from the bog.',
-    baseCost: { broth: 15 },
-    brothPerSecond: 0.5,
-  },
-  {
-    id: 'vat',
-    name: 'Fermentation Vat',
-    emoji: '🧪',
-    description: 'Slow-brews Sector 4 peat into 40 L batches of fp16 compute broth.',
-    baseCost: { broth: 100 },
-    brothPerSecond: 4,
-  },
-  {
-    id: 'pump',
-    name: 'Bog Pump',
-    emoji: '⛽',
-    description: 'Industrial pump on a Taylor C602 pulley, slurping broth from the water table.',
-    baseCost: { broth: 1100 },
-    brothPerSecond: 25,
-  },
-  {
-    id: 'chiller',
-    name: 'Chiller',
-    emoji: '❄️',
-    description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.',
-    baseCost: { broth: 600 },
-    cooling: 10,
-  },
-  {
-    id: 'tower',
-    name: 'Cooling Tower',
-    emoji: '🏭',
-    description: 'Evaporative tower venting steam over the moss.',
-    baseCost: { broth: 12000 },
-    cooling: 120,
-  },
-  {
-    id: 'rack',
-    name: 'Server Rack',
-    emoji: '🖥️',
-    description: 'A humming rack steeped in the bog.',
-    baseCost: { broth: 2500 },
-    computePerSecond: 2,
-    heat: 8,
-  },
-  {
-    id: 'pod',
-    name: 'Compute Pod',
-    emoji: '📦',
-    description: 'A sealed pod of racks half-sunk in the mire.',
-    baseCost: { broth: 50000 },
-    computePerSecond: 20,
-    heat: 60,
-  },
-  {
-    id: 'hall',
-    name: 'Data Hall',
-    emoji: '🏢',
-    description: 'A whole hall of servers drinking the bog dry.',
-    baseCost: { broth: 1_000_000 },
-    computePerSecond: 250,
-    heat: 500,
-  },
-  {
-    id: 'hyperscaler',
-    name: 'Bog Hyperscaler',
-    emoji: '🌐',
-    description: 'A continent-scale facility anointed in broth.',
-    baseCost: { broth: 25_000_000, compute: 100_000 },
-    computePerSecond: 4000,
-    heat: 5000,
-  },
+  { id: 'harvester', name: 'Peat Harvester', emoji: '🪵', description: 'A hardy cutter dragging rich peat from the bog.', baseCost: { broth: 15 }, category: 'broth', brothPerSecond: 0.5 },
+  { id: 'vat', name: 'Fermentation Vat', emoji: '🧪', description: 'Slow-brews Sector 4 peat into 40 L batches of fp16 compute broth.', baseCost: { broth: 100 }, category: 'broth', brothPerSecond: 4 },
+  { id: 'pump', name: 'Bog Pump', emoji: '⛽', description: 'Industrial pump on a Taylor C602 pulley, slurping broth from the water table.', baseCost: { broth: 1100 }, category: 'broth', brothPerSecond: 25 },
+  { id: 'dredger', name: 'Bog Dredger', emoji: '🚜', description: 'A tracked dredger widening the broth channels.', baseCost: { broth: 12_000 }, category: 'broth', brothPerSecond: 120, unlock: { brothPerSecond: 50 } },
+  { id: 'refinery', name: 'Broth Refinery', emoji: '🏗️', description: 'Polishes raw peat into a dependable compute broth stream.', baseCost: { broth: 130_000 }, category: 'broth', brothPerSecond: 700, unlock: { brothPerSecond: 500 } },
+  { id: 'still', name: 'Geothermal Still', emoji: '♨️', description: 'Draws subterranean warmth through a continuous broth still.', baseCost: { broth: 1_400_000 }, category: 'broth', brothPerSecond: 4_000, unlock: { brothPerSecond: 3_000 } },
+  { id: 'biome', name: 'Sealed Biome Vat', emoji: '🫙', description: 'A sealed ecosystem that brews the bog at industrial scale.', baseCost: { broth: 20_000_000 }, category: 'broth', brothPerSecond: 25_000, unlock: { brothPerSecond: 20_000 } },
+  { id: 'fryer', name: '120 kg Fryer Line', emoji: '🍟', description: 'Fries 120 kg of hot fries an hour; the runoff is surprisingly good broth.', baseCost: { broth: 300_000_000 }, category: 'broth', brothPerSecond: 150_000, unlock: { brothPerSecond: 150_000 } },
+  { id: 'chiller', name: 'Chiller', emoji: '❄️', description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.', baseCost: { broth: 600 }, category: 'cooling', cooling: 10 },
+  { id: 'tower', name: 'Cooling Tower', emoji: '🏭', description: 'Evaporative tower venting steam over the moss.', baseCost: { broth: 12_000 }, category: 'cooling', cooling: 120 },
+  { id: 'glycol', name: 'Glycol Loop', emoji: '🧊', description: 'A closed loop of glycol carrying heat into the moss.', baseCost: { broth: 150_000 }, category: 'cooling', cooling: 1_400, unlock: { computePerSecond: 20 } },
+  { id: 'exchanger', name: 'Bog Heat Exchanger', emoji: '🔁', description: 'Trades bog water for rack heat at exceptional efficiency.', baseCost: { broth: 2_000_000 }, category: 'cooling', cooling: 15_000, unlock: { computePerSecond: 300 } },
+  { id: 'cryo', name: 'Cryo Plant', emoji: '🌬️', description: 'A cryogenic plant freezing the bog around the racks.', baseCost: { broth: 30_000_000 }, category: 'cooling', cooling: 180_000, unlock: { computePerSecond: 5_000 } },
+  { id: 'rack', name: 'Server Rack', emoji: '🖥️', description: 'A humming rack steeped in the bog.', baseCost: { broth: 2_500 }, category: 'compute', computePerSecond: 2, heat: 8 },
+  { id: 'pod', name: 'Compute Pod', emoji: '📦', description: 'A sealed pod of racks half-sunk in the mire.', baseCost: { broth: 50_000 }, category: 'compute', computePerSecond: 20, heat: 60, unlock: { computePerSecond: 1 } },
+  { id: 'hall', name: 'Data Hall', emoji: '🏢', description: 'A whole hall of servers drinking the bog dry.', baseCost: { broth: 1_000_000 }, category: 'compute', computePerSecond: 250, heat: 500, unlock: { computePerSecond: 50 } },
+  { id: 'cluster', name: 'fp16 Cluster', emoji: '🧮', description: 'A cluster of fp16 racks tuned for the peat bog.', baseCost: { broth: 8_000_000 }, category: 'compute', computePerSecond: 2_000, heat: 3_500, unlock: { computePerSecond: 500 } },
+  { id: 'hyperscaler', name: 'Bog Hyperscaler', emoji: '🌐', description: 'A continent-scale facility anointed in broth.', baseCost: { broth: 120_000_000, compute: 500_000 }, category: 'compute', computePerSecond: 30_000, heat: 30_000, unlock: { computePerSecond: 5_000 } },
+  { id: 'courthouse', name: "Magistrate Reino's Courthouse Datacenter", emoji: '⚖️', description: 'Where McFly & Chronicler LLP v Burger King Nordic is finally heard — on 40 L of fp16 broth per rack.', baseCost: { broth: 2_000_000_000, compute: 5_000_000 }, category: 'compute', computePerSecond: 250_000, heat: 200_000, unlock: { computePerSecond: 50_000 } },
 ];
 
 export const BUILDING_BY_ID: Record<string, BuildingDef> = Object.fromEntries(
   BUILDINGS.map((b) => [b.id, b]),
 );
 
-export type UpgradeKind = 'click' | 'building';
+export type UpgradeKind = 'click' | 'building' | 'thermal';
 
 export interface UpgradeDef {
   id: string;
@@ -109,15 +57,27 @@ export interface UpgradeDef {
   description: string;
   cost: ResourceCost;
   kind: UpgradeKind;
-  /** For kind 'building': which building it doubles. */
+  requires?: { buildingId: string; count: number }[];
   buildingId?: string;
-  /** Click multiplier applied when purchased. */
   clickMultiplier?: number;
-  /** Fraction of broth/s added to each click. */
   clickBrothFraction?: number;
-  /** Minimum owned buildings required to reveal. */
-  requiresOwned?: number;
+  coolingMultiplier?: number;
+  heatMultiplier?: number;
 }
+
+function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
+  const out: ResourceCost = {};
+  if (cost.broth !== undefined) out.broth = cost.broth * factor;
+  if (cost.compute !== undefined) out.compute = cost.compute * factor;
+  return out;
+}
+
+const BOOST_TIERS = [
+  { count: 10, factor: 10, roman: 'I' },
+  { count: 50, factor: 100, roman: 'II' },
+  { count: 100, factor: 1_000, roman: 'III' },
+  { count: 200, factor: 10_000, roman: 'IV' },
+];
 
 export const UPGRADES: UpgradeDef[] = [
   {
@@ -148,6 +108,15 @@ export const UPGRADES: UpgradeDef[] = [
     clickMultiplier: 2,
   },
   {
+    id: 'hot-fries',
+    name: '120 kg Hot Fries',
+    emoji: '🍟',
+    description: 'Feed the bog crew 120 kg of hot fries. Click power ×3.',
+    cost: { broth: 20_000 },
+    kind: 'click',
+    clickMultiplier: 3,
+  },
+  {
     id: 'dredge',
     name: 'Mechanised Dredge',
     emoji: '⚙️',
@@ -155,6 +124,15 @@ export const UPGRADES: UpgradeDef[] = [
     cost: { broth: 50_000 },
     kind: 'click',
     clickBrothFraction: 0.01,
+  },
+  {
+    id: 'pulley-equity',
+    name: '15% Taylor C602 Pulley Equity',
+    emoji: '🔩',
+    description: 'Take 15% equity in the pulley. Each click also gains +1.5% of your broth/s.',
+    cost: { broth: 250_000 },
+    kind: 'click',
+    clickBrothFraction: 0.015,
   },
   {
     id: 'ladle',
@@ -166,43 +144,56 @@ export const UPGRADES: UpgradeDef[] = [
     clickMultiplier: 5,
   },
   {
-    id: 'hot-fries',
-    name: '120 kg Hot Fries',
-    emoji: '🍟',
-    description: 'Feed the bog crew 120 kg of hot fries. Click power ×3.',
-    cost: { broth: 20_000 },
+    id: 'sanitized-change',
+    name: '$59 Sanitized Change',
+    emoji: '💵',
+    description: "WillMcfly's debt-free $59, sanitized and reinvested. Click power ×3.",
+    cost: { broth: 25_000_000 },
     kind: 'click',
     clickMultiplier: 3,
   },
   {
-    id: 'pulley-equity',
-    name: '15% Taylor C602 Pulley Equity',
-    emoji: '🔩',
-    description: 'Take 15% equity in the pulley. Each click also gains +1.5% of your broth/s.',
-    cost: { broth: 250_000 },
+    id: 'verdict-gavel',
+    name: "Reino's Gavel",
+    emoji: '🔨',
+    description: "Magistrate Reino's ruling lands with force. Click power ×5.",
+    cost: { broth: 1_000_000_000, compute: 1_000_000 },
     kind: 'click',
-    clickBrothFraction: 0.015,
+    clickMultiplier: 5,
   },
-  ...BUILDINGS.map(
-    (b): UpgradeDef => ({
-      id: `boost-${b.id}`,
-      name: `${b.name} Overclock`,
-      emoji: b.emoji,
-      description: `${b.name} output ×2. Requires 10 owned.`,
-      cost: scaleCost(b.baseCost, 10),
+  {
+    id: 'fry-oil-coolant',
+    name: 'Fry-Oil Coolant',
+    emoji: '🛢️',
+    description: 'Recycle hot-fry oil into a 25% cooling boost.',
+    cost: { broth: 5_000_000 },
+    kind: 'thermal',
+    coolingMultiplier: 1.25,
+    requires: [{ buildingId: 'chiller', count: 25 }, { buildingId: 'fryer', count: 1 }],
+  },
+  {
+    id: 'dawn-shift',
+    name: 'Post-Lubrication Dawn Shift',
+    emoji: '🌅',
+    description: 'A later shift keeps rack heat down by 10%.',
+    cost: { broth: 2_000_000, compute: 50_000 },
+    kind: 'thermal',
+    heatMultiplier: 0.9,
+    requires: [{ buildingId: 'rack', count: 50 }],
+  },
+  ...BUILDINGS.flatMap((building) =>
+    BOOST_TIERS.map(({ count, factor, roman }, index): UpgradeDef => ({
+      id: index === 0 ? `boost-${building.id}` : `boost-${building.id}-${count}`,
+      name: `${building.name} Overclock ${roman}`,
+      emoji: building.emoji,
+      description: `${building.name} output ×2. Requires ${count} owned.`,
+      cost: scaleCost(building.baseCost, factor),
       kind: 'building',
-      buildingId: b.id,
-      requiresOwned: 10,
-    }),
+      buildingId: building.id,
+      requires: [{ buildingId: building.id, count }],
+    })),
   ),
 ];
-
-function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
-  const out: ResourceCost = {};
-  if (cost.broth !== undefined) out.broth = cost.broth * factor;
-  if (cost.compute !== undefined) out.compute = cost.compute * factor;
-  return out;
-}
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(
   UPGRADES.map((u) => [u.id, u]),

@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface GameState {
   version: number;
@@ -10,6 +10,7 @@ export interface GameState {
   totalComputeThisRun: number;
   totalClicks: number;
   buildings: Record<string, number>;
+  revealed: string[];
   upgrades: string[];
   research: string[];
   achievements: string[];
@@ -27,6 +28,7 @@ export function createInitialState(): GameState {
     totalComputeThisRun: 0,
     totalClicks: 0,
     buildings: {},
+    revealed: [],
     upgrades: [],
     research: [],
     achievements: [],

@@ -48,6 +48,7 @@ export function deserialize(raw: string | null): GameState | null {
   state.totalComputeThisRun = p.totalComputeThisRun;
   state.totalClicks = p.totalClicks;
   state.buildings = { ...p.buildings };
+  state.revealed = isStrArr(p.revealed) ? [...p.revealed] : [];
   state.upgrades = [...p.upgrades];
   state.research = [...p.research];
   state.achievements = [...p.achievements];

@@ -65,14 +65,23 @@ export function globalMultiplier(state: GameState): number {
   return 1 + state.bogCores * 0.05 + state.achievements.length * 0.01;
 }
 
-function buildingMultiplier(state: GameState, buildingId: string): number {
-  return state.upgrades.includes(`boost-${buildingId}`) ? 2 : 1;
+export function buildingMultiplier(state: GameState, buildingId: string): number {
+  return 2 ** state.upgrades.filter((id) => {
+    const upgrade = UPGRADE_BY_ID[id];
+    return upgrade?.kind === 'building' && upgrade.buildingId === buildingId;
+  }).length;
 }
 
 export function totalHeat(state: GameState): number {
   let heatMult = 1;
   if (state.research.includes('liquid-immersion')) heatMult *= 0.8;
   if (state.research.includes('lubrication-clause')) heatMult *= 0.85;
+  for (const id of state.upgrades) {
+    const upgrade = UPGRADE_BY_ID[id];
+    if (upgrade?.kind === 'thermal' && upgrade.heatMultiplier) {
+      heatMult *= upgrade.heatMultiplier;
+    }
+  }
   let heat = 0;
   for (const b of BUILDINGS) {
     if (b.heat) heat += (state.buildings[b.id] ?? 0) * b.heat;
@@ -81,7 +90,13 @@ export function totalHeat(state: GameState): number {
 }
 
 export function totalCooling(state: GameState): number {
-  const coolMult = state.research.includes('thermal-modelling') ? 1.25 : 1;
+  let coolMult = state.research.includes('thermal-modelling') ? 1.25 : 1;
+  for (const id of state.upgrades) {
+    const upgrade = UPGRADE_BY_ID[id];
+    if (upgrade?.kind === 'thermal' && upgrade.coolingMultiplier) {
+      coolMult *= upgrade.coolingMultiplier;
+    }
+  }
   let cooling = 0;
   for (const b of BUILDINGS) {
     if (b.cooling) cooling += (state.buildings[b.id] ?? 0) * b.cooling;
@@ -170,7 +185,7 @@ export function click(state: GameState): number {
 
 export function buyBuilding(state: GameState, id: string, qty: number): boolean {
   const def = BUILDING_BY_ID[id];
-  if (!def || qty <= 0) return false;
+  if (!def || qty <= 0 || !buildingVisible(state, def)) return false;
   const owned = state.buildings[id] ?? 0;
   const cost = bulkCost(def, owned, qty);
   if (!canAfford(state, cost)) return false;
@@ -180,10 +195,32 @@ export function buyBuilding(state: GameState, id: string, qty: number): boolean 
 }
 
 export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
-  if (u.requiresOwned !== undefined) {
-    return (state.buildings[u.buildingId ?? ''] ?? 0) >= u.requiresOwned;
+  return (u.requires ?? []).every(
+    ({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count,
+  );
+}
+
+export function buildingVisible(state: GameState, def: BuildingDef): boolean {
+  return !def.unlock || state.revealed.includes(def.id);
+}
+
+export function revealBuildings(state: GameState): string[] {
+  const rates = productionPerSecond(state);
+  const newlyRevealed: string[] = [];
+  for (const def of BUILDINGS) {
+    if (!def.unlock || state.revealed.includes(def.id)) continue;
+    const brothReady =
+      def.unlock.brothPerSecond === undefined ||
+      rates.brothPerSecond >= def.unlock.brothPerSecond;
+    const computeReady =
+      def.unlock.computePerSecond === undefined ||
+      rates.computePerSecond >= def.unlock.computePerSecond;
+    if (brothReady && computeReady) {
+      state.revealed.push(def.id);
+      newlyRevealed.push(def.id);
+    }
   }
-  return true;
+  return newlyRevealed;
 }
 
 export function buyUpgrade(state: GameState, id: string): boolean {
@@ -225,6 +262,7 @@ export function prestige(state: GameState): number {
   state.compute = 0;
   state.totalComputeThisRun = 0;
   state.buildings = {};
+  state.revealed = [];
   state.upgrades = [];
   state.research = [];
   return gain;
