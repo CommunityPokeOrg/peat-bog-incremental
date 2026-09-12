@@ -58,4 +58,54 @@ describe('UI list reconciliation', () => {
     expect(root.querySelector<HTMLTextAreaElement>('#save-io')).toBe(textarea);
     expect(textarea.value).toBe('typed save data');
   });
+
+  it('shows locked building teasers and reveals the next blueprint', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const ui = createUi(root, {
+      onHarvest: () => {},
+      onPrestige: () => {},
+      onSaveNow: () => {},
+      onExport: () => '',
+      onImport: () => false,
+      onHardReset: () => {},
+    });
+    const state = createInitialState();
+
+    ui.renderLists(state);
+    const teaser = root.querySelector('[data-key="locked-dredger"]');
+    expect(teaser).not.toBeNull();
+    expect(teaser).not.toBeInstanceOf(HTMLButtonElement);
+
+    state.revealed.push('dredger');
+    ui.renderLists(state);
+    expect(root.querySelector<HTMLButtonElement>('[data-key="dredger"]')).not.toBeNull();
+  });
+
+  it('moves purchased upgrades into an owned drawer and preserves its open state', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const ui = createUi(root, {
+      onHarvest: () => {},
+      onPrestige: () => {},
+      onSaveNow: () => {},
+      onExport: () => '',
+      onImport: () => false,
+      onHardReset: () => {},
+    });
+    const state = createInitialState();
+    state.broth = 100;
+    ui.renderLists(state);
+    root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
+    const spade = root.querySelector<HTMLButtonElement>('[data-key="spade"]');
+    expect(spade).not.toBeNull();
+    spade!.click();
+
+    expect(root.querySelector('[data-key="spade"]')).toBeNull();
+    expect(root.querySelector('[data-upgrade-id="spade"]')).not.toBeNull();
+    const drawer = root.querySelector<HTMLDetailsElement>('.owned-drawer')!;
+    drawer.open = true;
+    ui.renderLists(state);
+    expect(drawer.open).toBe(true);
+  });
 });

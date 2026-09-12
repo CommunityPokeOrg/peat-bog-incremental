@@ -17,9 +17,9 @@ npm run typecheck # tsc --noEmit
 ## How to play
 
 - **Click** the big cauldron button (or press `H`) to harvest fp16 compute broth. Your first Peat Harvester is ~15 clicks away.
-- **Buildings** produce broth (Harvesters, Vats, Pumps), cooling (Chillers, Cooling Towers) or compute (Server Racks and up). Prices scale ×1.15 per unit; buy in batches of 1 / 10 / 100 / Max.
+- **Buildings** are grouped into broth, cooling and compute tiers. New blueprints unlock progressively from your current broth/s or compute/s production; each category shows the next classified blueprint. Prices scale ×1.15 per unit; buy in batches of 1 / 10 / 100 / Max.
 - **Thermal mechanic**: compute buildings generate heat. Chillers and towers provide cooling. Compute production is multiplied by `min(1, cooling / heat)` — watch the thermal bar and keep it at 100%.
-- **Upgrades** multiply click power or double a building's output (unlocked at 10 owned).
+- **Upgrades** ladder from click tools and thermal systems into four ×2 overclock tiers at 10 / 50 / 100 / 200 owned. Purchased upgrades move into the expandable owned-upgrades drawer, while upcoming upgrades preview their building requirements.
 - **Research & Litigation** is bought with compute: better cooling, lower heat, production multipliers, and the Magistrate Reino verdict.
 - **Achievements**: 21 to unlock, each granting +1% to all production. The **Docket** tab orders the trial milestones and highlights the next filing.
 - **Prestige — Drain the Bog**: petition Magistrate Reino to drain the bog. Once you've earned 1,000,000 compute in a run, reset for `floor(sqrt(totalCompute / 1e6))` Bog Cores. Each core gives +5% to all production, forever. Achievements and cores persist.

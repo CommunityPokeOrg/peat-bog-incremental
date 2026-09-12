@@ -6,9 +6,11 @@ import {
   DOCKET,
   RESEARCH,
   UPGRADES,
+  UPGRADE_BY_ID,
 } from '../game/data';
 import {
   bulkCost,
+  buildingVisible,
   buyBuilding,
   buyResearch,
   buyUpgrade,
@@ -329,6 +331,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       tabContent.dataset.tab !== activeTab ||
       tabContent.dataset.keys !== keySignature;
     if (shouldRebuild) {
+      const wasOwnedDrawerOpen = Boolean(
+        tabContent.querySelector<HTMLDetailsElement>('.owned-drawer')?.open,
+      );
       const frag = document.createDocumentFragment();
       renderedRows = new Map<string, HTMLElement>();
       for (const entry of entries) {
@@ -338,6 +343,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         frag.appendChild(row);
       }
       tabContent.replaceChildren(frag);
+      if (wasOwnedDrawerOpen) {
+        tabContent.querySelector<HTMLDetailsElement>('.owned-drawer')?.setAttribute('open', '');
+      }
       tabContent.dataset.tab = activeTab;
       tabContent.dataset.keys = keySignature;
       forceRebuild = false;
@@ -350,7 +358,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderBuildings(state: GameState): void {
-    const entries: RowEntry[] = BUILDINGS.map((def) => {
+    const entries: RowEntry[] = [];
+    const categories = ['broth', 'cooling', 'compute'] as const;
+    for (const category of categories) {
+      const categoryBuildings = BUILDINGS.filter((def) => def.category === category);
+      const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
+      for (const def of visible) {
       const desc = (): string => {
         const perUnit: string[] = [];
         if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
@@ -359,36 +372,54 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
         return `${def.description} ${perUnit.join(', ')}.`;
       };
-      return {
-        key: def.id,
-        create: () =>
-          createRow(def.id, {
-            emoji: def.emoji,
-            name: def.name,
-            desc: desc(),
-            onClick: () => {
-              const latest = currentState;
-              if (!latest) return;
-              const qty = effectiveQty(latest, def.id);
-              if (buyBuilding(latest, def.id, qty)) renderLists(latest);
-            },
-          }),
-        update: (row) => {
-          const latest = currentState ?? state;
-          const owned = latest.buildings[def.id] ?? 0;
-          const qty = effectiveQty(latest, def.id);
-          const cost = bulkCost(def, owned, qty);
-          updateRow(row, {
-            cost: formatCost(cost),
-            owned: `×${owned}`,
-            action: `Buy ×${qty}`,
-            disabled: !canAfford(latest, cost),
-            label: `Buy ${qty} ${def.name} for ${formatCost(cost)}`,
-            desc: desc(),
-          });
-        },
-      };
-    });
+        entries.push({
+          key: def.id,
+          create: () =>
+            createRow(def.id, {
+              emoji: def.emoji,
+              name: def.name,
+              desc: desc(),
+              onClick: () => {
+                const latest = currentState;
+                if (!latest) return;
+                const qty = effectiveQty(latest, def.id);
+                if (buyBuilding(latest, def.id, qty)) renderLists(latest);
+              },
+            }),
+          update: (row) => {
+            const latest = currentState ?? state;
+            const owned = latest.buildings[def.id] ?? 0;
+            const qty = effectiveQty(latest, def.id);
+            const cost = bulkCost(def, owned, qty);
+            updateRow(row, {
+              cost: formatCost(cost),
+              owned: `×${owned}`,
+              action: `Buy ×${qty}`,
+              disabled: !canAfford(latest, cost),
+              label: `Buy ${qty} ${def.name} for ${formatCost(cost)}`,
+              desc: desc(),
+            });
+          },
+        });
+      }
+      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
+      if (nextLocked) {
+        const threshold = nextLocked.unlock?.brothPerSecond !== undefined
+          ? `${formatNumber(nextLocked.unlock.brothPerSecond)} broth/s`
+          : `${formatNumber(nextLocked.unlock?.computePerSecond ?? 0)} compute/s`;
+        entries.push({
+          key: `locked-${nextLocked.id}`,
+          create: () =>
+            createRow(`locked-${nextLocked.id}`, {
+              emoji: '🔒',
+              name: 'Classified blueprint',
+              desc: `Unlocks at ${threshold}`,
+              className: 'locked-teaser',
+            }),
+          update: (row) => updateRow(row, { status: 'locked', desc: `Unlocks at ${threshold}` }),
+        });
+      }
+    }
     reconcileRows(entries);
   }
 
@@ -419,32 +450,132 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     reconcileRows(entries);
   }
 
-  function renderUpgrades(state: GameState): void {
-    const visible = UPGRADES.filter((u) => upgradeVisible(state, u));
-    const entries: RowEntry[] = visible.map((u) => ({
-      key: u.id,
+  function createSectionHeading(label: string): HTMLElement {
+    const heading = document.createElement('div');
+    heading.className = 'section-heading';
+    heading.textContent = label;
+    return heading;
+  }
+
+  function requirementGap(state: GameState, upgrade: (typeof UPGRADES)[number]): number {
+    return (upgrade.requires ?? []).reduce(
+      (gap, requirement) =>
+        gap + Math.max(0, requirement.count - (state.buildings[requirement.buildingId] ?? 0)),
+      0,
+    );
+  }
+
+  function requirementsText(state: GameState, upgrade: (typeof UPGRADES)[number]): string {
+    return (upgrade.requires ?? [])
+      .map((requirement) => {
+        const building = BUILDING_BY_ID[requirement.buildingId];
+        const count = state.buildings[requirement.buildingId] ?? 0;
+        return `Requires ${requirement.count} ${building.name} (${count}/${requirement.count})`;
+      })
+      .join('; ');
+  }
+
+  function createOwnedDrawerEntry(): RowEntry {
+    return {
+      key: 'owned-drawer',
+      create: () => {
+        const drawer = document.createElement('details');
+        drawer.className = 'owned-drawer';
+        drawer.innerHTML = '<summary></summary><div class="owned-grid"></div>';
+        return drawer;
+      },
+      update: (row) => {
+        const latest = currentState;
+        if (!latest) return;
+        const summary = row.querySelector('summary');
+        const grid = row.querySelector<HTMLElement>('.owned-grid');
+        if (!summary || !grid) return;
+        const countText = `Owned upgrades (${latest.upgrades.length})`;
+        if (summary.textContent !== countText) summary.textContent = countText;
+        for (const id of latest.upgrades) {
+          if (grid.querySelector(`[data-upgrade-id="${id}"]`)) continue;
+          const upgrade = UPGRADE_BY_ID[id];
+          if (!upgrade) continue;
+          const tile = document.createElement('span');
+          tile.className = 'owned-tile';
+          tile.dataset.upgradeId = id;
+          tile.setAttribute('role', 'img');
+          tile.tabIndex = 0;
+          tile.setAttribute('aria-label', `${upgrade.name}: ${upgrade.description}`);
+          tile.title = `${upgrade.name} — ${upgrade.description}`;
+          tile.textContent = upgrade.emoji;
+          grid.appendChild(tile);
+        }
+      },
+    };
+  }
+
+  function createUpgradeEntry(
+    upgrade: (typeof UPGRADES)[number],
+    state: GameState,
+    upcoming = false,
+  ): RowEntry {
+    return {
+      key: upcoming ? `soon-${upgrade.id}` : upgrade.id,
       create: () =>
-        createRow(u.id, {
-          emoji: u.emoji,
-          name: u.name,
-          desc: u.description,
-          onClick: () => {
-            const latest = currentState;
-            if (latest && buyUpgrade(latest, u.id)) renderLists(latest);
-          },
+        createRow(upcoming ? `soon-${upgrade.id}` : upgrade.id, {
+          emoji: upgrade.emoji,
+          name: upgrade.name,
+          desc: upcoming ? requirementsText(state, upgrade) : upgrade.description,
+          className: upcoming ? 'upcoming-upgrade' : undefined,
+          onClick: upcoming
+            ? undefined
+            : () => {
+                const latest = currentState;
+                if (latest && buyUpgrade(latest, upgrade.id)) renderLists(latest);
+              },
         }),
       update: (row) => {
         const latest = currentState ?? state;
-        const owned = latest.upgrades.includes(u.id);
+        const isOwned = latest.upgrades.includes(upgrade.id);
         updateRow(row, {
-          cost: formatCost(u.cost),
-          owned: owned ? '✓ owned' : '',
-          action: owned ? '' : 'Buy',
-          disabled: owned || !canAfford(latest, u.cost),
-          label: owned ? `${u.name} (owned)` : `Buy upgrade ${u.name} for ${formatCost(u.cost)}`,
+          cost: upcoming ? '' : formatCost(upgrade.cost),
+          owned: isOwned ? '✓ owned' : '',
+          action: upcoming ? 'Locked' : isOwned ? '' : 'Buy',
+          disabled: upcoming || isOwned || !canAfford(latest, upgrade.cost),
+          label: upcoming
+            ? `${upgrade.name} (locked)`
+            : isOwned
+              ? `${upgrade.name} (owned)`
+              : `Buy upgrade ${upgrade.name} for ${formatCost(upgrade.cost)}`,
+          desc: upcoming ? requirementsText(latest, upgrade) : upgrade.description,
         });
       },
-    }));
+    };
+  }
+
+  function renderUpgrades(state: GameState): void {
+    const owned = new Set(state.upgrades);
+    const available = UPGRADES
+      .filter((u) => !owned.has(u.id) && upgradeVisible(state, u))
+      .sort((a, b) => (a.cost.broth ?? 0) - (b.cost.broth ?? 0) || (a.cost.compute ?? 0) - (b.cost.compute ?? 0));
+    const upcoming = UPGRADES
+      .filter((u) => !owned.has(u.id) && !upgradeVisible(state, u) && u.requires?.length)
+      .sort((a, b) => requirementGap(state, a) - requirementGap(state, b))
+      .slice(0, 6);
+    const entries: RowEntry[] = [];
+    if (owned.size > 0) entries.push(createOwnedDrawerEntry());
+    if (available.length > 0) {
+      entries.push({
+        key: 'available-heading',
+        create: () => createSectionHeading('Available'),
+        update: () => {},
+      });
+    }
+    entries.push(...available.map((u) => createUpgradeEntry(u, state)));
+    if (upcoming.length > 0) {
+      entries.push({
+        key: 'upcoming-heading',
+        create: () => createSectionHeading('Upcoming'),
+        update: () => {},
+      });
+      entries.push(...upcoming.map((u) => createUpgradeEntry(u, state, true)));
+    }
     if (entries.length === 0) {
       entries.push({
         key: 'empty',
