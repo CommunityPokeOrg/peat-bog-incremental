@@ -12,6 +12,10 @@
   --coolant-dim: #2e7d8c;
   --danger: #d96a4e;
   --mono: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  --radius-card: 10px;
+  --radius-control: 6px;
+  --space-row: 0.6rem 0.7rem;
+  --focus-ring: 2px solid var(--coolant);
 }
 
 * {
@@ -60,14 +64,15 @@ body {
   padding: 0.7rem 1rem;
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   font-family: var(--mono);
   font-size: 0.95rem;
 }
 
-.next-hint {
+#next-hint {
   color: var(--text-dim);
   font-size: 0.8rem;
+  min-height: 1.25rem;
   margin-top: -0.6rem;
   padding: 0 0.25rem;
 }
@@ -98,7 +103,7 @@ body {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   padding: 0.9rem 1rem;
 }
 
@@ -120,7 +125,7 @@ body {
   height: 14px;
   background: var(--bg-deep);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 
@@ -244,10 +249,10 @@ kbd {
 .panel {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
   display: flex;
   flex-direction: column;
   min-height: 480px;
+  border-radius: var(--radius-card);
 }
 
 .tabs {
@@ -290,7 +295,7 @@ kbd {
   background: var(--bg-deep);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   font-family: var(--mono);
 }
@@ -317,13 +322,17 @@ kbd {
   text-align: left;
   width: 100%;
   min-height: 44px;
-  padding: 0.6rem 0.7rem;
+  padding: var(--space-row);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   color: var(--text);
-  cursor: pointer;
+  cursor: default;
   font-size: 0.85rem;
+}
+
+button.item {
+  cursor: pointer;
 }
 
 button.item:hover:not(:disabled) {
@@ -354,6 +363,8 @@ button.item:hover:not(:disabled) {
   color: var(--coolant);
   font-family: var(--mono);
   font-size: 0.78rem;
+  min-width: 5ch;
+  visibility: visible;
 }
 
 .item-desc {
@@ -365,6 +376,7 @@ button.item:hover:not(:disabled) {
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--moss-bright);
+  min-width: 12ch;
 }
 
 .item-body {
@@ -381,12 +393,13 @@ button.item:hover:not(:disabled) {
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
+  min-width: 8ch;
 }
 
 .item-action:empty,
 .item-cost:empty,
 .owned:empty {
-  display: none;
+  visibility: hidden;
 }
 
 button.item:hover:not(:disabled) .item-action {
@@ -460,18 +473,26 @@ button.item:hover:not(:disabled) .item-action {
   color: var(--coolant);
 }
 
+.upcoming-upgrade {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .owned-drawer {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   padding: 0.6rem 0.7rem;
 }
 
 .owned-drawer summary {
+  align-items: center;
   color: var(--moss-bright);
   cursor: pointer;
+  display: flex;
   font-size: 0.85rem;
   font-weight: 600;
+  min-height: 44px;
 }
 
 .owned-grid {
@@ -485,7 +506,7 @@ button.item:hover:not(:disabled) .item-action {
   align-items: center;
   background: var(--bg-deep);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   cursor: default;
   display: inline-flex;
   font-size: 1.25rem;
@@ -504,7 +525,7 @@ button.item:hover:not(:disabled) .item-action {
   background: var(--bg-deep);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -544,7 +565,7 @@ button.item:hover:not(:disabled) .item-action {
   background: var(--bg-deep);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-family: var(--mono);
   font-size: 0.75rem;
   padding: 0.5rem;
@@ -583,7 +604,7 @@ button.item:hover:not(:disabled) .item-action {
 .toast {
   background: var(--bg-card);
   border: 1px solid var(--moss);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 0.6rem 0.9rem;
   font-size: 0.85rem;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
@@ -639,8 +660,27 @@ button.item:hover:not(:disabled) .item-action {
 }
 
 :focus-visible {
-  outline: 2px solid var(--coolant);
+  outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+.harvest-btn {
+  animation: simmer 6s ease-in-out infinite;
+}
+
+@keyframes simmer {
+  0%, 100% {
+    box-shadow:
+      0 0 0 6px rgba(127, 176, 105, 0.07),
+      0 10px 30px rgba(0, 0, 0, 0.5),
+      inset 0 0 18px rgba(127, 176, 105, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 0 7px rgba(86, 200, 220, 0.1),
+      0 10px 30px rgba(0, 0, 0, 0.5),
+      inset 0 0 28px rgba(86, 200, 220, 0.12);
+  }
 }
 
 @media (max-width: 800px) {
@@ -660,8 +700,7 @@ button.item:hover:not(:disabled) .item-action {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

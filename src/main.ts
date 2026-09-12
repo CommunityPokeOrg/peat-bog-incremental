@@ -86,7 +86,7 @@ async function init(): Promise<void> {
     const gain = prestigeGain(state);
     if (!canPrestige(state)) return;
     ui.showModal({
-      title: 'Drain the Bog?',
+      title: 'Drain the bog?',
       body: `Gain ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
       actions: [
         { label: 'Cancel', onClick: () => ui.closeModal() },

@@ -108,4 +108,27 @@ describe('UI list reconciliation', () => {
     ui.renderLists(state);
     expect(drawer.open).toBe(true);
   });
+
+  it('moves through tabs with arrow keys and keeps one tab tabbable', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const ui = createUi(root, {
+      onHarvest: () => {},
+      onPrestige: () => {},
+      onSaveNow: () => {},
+      onExport: () => '',
+      onImport: () => false,
+      onHardReset: () => {},
+    });
+    ui.renderLists(createInitialState());
+    const buildings = root.querySelector<HTMLButtonElement>('[data-tab="buildings"]')!;
+    const upgrades = root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!;
+    buildings.focus();
+    buildings.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+    expect(document.activeElement).toBe(upgrades);
+    expect(upgrades.getAttribute('aria-selected')).toBe('true');
+    expect(upgrades.tabIndex).toBe(0);
+    expect(buildings.tabIndex).toBe(-1);
+  });
 });

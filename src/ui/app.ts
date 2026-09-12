@@ -31,6 +31,10 @@ import type { GameState } from '../game/state';
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
 type Qty = number | 'max';
 
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return count === 1 ? singular : plural;
+}
+
 export interface UiHooks {
   initialTab?: TabId;
   persistenceBackend?: string;
@@ -78,9 +82,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <div class="thermal-sub" id="thermal-sub"></div>
         </div>
         <div class="harvest-zone" id="harvest-zone">
-          <button id="harvest-btn" class="harvest-btn" aria-label="Harvest Broth (shortcut: H)">
+          <button id="harvest-btn" class="harvest-btn" aria-label="Harvest broth (shortcut: H)">
             <span class="harvest-emoji" aria-hidden="true">🫧</span>
-            <span class="harvest-label">Harvest Broth</span>
+            <span class="harvest-label">Harvest broth</span>
           </button>
           <div class="float-layer" id="float-layer" aria-hidden="true"></div>
         </div>
@@ -93,12 +97,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       </section>
       <section class="panel">
         <nav class="tabs" role="tablist" aria-label="Game panels">
-          <button role="tab" data-tab="docket" aria-selected="${(hooks.initialTab ?? 'buildings') === 'docket'}">Docket</button>
-          <button role="tab" data-tab="buildings" aria-selected="${(hooks.initialTab ?? 'buildings') === 'buildings'}">Buildings</button>
-          <button role="tab" data-tab="upgrades" aria-selected="false">Upgrades</button>
-          <button role="tab" data-tab="research" aria-selected="false">Research &amp; Litigation</button>
-          <button role="tab" data-tab="achievements" aria-selected="false">Achievements</button>
-          <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+          <button role="tab" data-tab="docket">Docket</button>
+          <button role="tab" data-tab="buildings">Buildings</button>
+          <button role="tab" data-tab="upgrades">Upgrades</button>
+          <button role="tab" data-tab="research">Research &amp; Litigation</button>
+          <button role="tab" data-tab="achievements">Achievements</button>
+          <button role="tab" data-tab="settings">Settings</button>
         </nav>
         <div class="qty-selector" id="qty-selector" role="group" aria-label="Buy quantity">
           <span>Buy:</span>
@@ -147,16 +151,37 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   harvestBtn.addEventListener('click', () => hooks.onHarvest());
 
-  root.querySelectorAll<HTMLButtonElement>('.tabs [role="tab"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      activeTab = btn.dataset.tab as TabId;
-      root.querySelectorAll('.tabs [role="tab"]').forEach((b) =>
-        b.setAttribute('aria-selected', String(b === btn)),
-      );
-      qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
-      forceRebuild = true;
-      if (currentState) renderLists(currentState);
+  const tabButtons = [...root.querySelectorAll<HTMLButtonElement>('.tabs [role="tab"]')];
+  const activateTab = (btn: HTMLButtonElement, focus = false): void => {
+    activeTab = btn.dataset.tab as TabId;
+    tabButtons.forEach((tab) => {
+      const selected = tab === btn;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
     });
+    qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
+    forceRebuild = true;
+    if (focus) btn.focus();
+    if (currentState) renderLists(currentState);
+  };
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => activateTab(btn));
+    btn.addEventListener('keydown', (event) => {
+      const index = tabButtons.indexOf(btn);
+      let nextIndex = index;
+      if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabButtons.length;
+      if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabButtons.length) % tabButtons.length;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = tabButtons.length - 1;
+      if (nextIndex === index) return;
+      event.preventDefault();
+      activateTab(tabButtons[nextIndex], true);
+    });
+  });
+  tabButtons.forEach((btn) => {
+    const selected = btn.dataset.tab === activeTab;
+    btn.setAttribute('aria-selected', String(selected));
+    btn.tabIndex = selected ? 0 : -1;
   });
 
   root.querySelectorAll<HTMLButtonElement>('#qty-selector [data-qty]').forEach((btn) => {
@@ -239,10 +264,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       ? `Petition Magistrate Reino to drain the bog. Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.`
       : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).`;
     prestigeBtn.disabled = !ok;
-    prestigeBtn.textContent = ok ? `Drain for ${gain} 💠` : 'Drain the Bog';
+    prestigeBtn.textContent = ok ? `Drain for ${gain} 💠` : 'Drain the bog';
     prestigeBtn.setAttribute(
       'aria-label',
-      ok ? `Drain the Bog and gain ${gain} Bog Cores` : 'Drain the Bog (locked)',
+      ok ? `Drain the bog and gain ${gain} Bog Cores` : 'Drain the bog (locked)',
     );
   }
 
@@ -363,15 +388,23 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     for (const category of categories) {
       const categoryBuildings = BUILDINGS.filter((def) => def.category === category);
       const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
+      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
+      if (visible.length > 0 || nextLocked) {
+        entries.push({
+          key: `heading-${category}`,
+          create: () => createSectionHeading(category[0].toUpperCase() + category.slice(1)),
+          update: () => {},
+        });
+      }
       for (const def of visible) {
-      const desc = (): string => {
-        const perUnit: string[] = [];
-        if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
-        if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
-        if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
-        if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
-        return `${def.description} ${perUnit.join(', ')}.`;
-      };
+        const desc = (): string => {
+          const perUnit: string[] = [];
+          if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
+          if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
+          if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
+          if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
+          return `${def.description} ${perUnit.join(', ')}.`;
+        };
         entries.push({
           key: def.id,
           create: () =>
@@ -402,7 +435,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           },
         });
       }
-      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
       if (nextLocked) {
         const threshold = nextLocked.unlock?.brothPerSecond !== undefined
           ? `${formatNumber(nextLocked.unlock.brothPerSecond)} broth/s`
@@ -412,7 +444,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           create: () =>
             createRow(`locked-${nextLocked.id}`, {
               emoji: '🔒',
-              name: 'Classified blueprint',
+              name: 'Next blueprint',
               desc: `Unlocks at ${threshold}`,
               className: 'locked-teaser',
             }),
@@ -470,9 +502,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       .map((requirement) => {
         const building = BUILDING_BY_ID[requirement.buildingId];
         const count = state.buildings[requirement.buildingId] ?? 0;
-        return `Requires ${requirement.count} ${building.name} (${count}/${requirement.count})`;
+        const remaining = Math.max(0, requirement.count - count);
+        return `Needs ${remaining} more ${pluralize(remaining, building.name)}`;
       })
-      .join('; ');
+      .join(' and ');
   }
 
   function createOwnedDrawerEntry(): RowEntry {
@@ -490,7 +523,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const summary = row.querySelector('summary');
         const grid = row.querySelector<HTMLElement>('.owned-grid');
         if (!summary || !grid) return;
-        const countText = `Owned upgrades (${latest.upgrades.length})`;
+        const countText = `Owned upgrades · ${latest.upgrades.length}`;
         if (summary.textContent !== countText) summary.textContent = countText;
         for (const id of latest.upgrades) {
           if (grid.querySelector(`[data-upgrade-id="${id}"]`)) continue;
@@ -500,7 +533,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           tile.className = 'owned-tile';
           tile.dataset.upgradeId = id;
           tile.setAttribute('role', 'img');
-          tile.tabIndex = 0;
           tile.setAttribute('aria-label', `${upgrade.name}: ${upgrade.description}`);
           tile.title = `${upgrade.name} — ${upgrade.description}`;
           tile.textContent = upgrade.emoji;
@@ -536,8 +568,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         updateRow(row, {
           cost: upcoming ? '' : formatCost(upgrade.cost),
           owned: isOwned ? '✓ owned' : '',
-          action: upcoming ? 'Locked' : isOwned ? '' : 'Buy',
-          disabled: upcoming || isOwned || !canAfford(latest, upgrade.cost),
+          action: upcoming ? '' : isOwned ? '' : 'Buy',
+          disabled: upcoming ? undefined : isOwned || !canAfford(latest, upgrade.cost),
           label: upcoming
             ? `${upgrade.name} (locked)`
             : isOwned
@@ -579,7 +611,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     if (entries.length === 0) {
       entries.push({
         key: 'empty',
-        create: () => emptyNote('No upgrades available yet — keep building.'),
+        create: () => emptyNote('No upgrades yet — buy buildings to unlock them.'),
         update: () => {},
       });
     }
