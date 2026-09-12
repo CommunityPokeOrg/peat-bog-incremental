@@ -8,208 +8,205 @@ import {
   prestigeGain,
   tick,
 } from './game/engine';
-import { formatDuration, formatNumber } from './game/format';
 import {
   computeOfflineEarnings,
   exportSave,
   importSave,
-  load,
-  save,
   SAVE_KEY,
+  save as saveLocal,
 } from './game/save';
-import { createInitialState, type GameState } from './game/state';
+import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from './game/db';
+import { createInitialState } from './game/state';
+import { formatDuration, formatNumber } from './game/format';
 import { createUi } from './ui/app';
 
 const root = document.getElementById('app')!;
 
-// --- load -------------------------------------------------------------------
-
-let state: GameState;
-let corruptSave = false;
-let offlineSeconds = 0;
-{
-  let raw: string | null = null;
+async function init(): Promise<void> {
+  let state = createInitialState();
+  let corruptSave = false;
+  let offlineSeconds = 0;
+  let hadLegacySave = false;
   try {
-    raw = localStorage.getItem(SAVE_KEY);
+    hadLegacySave = Boolean(localStorage.getItem(SAVE_KEY));
   } catch {
-    raw = null;
+    hadLegacySave = false;
   }
-  if (raw) {
-    const loaded = load();
-    if (loaded) {
-      state = loaded;
-      offlineSeconds = (Date.now() - state.lastSaveTime) / 1000;
-    } else {
-      state = createInitialState();
-      corruptSave = true;
+  const loaded = await loadWithMigration();
+  if (loaded) {
+    state = loaded;
+    offlineSeconds = (Date.now() - state.lastSaveTime) / 1000;
+  } else if (hadLegacySave) {
+    corruptSave = true;
+  }
+  const newSave = !loaded && !hadLegacySave;
+
+  const doSave = async (showError = true): Promise<void> => {
+    try {
+      if (isIndexedDbAvailable()) await saveState(state);
+      else saveLocal(state);
+      ui.setSavedIndicator(`Saved ✓ ${new Date().toLocaleTimeString()}`);
+    } catch {
+      try {
+        saveLocal(state);
+        ui.setSavedIndicator(`Saved locally ✓ ${new Date().toLocaleTimeString()}`);
+        if (showError) ui.toast('IndexedDB unavailable — saved to localStorage fallback.');
+      } catch {
+        if (showError) ui.toast('Could not save — storage unavailable.');
+      }
     }
-  } else {
-    state = createInitialState();
+  };
+
+  function checkAchievementsNow(): void {
+    for (const id of checkAchievements(state)) {
+      const a = ACHIEVEMENT_BY_ID[id];
+      ui.toast(`Achievement: ${a.emoji} ${a.name} — +1% production`);
+    }
   }
-}
 
-// --- ui ---------------------------------------------------------------------
+  function doHarvest(): void {
+    const gained = click(state);
+    ui.spawnFloat(gained);
+    const btn = document.getElementById('harvest-btn')!;
+    btn.classList.remove('squish');
+    void btn.offsetWidth;
+    btn.classList.add('squish');
+    checkAchievementsNow();
+  }
 
-const ui = createUi(root, {
-  onHarvest: doHarvest,
-  onPrestige: confirmPrestige,
-  onSaveNow: () => doSave(),
-  onExport: () => exportSave(state),
-  onImport: (encoded) => {
-    const imported = importSave(encoded);
-    if (!imported) return false;
-    state = imported;
-    ui.renderLists(state);
-    return true;
-  },
-  onHardReset: () => {
+  function confirmPrestige(): void {
+    const gain = prestigeGain(state);
+    if (!canPrestige(state)) return;
     ui.showModal({
-      title: 'Hard reset?',
-      body: 'This wipes your entire save — broth, buildings, research, achievements, Bog Cores. There is no undo.',
+      title: 'Drain the Bog?',
+      body: `Gain ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
       actions: [
+        { label: 'Cancel', onClick: () => ui.closeModal() },
         {
-          label: 'Cancel',
-          onClick: () => ui.closeModal(),
-        },
-        {
-          label: 'Yes, wipe it',
+          label: `Drain for ${gain} 💠`,
           danger: true,
           onClick: () => {
-            ui.showModal({
-              title: 'Really sure?',
-              body: 'Second confirmation: the bog will be drained forever.',
-              actions: [
-                { label: 'Back', onClick: () => ui.closeModal() },
-                {
-                  label: 'Drain forever',
-                  danger: true,
-                  onClick: () => {
-                    try {
-                      localStorage.removeItem(SAVE_KEY);
-                    } catch {
-                      /* ignore */
-                    }
-                    state = createInitialState();
-                    ui.closeModal();
-                    ui.renderLists(state);
-                    ui.toast('Fresh bog. Good luck.');
-                  },
-                },
-              ],
-            });
+            prestige(state);
+            ui.closeModal();
+            ui.renderLists(state);
+            ui.toast(`The bog drains. +${gain} Bog Cores.`);
+            checkAchievementsNow();
+            void doSave();
           },
         },
       ],
     });
-  },
-});
+  }
 
-function doHarvest(): void {
-  const gained = click(state);
-  ui.spawnFloat(gained);
-  const btn = document.getElementById('harvest-btn')!;
-  btn.classList.remove('squish');
-  void btn.offsetWidth;
-  btn.classList.add('squish');
-  checkAchievementsNow();
-}
-
-function confirmPrestige(): void {
-  const gain = prestigeGain(state);
-  if (!canPrestige(state)) return;
-  ui.showModal({
-    title: 'Drain the Bog?',
-    body: `Gain ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
-    actions: [
-      { label: 'Cancel', onClick: () => ui.closeModal() },
-      {
-        label: `Drain for ${gain} 💠`,
-        danger: true,
-        onClick: () => {
-          prestige(state);
-          ui.closeModal();
-          ui.renderLists(state);
-          ui.toast(`The bog drains. +${gain} Bog Cores.`);
-          checkAchievementsNow();
-          doSave();
-        },
-      },
-    ],
+  const ui = createUi(root, {
+    initialTab: newSave ? 'docket' : 'buildings',
+    persistenceBackend: isIndexedDbAvailable() ? 'IndexedDB (idb) · slot main' : 'localStorage fallback',
+    onHarvest: doHarvest,
+    onPrestige: confirmPrestige,
+    onSaveNow: () => void doSave(),
+    onExport: () => exportSave(state),
+    onImport: (encoded) => {
+      const imported = importSave(encoded);
+      if (!imported) return false;
+      state = imported;
+      ui.renderLists(state);
+      void doSave();
+      return true;
+    },
+    onHardReset: () => {
+      ui.showModal({
+        title: 'Hard reset?',
+        body: 'This wipes your entire save — broth, buildings, research, achievements, Bog Cores. There is no undo.',
+        actions: [
+          { label: 'Cancel', onClick: () => ui.closeModal() },
+          {
+            label: 'Yes, wipe it',
+            danger: true,
+            onClick: () => {
+              ui.showModal({
+                title: 'Really sure?',
+                body: 'Second confirmation: the bog will be drained forever.',
+                actions: [
+                  { label: 'Back', onClick: () => ui.closeModal() },
+                  {
+                    label: 'Drain forever',
+                    danger: true,
+                    onClick: () => {
+                      void clearState().catch(() => {});
+                      try {
+                        localStorage.removeItem(SAVE_KEY);
+                      } catch {
+                        // Ignore unavailable legacy storage.
+                      }
+                      state = createInitialState();
+                      ui.closeModal();
+                      ui.renderLists(state);
+                      ui.toast('Fresh bog. Good luck.');
+                    },
+                  },
+                ],
+              });
+            },
+          },
+        ],
+      });
+    },
   });
-}
 
-function checkAchievementsNow(): void {
-  for (const id of checkAchievements(state)) {
-    const a = ACHIEVEMENT_BY_ID[id];
-    ui.toast(`Achievement: ${a.emoji} ${a.name} — +1% production`);
-  }
-}
+  const fireSave = (): void => {
+    try {
+      saveLocal(state);
+    } catch {
+      // IndexedDB may still complete after the page starts unloading.
+    }
+    void doSave(false);
+  };
 
-// --- saving -------------------------------------------------------------------
-
-function doSave(): void {
-  try {
-    save(state);
-    const t = new Date().toLocaleTimeString();
-    ui.setSavedIndicator(`Saved ✓ ${t}`);
-  } catch {
-    ui.toast('Could not save — storage unavailable.');
-  }
-}
-
-setInterval(doSave, 15_000);
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') doSave();
-});
-window.addEventListener('beforeunload', doSave);
-
-// --- keyboard -----------------------------------------------------------------
-
-window.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() !== 'h') return;
-  const target = e.target as HTMLElement | null;
-  if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-  doHarvest();
-});
-
-// --- offline summary ----------------------------------------------------------
-
-if (corruptSave) {
-  ui.toast('Save was unreadable — started a fresh bog.');
-}
-
-if (offlineSeconds > 60) {
-  const earned = computeOfflineEarnings(state, offlineSeconds);
-  state.broth += earned.broth;
-  state.compute += earned.compute;
-  state.totalBrothEarned += earned.broth;
-  state.totalComputeEarned += earned.compute;
-  ui.showModal({
-    title: 'Welcome back to the bog',
-    body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.compute)} compute.`,
-    actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
+  setInterval(() => void doSave(), 15_000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void doSave();
   });
-}
+  window.addEventListener('beforeunload', fireSave);
+  window.addEventListener('pagehide', fireSave);
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'h') return;
+    const target = e.target as HTMLElement | null;
+    if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    doHarvest();
+  });
 
-// --- loop ---------------------------------------------------------------------
-
-let last = performance.now();
-let lastListRender = 0;
-
-function frame(now: number): void {
-  const dt = Math.min((now - last) / 1000, 1);
-  last = now;
-  if (dt > 0) {
-    tick(state, dt);
-    checkAchievementsNow();
+  if (corruptSave) ui.toast('Save was unreadable — started a fresh bog.');
+  if (offlineSeconds > 60) {
+    const earned = computeOfflineEarnings(state, offlineSeconds);
+    state.broth += earned.broth;
+    state.compute += earned.compute;
+    state.totalBrothEarned += earned.broth;
+    state.totalComputeEarned += earned.compute;
+    ui.showModal({
+      title: 'Welcome back to the bog',
+      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.compute)} compute.`,
+      actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
+    });
   }
-  ui.renderCounters(state);
-  if (now - lastListRender > 250) {
-    lastListRender = now;
-    ui.renderLists(state);
+
+  let last = performance.now();
+  let lastListRender = 0;
+  function frame(now: number): void {
+    const dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    if (dt > 0) {
+      tick(state, dt);
+      checkAchievementsNow();
+    }
+    ui.renderCounters(state);
+    if (now - lastListRender > 250) {
+      lastListRender = now;
+      ui.renderLists(state);
+    }
+    requestAnimationFrame(frame);
   }
+  ui.renderLists(state);
   requestAnimationFrame(frame);
 }
 
-ui.renderLists(state);
-requestAnimationFrame(frame);
+void init();
