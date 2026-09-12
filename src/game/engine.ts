@@ -195,8 +195,15 @@ export function buyBuilding(state: GameState, id: string, qty: number): boolean 
 }
 
 export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
-  return (u.requires ?? []).every(
-    ({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count,
+  if (state.upgrades.includes(u.id)) return true;
+  if (u.requires?.length) {
+    return u.requires.every(
+      ({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count,
+    );
+  }
+  return (
+    state.totalBrothEarned >= (u.cost.broth ?? 0) * 0.1 &&
+    state.totalComputeEarned >= (u.cost.compute ?? 0) * 0.1
   );
 }
 

@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import { BUILDING_BY_ID } from '../src/game/data';
+import { buildingVisible } from '../src/game/engine';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
+import { pluralize } from '../src/ui/text';
 
 describe('UI list reconciliation', () => {
   afterEach(() => {
@@ -95,6 +98,7 @@ describe('UI list reconciliation', () => {
     });
     const state = createInitialState();
     state.broth = 100;
+    state.totalBrothEarned = 100;
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
     const spade = root.querySelector<HTMLButtonElement>('[data-key="spade"]');
@@ -130,5 +134,32 @@ describe('UI list reconciliation', () => {
     expect(upgrades.getAttribute('aria-selected')).toBe('true');
     expect(upgrades.tabIndex).toBe(0);
     expect(buildings.tabIndex).toBe(-1);
+  });
+
+  it('pluralizes common building names', () => {
+    expect(pluralize(10, 'Refinery')).toBe('Refineries');
+    expect(pluralize(3, 'Vat')).toBe('Vats');
+    expect(pluralize(2, 'Chiller')).toBe('Chillers');
+  });
+
+  it('hides upcoming overclocks for unrevealed buildings', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const ui = createUi(root, {
+      onHarvest: () => {},
+      onPrestige: () => {},
+      onSaveNow: () => {},
+      onExport: () => '',
+      onImport: () => false,
+      onHardReset: () => {},
+    });
+    const state = createInitialState();
+    ui.renderLists(state);
+    root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
+
+    expect(buildingVisible(state, BUILDING_BY_ID.dredger)).toBe(false);
+    expect(root.querySelector('[data-key="soon-boost-dredger"]')).toBeNull();
+    expect(root.querySelector('[data-key="soon-boost-refinery"]')).toBeNull();
+    expect(root.querySelector('[data-key="soon-boost-still"]')).toBeNull();
   });
 });

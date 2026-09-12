@@ -27,13 +27,10 @@ import {
 } from '../game/engine';
 import { formatCost, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
+import { pluralize } from './text';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
 type Qty = number | 'max';
-
-function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return count === 1 ? singular : plural;
-}
 
 export interface UiHooks {
   initialTab?: TabId;
@@ -508,6 +505,21 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       .join(' and ');
   }
 
+  function unlockThresholdText(upgrade: (typeof UPGRADES)[number]): string {
+    const thresholds: string[] = [];
+    if (upgrade.cost.broth !== undefined) {
+      thresholds.push(`${formatNumber(upgrade.cost.broth * 0.1)} broth`);
+    }
+    if (upgrade.cost.compute !== undefined) {
+      thresholds.push(`${formatNumber(upgrade.cost.compute * 0.1)} compute`);
+    }
+    return `Unlocks after earning ${thresholds.join(' and ')}`;
+  }
+
+  function upcomingText(state: GameState, upgrade: (typeof UPGRADES)[number]): string {
+    return upgrade.requires?.length ? requirementsText(state, upgrade) : unlockThresholdText(upgrade);
+  }
+
   function createOwnedDrawerEntry(): RowEntry {
     return {
       key: 'owned-drawer',
@@ -553,7 +565,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         createRow(upcoming ? `soon-${upgrade.id}` : upgrade.id, {
           emoji: upgrade.emoji,
           name: upgrade.name,
-          desc: upcoming ? requirementsText(state, upgrade) : upgrade.description,
+          desc: upcoming ? upcomingText(state, upgrade) : upgrade.description,
           className: upcoming ? 'upcoming-upgrade' : undefined,
           onClick: upcoming
             ? undefined
@@ -575,7 +587,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             : isOwned
               ? `${upgrade.name} (owned)`
               : `Buy upgrade ${upgrade.name} for ${formatCost(upgrade.cost)}`,
-          desc: upcoming ? requirementsText(latest, upgrade) : upgrade.description,
+          desc: upcoming ? upcomingText(latest, upgrade) : upgrade.description,
         });
       },
     };
@@ -587,8 +599,21 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       .filter((u) => !owned.has(u.id) && upgradeVisible(state, u))
       .sort((a, b) => (a.cost.broth ?? 0) - (b.cost.broth ?? 0) || (a.cost.compute ?? 0) - (b.cost.compute ?? 0));
     const upcoming = UPGRADES
-      .filter((u) => !owned.has(u.id) && !upgradeVisible(state, u) && u.requires?.length)
-      .sort((a, b) => requirementGap(state, a) - requirementGap(state, b))
+      .filter((u) => {
+        if (owned.has(u.id) || upgradeVisible(state, u)) return false;
+        return (u.requires ?? []).every(({ buildingId }) => {
+          const building = BUILDING_BY_ID[buildingId];
+          return building && buildingVisible(state, building);
+        });
+      })
+      .sort((a, b) => {
+        const aHasRequirements = Boolean(a.requires?.length);
+        const bHasRequirements = Boolean(b.requires?.length);
+        if (aHasRequirements !== bHasRequirements) return aHasRequirements ? -1 : 1;
+        if (aHasRequirements) return requirementGap(state, a) - requirementGap(state, b);
+        return (a.cost.broth ?? 0) - (b.cost.broth ?? 0) ||
+          (a.cost.compute ?? 0) - (b.cost.compute ?? 0);
+      })
       .slice(0, 6);
     const entries: RowEntry[] = [];
     if (owned.size > 0) entries.push(createOwnedDrawerEntry());

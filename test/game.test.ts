@@ -167,6 +167,14 @@ describe('progressive building gating', () => {
     expect(upgradeVisible(state, upgrade)).toBe(true);
   });
 
+  it('gates click upgrades by lifetime earnings', () => {
+    const state = createInitialState();
+    expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(false);
+    state.totalBrothEarned = 5;
+    expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(true);
+    expect(upgradeVisible(state, UPGRADE_BY_ID.buckets)).toBe(false);
+  });
+
   it('applies thermal upgrade multipliers', () => {
     const state = createInitialState();
     state.buildings.rack = 10;
