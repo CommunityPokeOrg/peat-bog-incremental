@@ -70,7 +70,9 @@ function buildingMultiplier(state: GameState, buildingId: string): number {
 }
 
 export function totalHeat(state: GameState): number {
-  const heatMult = state.research.includes('liquid-immersion') ? 0.8 : 1;
+  let heatMult = 1;
+  if (state.research.includes('liquid-immersion')) heatMult *= 0.8;
+  if (state.research.includes('lubrication-clause')) heatMult *= 0.85;
   let heat = 0;
   for (const b of BUILDINGS) {
     if (b.heat) heat += (state.buildings[b.id] ?? 0) * b.heat;
@@ -104,10 +106,13 @@ export function productionPerSecond(state: GameState): Rates {
   const brothMult =
     global *
     (state.research.includes('broth-distillation') ? 1.5 : 1) *
+    (state.research.includes('broth-standard') ? 1.25 : 1) *
+    (state.research.includes('nordic-verdict') ? 1.5 : 1) *
     (state.research.includes('quantum-peat') ? 2 : 1);
   const computeMult =
     global *
     (state.research.includes('edge-caching') ? 1.5 : 1) *
+    (state.research.includes('nordic-verdict') ? 1.5 : 1) *
     (state.research.includes('quantum-peat') ? 2 : 1);
 
   let broth = 0;
@@ -233,6 +238,7 @@ export function checkAchievements(state: GameState): string[] {
   const has = (id: string) => state.achievements.includes(id);
   const checks: Record<string, boolean> = {
     'click-1': state.totalClicks >= 1,
+    'debt-free': state.totalBrothEarned >= 59,
     'click-100': state.totalClicks >= 100,
     'click-1000': state.totalClicks >= 1000,
     'broth-1k': state.totalBrothEarned >= 1_000,
@@ -248,6 +254,10 @@ export function checkAchievements(state: GameState): string[] {
     'cores-10': state.bogCores >= 10,
     'harvester-100': owned('harvester') >= 100,
     hyperscaler: owned('hyperscaler') >= 1,
+    'hot-fries': state.upgrades.includes('hot-fries'),
+    'pulley-equity': state.upgrades.includes('pulley-equity'),
+    'clause-struck': state.research.includes('lubrication-clause'),
+    'reino-verdict': state.research.includes('nordic-verdict'),
   };
   const newly: string[] = [];
   for (const a of ACHIEVEMENTS) {

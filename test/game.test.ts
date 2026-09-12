@@ -201,3 +201,44 @@ describe('achievements', () => {
     expect(checkAchievements(state)).toContain('full-cool');
   });
 });
+
+describe('Sector 4 research and upgrades', () => {
+  it('reduces heat with the lubrication clause', () => {
+    const state = createInitialState();
+    state.buildings.rack = 10;
+    state.research.push('lubrication-clause');
+    expect(totalHeat(state)).toBeCloseTo(80 * 0.85);
+  });
+
+  it('multiplies both production rates after the Nordic verdict', () => {
+    const state = createInitialState();
+    state.buildings.harvester = 10;
+    state.buildings.rack = 10;
+    state.buildings.chiller = 8;
+    const before = productionPerSecond(state);
+    state.research.push('nordic-verdict');
+    const after = productionPerSecond(state);
+    expect(after.brothPerSecond).toBeCloseTo(before.brothPerSecond * 1.5);
+    expect(after.computePerSecond).toBeCloseTo(before.computePerSecond * 1.5);
+  });
+
+  it('triples click power with hot fries', () => {
+    const state = createInitialState();
+    state.upgrades.push('hot-fries');
+    expect(clickPower(state)).toBeCloseTo(3);
+  });
+});
+
+describe('new docket achievements', () => {
+  it('unlocks debt-free at 59 broth', () => {
+    const state = createInitialState();
+    state.totalBrothEarned = 59;
+    expect(checkAchievements(state)).toContain('debt-free');
+  });
+
+  it('unlocks the Reino verdict after research', () => {
+    const state = createInitialState();
+    state.research.push('nordic-verdict');
+    expect(checkAchievements(state)).toContain('reino-verdict');
+  });
+});

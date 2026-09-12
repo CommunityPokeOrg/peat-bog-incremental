@@ -1,7 +1,9 @@
 import {
   ACHIEVEMENTS,
+  ACHIEVEMENT_BY_ID,
   BUILDING_BY_ID,
   BUILDINGS,
+  DOCKET,
   RESEARCH,
   UPGRADES,
   type ResourceCost,
@@ -25,10 +27,12 @@ import {
 import { formatCost, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
 
-type TabId = 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
+type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
 type Qty = number | 'max';
 
 export interface UiHooks {
+  initialTab?: TabId;
+  persistenceBackend?: string;
   onHarvest(): void;
   onPrestige(): void;
   onSaveNow(): void;
@@ -56,9 +60,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   root.innerHTML = `
     <header class="site-header">
       <h1>Peat Bog Incremental</h1>
-      <p class="subtitle">Harvest the broth. Cool the racks. Drain the bog.</p>
+      <p class="subtitle">Sector 4 · The Peat Bog Trial — harvest the fp16 compute broth, cool the racks, settle McFly &amp; Chronicler LLP v Burger King Nordic before Magistrate Reino.</p>
     </header>
     <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
+    <div class="next-hint" id="next-hint" aria-live="polite"></div>
     <main class="layout">
       <section class="harvest-panel" aria-label="Harvest">
         <div class="card thermal-card">
@@ -87,9 +92,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       </section>
       <section class="panel">
         <nav class="tabs" role="tablist" aria-label="Game panels">
-          <button role="tab" data-tab="buildings" aria-selected="true">Buildings</button>
+          <button role="tab" data-tab="docket" aria-selected="${(hooks.initialTab ?? 'buildings') === 'docket'}">Docket</button>
+          <button role="tab" data-tab="buildings" aria-selected="${(hooks.initialTab ?? 'buildings') === 'buildings'}">Buildings</button>
           <button role="tab" data-tab="upgrades" aria-selected="false">Upgrades</button>
-          <button role="tab" data-tab="research" aria-selected="false">Research</button>
+          <button role="tab" data-tab="research" aria-selected="false">Research &amp; Litigation</button>
           <button role="tab" data-tab="achievements" aria-selected="false">Achievements</button>
           <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
         </nav>
@@ -105,7 +111,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     </main>
     <footer class="site-footer">
       <span id="save-indicator" aria-live="polite"></span>
-      <span>v1.0.0 · Peat Bog Incremental</span>
+      <span>Sector 4 · Peat Bog Trial · McFly &amp; Chronicler LLP v Burger King Nordic</span>
     </footer>
     <div class="toasts" id="toasts" aria-live="assertive"></div>
     <div class="modal-backdrop" id="modal-backdrop" hidden>
@@ -113,12 +119,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     </div>
   `;
 
-  let activeTab: TabId = 'buildings';
+  let activeTab: TabId = hooks.initialTab ?? 'buildings';
   let buyQty: Qty = 1;
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
   const resourcesEl = $('#resources');
+  const nextHint = $('#next-hint');
   const thermalText = $('#thermal-text');
   const thermalPct = $('#thermal-pct');
   const thermalFill = $('#thermal-fill');
@@ -134,6 +141,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const modalBackdrop = $('#modal-backdrop');
   const modal = $('#modal');
   const saveIndicator = $('#save-indicator');
+  const qtySelector = $('#qty-selector');
+  qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
 
   harvestBtn.addEventListener('click', () => hooks.onHarvest());
 
@@ -143,7 +152,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       root.querySelectorAll('.tabs [role="tab"]').forEach((b) =>
         b.setAttribute('aria-selected', String(b === btn)),
       );
-      $('#qty-selector').style.display = activeTab === 'buildings' ? '' : 'none';
+      qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
       if (currentState) renderLists(currentState);
     });
   });
@@ -181,9 +190,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderCounters(state: GameState): void {
     const rates = productionPerSecond(state);
     resourcesEl.innerHTML = `
-      <span class="res"><span class="res-emoji" aria-hidden="true">🫧</span> <strong>${formatNumber(state.broth)}</strong> broth <em>+${formatNumber(rates.brothPerSecond)}/s</em></span>
+      <span class="res"><span class="res-emoji" aria-hidden="true">🫧</span> <strong>${formatNumber(state.broth)}</strong> fp16 compute broth <em>+${formatNumber(rates.brothPerSecond)}/s</em></span>
       <span class="res"><span class="res-emoji" aria-hidden="true">⚡</span> <strong>${formatNumber(state.compute)}</strong> compute <em>+${formatNumber(rates.computePerSecond)}/s</em></span>
       <span class="res"><span class="res-emoji" aria-hidden="true">💠</span> <strong>${formatNumber(state.bogCores)}</strong> bog cores</span>`;
+    const next = currentDocket(state);
+    nextHint.textContent = next ? `Next up: ${next.name}` : 'Docket complete — the peat bog trial is settled.';
     clickPowerEl.textContent = formatNumber(clickPower(state));
     renderThermal(state);
     renderPrestige(state);
@@ -215,8 +226,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const gain = prestigeGain(state);
     const ok = canPrestige(state);
     prestigeInfo.textContent = ok
-      ? `Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.`
-      : `Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).`;
+      ? `Petition Magistrate Reino to drain the bog. Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.`
+      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).`;
     prestigeBtn.disabled = !ok;
     prestigeBtn.textContent = ok ? `Drain for ${gain} 💠` : 'Drain the Bog';
     prestigeBtn.setAttribute(
@@ -278,6 +289,32 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           },
         }),
       );
+    }
+    tabContent.replaceChildren(frag);
+  }
+
+  function currentDocket(state: GameState) {
+    const id = DOCKET.find((itemId) => !state.achievements.includes(itemId));
+    return id ? ACHIEVEMENT_BY_ID[id] : undefined;
+  }
+
+  function renderDocket(state: GameState): void {
+    const currentId = DOCKET.find((id) => !state.achievements.includes(id));
+    const frag = document.createDocumentFragment();
+    for (const id of DOCKET) {
+      const achievement = ACHIEVEMENT_BY_ID[id];
+      const done = state.achievements.includes(id);
+      const status = done ? 'done' : id === currentId ? 'current' : 'upcoming';
+      const row = document.createElement('div');
+      row.className = `item docket-row ${status}`;
+      row.innerHTML = `
+        <span class="item-emoji" aria-hidden="true">${achievement.emoji}</span>
+        <span class="item-body">
+          <span class="item-name">${achievement.name}</span>
+          <span class="item-desc">${achievement.description}</span>
+        </span>
+        <span class="docket-badge">${done ? 'Filed ✓' : status === 'current' ? 'In progress' : 'Pending'}</span>`;
+      frag.appendChild(row);
     }
     tabContent.replaceChildren(frag);
   }
@@ -351,8 +388,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   function renderSettings(): void {
     const wrap = document.createElement('div');
-    wrap.className = 'settings';
+      wrap.className = 'settings';
     wrap.innerHTML = `
+      <p class="persistence-status">Persistence: ${hooks.persistenceBackend ?? 'IndexedDB (idb) · slot main'}</p>
       <button class="btn" id="set-save">Save now</button>
       <button class="btn" id="set-export">Export save</button>
       <button class="btn" id="set-import">Import save</button>
@@ -396,6 +434,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderLists(state: GameState): void {
     currentState = state;
     switch (activeTab) {
+      case 'docket': renderDocket(state); break;
       case 'buildings': renderBuildings(state); break;
       case 'upgrades': renderUpgrades(state); break;
       case 'research': renderResearch(state); break;

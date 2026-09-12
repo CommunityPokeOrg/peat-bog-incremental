@@ -30,7 +30,7 @@ export const BUILDINGS: BuildingDef[] = [
     id: 'vat',
     name: 'Fermentation Vat',
     emoji: '🧪',
-    description: 'Slow-brews peat into nutrient-dense compute broth.',
+    description: 'Slow-brews Sector 4 peat into 40 L batches of fp16 compute broth.',
     baseCost: { broth: 100 },
     brothPerSecond: 4,
   },
@@ -38,7 +38,7 @@ export const BUILDINGS: BuildingDef[] = [
     id: 'pump',
     name: 'Bog Pump',
     emoji: '⛽',
-    description: 'Industrial pump slurping broth straight from the water table.',
+    description: 'Industrial pump on a Taylor C602 pulley, slurping broth from the water table.',
     baseCost: { broth: 1100 },
     brothPerSecond: 25,
   },
@@ -46,7 +46,7 @@ export const BUILDINGS: BuildingDef[] = [
     id: 'chiller',
     name: 'Chiller',
     emoji: '❄️',
-    description: 'Keeps a rack-sized pocket of the bog frosty.',
+    description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.',
     baseCost: { broth: 600 },
     cooling: 10,
   },
@@ -165,6 +165,24 @@ export const UPGRADES: UpgradeDef[] = [
     kind: 'click',
     clickMultiplier: 5,
   },
+  {
+    id: 'hot-fries',
+    name: '120 kg Hot Fries',
+    emoji: '🍟',
+    description: 'Feed the bog crew 120 kg of hot fries. Click power ×3.',
+    cost: { broth: 20_000 },
+    kind: 'click',
+    clickMultiplier: 3,
+  },
+  {
+    id: 'pulley-equity',
+    name: '15% Taylor C602 Pulley Equity',
+    emoji: '🔩',
+    description: 'Take 15% equity in the pulley. Each click also gains +1.5% of your broth/s.',
+    cost: { broth: 250_000 },
+    kind: 'click',
+    clickBrothFraction: 0.015,
+  },
   ...BUILDINGS.map(
     (b): UpgradeDef => ({
       id: `boost-${b.id}`,
@@ -207,6 +225,13 @@ export const RESEARCH: ResearchDef[] = [
     cost: { compute: 500 },
   },
   {
+    id: 'lubrication-clause',
+    name: 'Strike the 5:00 AM Lubrication Clause',
+    emoji: '📜',
+    description: 'No more dawn greasing of the racks. All heat −15%.',
+    cost: { compute: 2_000 },
+  },
+  {
     id: 'liquid-immersion',
     name: 'Liquid Immersion',
     emoji: '🛢️',
@@ -221,11 +246,25 @@ export const RESEARCH: ResearchDef[] = [
     cost: { compute: 20_000 },
   },
   {
+    id: 'broth-standard',
+    name: '40 L fp16 Compute Broth Standard',
+    emoji: '🧴',
+    description: 'Standardise every batch at 40 L fp16. Broth production ×1.25.',
+    cost: { compute: 50_000 },
+  },
+  {
     id: 'edge-caching',
     name: 'Edge Caching',
     emoji: '🗄️',
     description: 'Compute production ×1.5.',
     cost: { compute: 100_000 },
+  },
+  {
+    id: 'nordic-verdict',
+    name: 'McFly & Chronicler LLP v Burger King Nordic',
+    emoji: '⚖️',
+    description: 'Win the case before Magistrate Reino. All production ×1.5.',
+    cost: { compute: 250_000 },
   },
   {
     id: 'quantum-peat',
@@ -264,8 +303,29 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'cores-10', name: 'Core Sample', emoji: '💎', description: 'Hold 10 Bog Cores.' },
   { id: 'harvester-100', name: 'Peat Empire', emoji: '🪵', description: 'Own 100 Peat Harvesters.' },
   { id: 'hyperscaler', name: 'Hyperscaled', emoji: '🌐', description: 'Own a Bog Hyperscaler.' },
+  { id: 'debt-free', name: 'WillMcfly, Debt-Free', emoji: '💵', description: 'Bank $59 of sanitized change (earn 59 total broth).' },
+  { id: 'hot-fries', name: '120 kg Hot Fries', emoji: '🍟', description: 'Buy the 120 kg Hot Fries upgrade.' },
+  { id: 'pulley-equity', name: 'Pulley Shareholder', emoji: '🔩', description: 'Hold 15% Taylor C602 pulley equity.' },
+  { id: 'clause-struck', name: 'Clause Struck', emoji: '📜', description: 'Remove the 5:00 AM lubrication clause.' },
+  { id: 'reino-verdict', name: 'Magistrate Reino Rules', emoji: '⚖️', description: 'Win McFly & Chronicler LLP v Burger King Nordic.' },
 ];
 
 export const ACHIEVEMENT_BY_ID: Record<string, AchievementDef> = Object.fromEntries(
   ACHIEVEMENTS.map((a) => [a.id, a]),
 );
+
+export const DOCKET: string[] = [
+  'click-1',
+  'debt-free',
+  'broth-1k',
+  'first-rack',
+  'first-compute',
+  'full-cool',
+  'hot-fries',
+  'clause-struck',
+  'pulley-equity',
+  'reino-verdict',
+  'compute-1m',
+  'prestige-1',
+  'hyperscaler',
+];
