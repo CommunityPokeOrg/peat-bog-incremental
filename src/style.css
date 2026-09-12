@@ -250,8 +250,8 @@ kbd {
 }
 
 .tabs [role='tab'] {
-  flex: 1;
-  min-width: 44px;
+  flex: 1 1 auto;
+  min-width: max-content;
   min-height: 44px;
   background: transparent;
   border: none;
@@ -358,6 +358,27 @@ button.item:hover:not(:disabled) {
   font-family: var(--mono);
   font-size: 0.78rem;
   color: var(--moss-bright);
+}
+
+.item-body {
+  flex: 1;
+}
+
+.item-action {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--moss);
+  color: var(--moss-bright);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+button.item:hover:not(:disabled) .item-action {
+  background: var(--moss);
+  color: #10180f;
 }
 
 .achievement.locked {

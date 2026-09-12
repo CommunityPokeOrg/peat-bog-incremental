@@ -231,6 +231,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     desc: string;
     cost: ResourceCost;
     owned?: string;
+    action?: string;
     disabled: boolean;
     label: string;
     onBuy(): void;
@@ -245,7 +246,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         <span class="item-name">${opts.name}${opts.owned ? ` <span class="owned">${opts.owned}</span>` : ''}</span>
         <span class="item-desc">${opts.desc}</span>
         <span class="item-cost">${formatCost(opts.cost)}</span>
-      </span>`;
+      </span>
+      ${opts.action ? `<span class="item-action" aria-hidden="true">${opts.action}</span>` : ''}`;
     btn.addEventListener('click', opts.onBuy);
     return btn;
   }
@@ -268,6 +270,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           desc: `${def.description} ${perUnit.join(', ')}.`,
           cost,
           owned: `×${owned}`,
+          action: `Buy ×${qty}`,
           disabled: !canAfford(state, cost),
           label: `Buy ${qty} ${def.name} for ${formatCost(cost)}`,
           onBuy: () => {
@@ -291,6 +294,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           desc: u.description,
           cost: u.cost,
           owned: owned ? '✓ owned' : undefined,
+          action: owned ? undefined : 'Buy',
           disabled: owned || !canAfford(state, u.cost),
           label: owned ? `${u.name} (owned)` : `Buy upgrade ${u.name} for ${formatCost(u.cost)}`,
           onBuy: () => {
@@ -316,6 +320,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           desc: r.description,
           cost: r.cost,
           owned: owned ? '✓ done' : undefined,
+          action: owned ? undefined : 'Research',
           disabled: owned || !canAfford(state, r.cost),
           label: owned ? `${r.name} (researched)` : `Research ${r.name} for ${formatCost(r.cost)}`,
           onBuy: () => {
