@@ -404,6 +404,18 @@ export function buildingVisible(state: GameState, def: BuildingDef, rates = prod
   );
 }
 
+/** A resource is discovered once the player has held it, produced it, or unlocked its line. */
+export function resourceDiscovered(state: GameState, resource: SpendableResource): boolean {
+  if (resource === 'broth' || resource === 'compute') return true;
+  if (state.wallet[resource].gt(0) || state.lifetime[resource].gt(0)) return true;
+  const rates = productionPerSecond(state);
+  return BUILDINGS.some((building) =>
+    building.produces?.[resource] !== undefined &&
+    lineUnlocked(state, building.line) &&
+    ((state.buildings[building.id] ?? 0) > 0 || buildingVisible(state, building, rates)),
+  );
+}
+
 export function revealBuildings(state: GameState): string[] {
   const newlyRevealed: string[] = [];
   const rates = productionPerSecond(state);

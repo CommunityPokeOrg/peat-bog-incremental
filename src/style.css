@@ -973,6 +973,7 @@ button.item:not(:disabled) .item-action {
 
 /* Charter tree: camera viewport, transformed sheet, and absolutely placed node buttons. */
 .charter-canvas {
+  contain: layout paint;
   position: relative;
   flex: 1 1 auto;
   min-height: 320px;
@@ -1156,6 +1157,19 @@ button.item:not(:disabled) .item-action {
 
 .charter-node[data-state="signed"] {
   color: var(--ink);
+}
+
+.charter-canvas[data-far="true"] .charter-node-name {
+  display: none;
+}
+
+.charter-canvas[data-far="true"] .charter-edges line,
+.charter-canvas[data-far="true"] .charter-node-glyph::after {
+  animation: none;
+}
+
+.charter-canvas[data-far="true"] .charter-node .charter-node-glyph {
+  filter: none;
 }
 
 .charter-node[aria-pressed="true"] .charter-node-glyph {
@@ -1502,12 +1516,13 @@ button.item:not(:disabled) .item-action {
   right: var(--sp-4);
   bottom: var(--sp-4);
   z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  display: grid;
+  perspective: 600px;
 }
 
 .toast {
+  grid-area: 1 / 1;
+  z-index: calc(10 - var(--depth));
   max-width: min(30rem, calc(100vw - 2rem));
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--rule-strong);
@@ -1517,6 +1532,17 @@ button.item:not(:disabled) .item-action {
   color: var(--ink);
   font-size: var(--fs-sm);
   animation: toast-in var(--t-duration-md) var(--t-ease);
+  transform: translateY(calc(var(--depth) * -8px)) scale(calc(1 - var(--depth) * .05));
+  opacity: calc(1 - var(--depth) * .25);
+  transition:
+    transform var(--t-duration-md) var(--t-ease),
+    opacity var(--t-duration-md) var(--t-ease);
+}
+
+.toasts:hover .toast,
+.toasts:focus-within .toast {
+  transform: translateY(calc(var(--depth) * -110%));
+  opacity: 1;
 }
 
 .modal-backdrop {
@@ -1678,6 +1704,10 @@ button.item:not(:disabled) .item-action {
   .charter-edges line[data-state="signed"],
   .t-check {
     animation: none;
+  }
+
+  .toast {
+    transition: none;
   }
 }
 

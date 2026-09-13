@@ -22,12 +22,14 @@ import {
   canAfford,
   canPrestige,
   clickPower,
+  lineUnlocked,
   maxAffordable,
   maxResearchQueue,
   nightWatchCost,
   prestigeGain,
   productionPerSecond,
   researchProgress,
+  resourceDiscovered,
   thermalFactor,
   totalCooling,
   totalHeat,
@@ -111,6 +113,10 @@ const TAB_EMBLEMS: Record<TabId, string> = {
   charter: EMBLEM_STAR,
   settings: EMBLEM_SLIDERS,
 };
+
+function resourceName(id: string): string {
+  return RESOURCES.find((resource) => resource.id === id)?.name ?? id;
+}
 
 const WISP_POSITIONS = [
   [8, 22, 16, -2],
@@ -509,7 +515,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function formatBuffTarget(target: string): string {
-    return target === 'click' ? 'clicks' : target;
+    if (target === 'all') return 'all production';
+    return target === 'click' ? 'clicks' : resourceName(target);
   }
 
   function renderBuffs(state: GameState): void {
@@ -533,7 +540,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function spawnFloat(amount: Decimal | number, resource = 'broth'): void {
     const el = document.createElement('span');
     el.className = 'float-num';
-    el.textContent = `+${formatNumber(amount)} ${resource}`;
+    el.textContent = `+${formatNumber(amount)} ${resourceName(resource)}`;
     el.style.left = `${30 + Math.random() * 40}%`;
     floatLayer.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
@@ -834,6 +841,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     renderProductionFilters(state, rates);
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
+      if (!lineUnlocked(state, category)) continue;
       const categoryBuildings = BUILDINGS.filter((def) => def.line === category);
       const visible = categoryBuildings.filter((def) => buildingVisible(state, def, rates));
       const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def, rates));
@@ -848,7 +856,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const desc = (): string => {
           const perUnit: string[] = [];
           for (const [resource, amount] of Object.entries(def.produces ?? {})) {
-            perUnit.push(`+${formatNumber(amount)} ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}/s`);
+            perUnit.push(`+${formatNumber(amount)} ${resourceName(resource)}/s`);
           }
           if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
           if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
@@ -890,9 +898,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       }
       if (nextLocked) {
         const rateThreshold = Object.entries(nextLocked.unlock?.rate ?? {})
-          .map(([resource, amount]) => `${formatNumber(amount)} ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}/s`);
+          .map(([resource, amount]) => `${formatNumber(amount)} ${resourceName(resource)}/s`);
         const lifetimeThreshold = Object.entries(nextLocked.unlock?.lifetime ?? {})
-          .map(([resource, amount]) => `${formatNumber(amount)} lifetime ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}`);
+          .map(([resource, amount]) => `${formatNumber(amount)} lifetime ${resourceName(resource)}`);
         const threshold = [...rateThreshold, ...lifetimeThreshold].join(' and ');
         entries.push({
           key: `locked-${nextLocked.id}`,
@@ -923,8 +931,53 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         <span class="quest-progress"></span>
         <span class="quest-reward"></span>
       </span>
-      <span class="quest-action item-action"></span>`;
+      <span class="quest-action item-action" data-state="out">
+        <button type="button" class="btn" hidden></button>
+        <span class="claimed-badge" hidden>Claimed ✓</span>
+      </span>`;
+    const button = row.querySelector<HTMLButtonElement>('button')!;
+    button.addEventListener('click', () => {
+      const latest = currentState;
+      if (!latest) return;
+      const quest = ALL_QUESTS.find((item) => item.id === questId);
+      const bounty = BOUNTIES.find((item) => item.id === questId);
+      const reward = quest
+        ? hooks.onClaimQuest?.(quest.id) ?? claimQuest(latest, quest.id)
+        : bounty
+          ? claimBounty(latest, bounty.id)
+          : undefined;
+      if (!reward) return;
+      sound.play('claim');
+      toast(`Filed: ${quest?.name ?? bounty?.name} — ${formatQuestReward(reward, resourceName)}`);
+      renderCounters(latest);
+      renderLists(latest);
+      const claimedAction = tabContent.querySelector<HTMLElement>(`[data-key="${questId}"] .quest-action`);
+      if (claimedAction) claimedAction.insertAdjacentHTML('afterbegin', SUCCESS_CHECK);
+    });
     return row;
+  }
+
+  function researchVisible(state: GameState, id: string): boolean {
+    const research = RESEARCH_BY_ID[id];
+    if (!research) return false;
+    return state.research.includes(id) ||
+      state.researchQueue.some((entry) => entry.id === id) ||
+      (research.requires ?? []).every((required) => state.research.includes(required));
+  }
+
+  function questVisible(state: GameState, quest: (typeof ALL_QUESTS)[number]): boolean {
+    if (state.quests.claimed.includes(quest.id)) return true;
+    const requirement = quest.requirement;
+    if (requirement.kind === 'lifetime' || requirement.kind === 'rate') {
+      return resourceDiscovered(state, requirement.resource);
+    }
+    if (requirement.kind === 'owned') {
+      const building = BUILDING_BY_ID[requirement.buildingId];
+      return Boolean(building && lineUnlocked(state, building.line));
+    }
+    if (requirement.kind === 'line') return lineUnlocked(state, requirement.line);
+    if (requirement.kind === 'research') return researchVisible(state, requirement.id);
+    return true;
   }
 
   function renderDocket(state: GameState): void {
@@ -939,8 +992,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     };
     const entries: RowEntry[] = [];
     for (const chapter of chapters) {
-      const quests = ALL_QUESTS.filter((quest) => quest.chapter === chapter);
+      const quests = ALL_QUESTS.filter((quest) => quest.chapter === chapter && questVisible(state, quest));
       const claimed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
+      if (quests.length === 0) continue;
       entries.push({
         key: `chapter-${chapter}`,
         create: () => createSectionHeading(`${chapterLabels[chapter]} · ${claimed}/${quests.length} claimed`),
@@ -976,50 +1030,56 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             row.querySelector<HTMLElement>('.quest-progress')!.textContent =
               `${formatNumber(current)} / ${formatNumber(progress.target)}`;
             row.querySelector<HTMLElement>('.quest-reward')!.textContent =
-              `Reward: ${formatQuestReward(quest.reward)}`;
+              `Reward: ${formatQuestReward(quest.reward, resourceName)}`;
             const action = row.querySelector<HTMLElement>('.quest-action')!;
-            action.replaceChildren();
+            const button = action.querySelector<HTMLButtonElement>('button')!;
+            const badge = action.querySelector<HTMLElement>('.claimed-badge')!;
             if (done) {
-              action.textContent = 'Claimed ✓';
-              action.classList.add('claimed-badge', 't-success-check');
+              button.hidden = true;
+              button.disabled = true;
+              button.className = 'btn';
+              button.textContent = 'Claim';
+              button.removeAttribute('aria-label');
+              badge.hidden = false;
               action.dataset.state = 'in';
             } else if (ready) {
-              action.classList.remove('claimed-badge');
-              const button = document.createElement('button');
+              button.hidden = false;
+              button.disabled = false;
               button.className = `btn ${quest.chapter === 'discovery' || quest.chapter === 'litigation' || quest.chapter === 'verdict' || quest.chapter === 'keepers' ? 'quest-claim' : 'quest-story-claim'}`;
               button.textContent = 'Claim';
               button.setAttribute('aria-label', `Claim ${quest.name}`);
-              button.addEventListener('click', () => {
-                const latest = currentState;
-                if (!latest) return;
-                const reward = hooks.onClaimQuest?.(quest.id) ??
-                  claimQuest(latest, quest.id);
-                if (!reward) return;
-                sound.play('claim');
-                toast(`Filed: ${quest.name} — ${formatQuestReward(reward)}`);
-                renderCounters(latest);
-                renderLists(latest);
-                const claimedAction = tabContent.querySelector<HTMLElement>(`[data-key="${quest.id}"] .quest-action`);
-                if (claimedAction) claimedAction.insertAdjacentHTML('afterbegin', SUCCESS_CHECK);
-              });
-              action.appendChild(button);
+              badge.hidden = true;
+              action.dataset.state = 'in';
             } else {
-              action.classList.remove('claimed-badge');
-              action.textContent = ' ';
+              button.hidden = true;
+              button.disabled = true;
+              button.className = 'btn';
+              button.textContent = 'Claim';
+              button.removeAttribute('aria-label');
+              badge.hidden = true;
+              action.dataset.state = 'out';
             }
           },
         });
       }
     }
+    const visibleBounties = BOUNTIES.filter((bounty) => {
+      const requirement = bounty.requirement(bountyInstance(state, bounty.id));
+      return requirement.kind !== 'lifetime' || resourceDiscovered(state, requirement.resource);
+    });
+    if (visibleBounties.length === 0) {
+      reconcileRows(entries);
+      return;
+    }
     entries.push({
       key: 'chapter-bounties',
-      create: () => createSectionHeading(`Bounties · ${BOUNTIES.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0)} completed`),
+      create: () => createSectionHeading(`Bounties · ${visibleBounties.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0)} completed`),
       update: (row) => {
-        const completed = BOUNTIES.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0);
+        const completed = visibleBounties.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0);
         row.textContent = `Bounties · ${completed} completed`;
       },
     });
-    for (const bounty of BOUNTIES) {
+    for (const bounty of visibleBounties) {
       entries.push({
         key: bounty.id,
         create: () => createQuestRow(bounty.id),
@@ -1040,25 +1100,17 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           row.querySelector<HTMLElement>('.quest-progress')!.textContent =
             `${formatNumber(progress.current.min(progress.target))} / ${formatNumber(progress.target)}`;
           row.querySelector<HTMLElement>('.quest-reward')!.textContent =
-            `Reward: ${formatQuestReward(bounty.reward(instance))}`;
+            `Reward: ${formatQuestReward(bounty.reward(instance), resourceName)}`;
           const action = row.querySelector<HTMLElement>('.quest-action')!;
-          action.replaceChildren();
-          const button = document.createElement('button');
-          button.className = 'btn quest-bounty-claim';
+          const button = action.querySelector<HTMLButtonElement>('button')!;
+          const badge = action.querySelector<HTMLElement>('.claimed-badge')!;
+          button.hidden = false;
+          button.className = ready ? 'btn quest-bounty-claim' : 'btn';
           button.textContent = ready ? 'Claim' : 'In progress';
           button.disabled = !ready;
           button.setAttribute('aria-label', `${ready ? 'Claim' : 'View'} ${bounty.name} ×${instance}`);
-          button.addEventListener('click', () => {
-            const latest = currentState;
-            if (!latest) return;
-            const reward = claimBounty(latest, bounty.id);
-            if (!reward) return;
-            sound.play('claim');
-            toast(`Filed: ${bounty.name} — ${formatQuestReward(reward)}`);
-            renderCounters(latest);
-            renderLists(latest);
-          });
-          action.appendChild(button);
+          badge.hidden = true;
+          action.dataset.state = ready ? 'in' : 'out';
         },
       });
     }
@@ -1094,7 +1146,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function unlockThresholdText(upgrade: (typeof UPGRADES)[number]): string {
     const thresholds: string[] = [];
     for (const [resource, amount] of Object.entries(upgrade.cost)) {
-      if (amount !== undefined) thresholds.push(`${formatNumber(amount * 0.1)} ${resource}`);
+      if (amount !== undefined) thresholds.push(`${formatNumber(amount * 0.1)} ${resourceName(resource)}`);
     }
     return `Unlocks after earning ${thresholds.join(' and ')}`;
   }
@@ -1298,6 +1350,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const branches: ResearchBranch[] = ['thermal', 'extraction', 'distillation', 'litigation', 'celestial'];
     for (const branch of branches) {
       const branchResearch = RESEARCH.filter((research) => researchBranch(research.id) === branch);
+      const visibleResearch = branchResearch.filter((research) => researchVisible(state, research.id));
+      if (visibleResearch.length === 0) continue;
       entries.push({
         key: `research-branch-${branch}`,
         create: () => {
@@ -1311,7 +1365,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           row.querySelector('span')!.textContent = RESEARCH_BRANCHES[branch].blurb;
         },
       });
-      for (const research of branchResearch) {
+      for (const research of visibleResearch) {
         entries.push({
           key: `catalog-${research.id}`,
           create: () => {
@@ -1401,7 +1455,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       .join(', ');
     const prerequisiteText = prerequisites ? ` Requires: ${prerequisites}.` : '';
     row.querySelector<HTMLElement>('.item-desc')!.textContent =
-      `${research.description} ${describeResearchEffect(research.effect)}.${prerequisiteText}`;
+      `${research.description} ${describeResearchEffect(research.effect, resourceName)}.${prerequisiteText}`;
     const bar = row.querySelector<HTMLElement>('.progress')!;
     const progress = researchProgress(state, research.id);
     const fraction = progress?.fraction ?? 0;
@@ -1502,6 +1556,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     charterView = clampPan(next, { width: layout.width, height: layout.height }, viewport);
     if (interacted) charterInteracted = true;
     sheet.style.transform = toCss(charterView);
+    canvas.dataset.far = String(charterView.scale < 0.6);
     const zoomIn = canvas.querySelector<HTMLButtonElement>('[data-zoom="in"]');
     const zoomOut = canvas.querySelector<HTMLButtonElement>('[data-zoom="out"]');
     if (zoomIn) zoomIn.disabled = charterView.scale >= CHARTER_MAX_SCALE;
@@ -1555,6 +1610,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const markDragging = (): void => {
       dragging = true;
       canvas.classList.add('is-panning');
+      if (canCapture) {
+        for (const pointerId of pointers.keys()) {
+          try {
+            canvas.setPointerCapture(pointerId);
+          } catch {
+            // Pointer capture is unavailable in some test DOMs.
+          }
+        }
+      }
     };
     const applyPan = (next: CharterView): void => {
       setCharterView(canvas, sheet, layout, next);
@@ -1581,7 +1645,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       ensureView();
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       starts.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (canCapture) canvas.setPointerCapture(event.pointerId);
       if (pointers.size >= 2) {
         previousPinch = pairSnapshot();
         markDragging();
@@ -1743,6 +1806,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             if (!node) continue;
             const nodeState = charterNodeState(state, node);
             button.dataset.state = nodeState;
+            button.hidden = nodeState === 'locked';
             button.setAttribute('aria-pressed', String(node.id === charterSelected));
             button.setAttribute('aria-label', `${node.name}, ${CHARTER_STATE_LABEL[nodeState]}, ${node.cost} cores`);
             button.title = `${node.name} · ${CHARTER_STATE_LABEL[nodeState]}`;
@@ -1752,7 +1816,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             const line = lines[index];
             if (!line) return;
             const child = CHARTER_BY_ID[edge.to];
-            line.dataset.state = child ? charterNodeState(state, child) : 'locked';
+            const childState = child ? charterNodeState(state, child) : 'locked';
+            line.dataset.state = childState;
+            line.style.display = childState === 'locked' ? 'none' : '';
             line.dataset.cross = edge.crossWing ? 'true' : 'false';
           });
           const sheet = row.querySelector<HTMLElement>('.charter-sheet');
@@ -1796,7 +1862,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           row.querySelector('.charter-detail-branch')!.textContent =
             `${CHARTER_BRANCHES[node.branch].name} · ${CHARTER_STATE_LABEL[nodeState]}`;
           row.querySelector('.charter-detail-desc')!.textContent = charterNodeDescription(state, node);
-          row.querySelector('.charter-detail-effects')!.textContent = node.effects.map(formatCharterEffect).join(' · ');
+          row.querySelector('.charter-detail-effects')!.textContent = node.effects
+            .map((effect) => formatCharterEffect(effect, resourceName))
+            .join(' · ');
           row.querySelector('.charter-detail-cost')!.textContent = `${node.cost} 💠`;
           const sign = row.querySelector<HTMLButtonElement>('.charter-sign')!;
           sign.textContent = nodeState === 'signed' ? 'Signed ✓' : nodeState === 'locked' ? 'Locked' : 'Sign';
@@ -1856,12 +1924,23 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     forceRebuild = false;
   }
 
+  function layoutToasts(): void {
+    [...toasts.children].forEach((child, index) => {
+      (child as HTMLElement).style.setProperty('--depth', String(index));
+    });
+    while (toasts.children.length > 5) toasts.lastElementChild?.remove();
+  }
+
   function toast(message: string): void {
     const el = document.createElement('div');
     el.className = 'toast';
     el.textContent = message;
-    toasts.appendChild(el);
-    setTimeout(() => el.remove(), 4500);
+    toasts.prepend(el);
+    layoutToasts();
+    setTimeout(() => {
+      el.remove();
+      layoutToasts();
+    }, 4500);
   }
 
   function emptyNote(text: string): HTMLElement {

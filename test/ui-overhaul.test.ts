@@ -163,6 +163,10 @@ describe('UI overhaul', () => {
   it('renders the Keepers of the Bog docket chapter', () => {
     const root = document.createElement('div');
     const state = createInitialState();
+    for (const resource of Object.keys(state.wallet) as Array<keyof typeof state.wallet>) {
+      state.wallet[resource] = D(1);
+      if (resource !== 'bogCores') state.lifetime[resource] = D(1);
+    }
     const ui = makeUi(root, { initialTab: 'docket' });
     ui.renderLists(state);
     expect(root.textContent).toContain('Keepers of the Bog · 0/10 claimed');
@@ -193,6 +197,46 @@ describe('UI overhaul', () => {
     })).toBe('broth ×1.25');
   });
 
+  it('hides undiscovered resource content until its line is opened', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root, { initialTab: 'docket' });
+    const state = createInitialState();
+    ui.renderLists(state);
+    const text = () => root.querySelector('#tab-content')?.textContent?.toLowerCase() ?? '';
+    expect(text()).not.toContain('briquette');
+    expect(text()).not.toContain('sludge');
+    root.querySelector<HTMLButtonElement>('[data-tab="buildings"]')!.click();
+    expect(text()).not.toContain('refined broth');
+    root.querySelector<HTMLButtonElement>('[data-tab="research"]')!.click();
+    expect(text()).not.toContain('refined broth');
+  });
+
+  it('keeps a claim button stable across renders', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.totalClicks = 10;
+    const ui = makeUi(root, { initialTab: 'docket' });
+    ui.renderLists(state);
+    const claim = root.querySelector<HTMLButtonElement>('.quest-claim')!;
+    ui.renderLists(state);
+    ui.renderLists(state);
+    expect(root.querySelector<HTMLButtonElement>('.quest-claim, .quest-story-claim')).toBe(claim);
+    expect(claim.disabled).toBe(false);
+    claim.click();
+    expect(state.quests.claimed).toContain('q-first-scoop');
+  });
+
+  it('lays toasts newest-first in a five-item deck', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root);
+    ui.toast('one');
+    ui.toast('two');
+    ui.toast('three');
+    const toasts = [...root.querySelectorAll<HTMLElement>('.toast')];
+    expect(toasts.map((toast) => toast.textContent)).toEqual(['three', 'two', 'one']);
+    expect(toasts.map((toast) => toast.style.getPropertyValue('--depth'))).toEqual(['0', '1', '2']);
+  });
+
   it('renders research progress, cancel, duration, and queue-full state', () => {
     const root = document.createElement('div');
     const state = createInitialState();
@@ -213,7 +257,9 @@ describe('UI overhaul', () => {
   it('renders all research branches and rolls a claimed bounty forward', () => {
     const researchRoot = document.createElement('div');
     const researchUi = makeUi(researchRoot, { initialTab: 'research' });
-    researchUi.renderLists(createInitialState());
+    const researchState = createInitialState();
+    researchState.research = RESEARCH.map((research) => research.id);
+    researchUi.renderLists(researchState);
     for (const branch of ['Thermal', 'Extraction', 'Distillation', 'Litigation', 'Celestial']) {
       expect(researchRoot.textContent).toContain(branch);
     }
@@ -313,7 +359,12 @@ describe('UI overhaul', () => {
     ui.renderLists(state);
     const node = (id: string): HTMLButtonElement =>
       root.querySelector<HTMLButtonElement>(`.charter-node[data-node="${id}"]`)!;
-    expect(root.querySelectorAll('.charter-node')).toHaveLength(CHARTER.length);
+    const visibleNodes = () => CHARTER.filter((candidate) => {
+      if (state.charter.includes(candidate.id)) return true;
+      if (candidate.requires && !state.charter.includes(candidate.requires)) return false;
+      return !candidate.requiresAny || candidate.requiresAny.some((id) => state.charter.includes(id));
+    }).length;
+    expect(root.querySelectorAll('.charter-node:not([hidden])')).toHaveLength(visibleNodes());
     expect(root.querySelectorAll('.charter-edges line')).toHaveLength(layoutCharter().edges.length);
     expect(node('seal').dataset.state).toBe('purchasable');
     expect(node('roots-1').dataset.state).toBe('locked');
@@ -326,8 +377,12 @@ describe('UI overhaul', () => {
     expect(state.charter).toEqual(['seal']);
     expect(node('seal').dataset.state).toBe('signed');
     expect(node('roots-1').dataset.state).toBe('unaffordable');
+    expect(root.querySelectorAll('.charter-node:not([hidden])')).toHaveLength(visibleNodes());
 
-    node('roots-1').click();
+    const roots = node('roots-1');
+    roots.dispatchEvent(pointerEvent('pointerdown', 20, 20));
+    roots.dispatchEvent(pointerEvent('pointerup', 20, 20));
+    roots.click();
     expect(root.querySelector('.charter-detail-name')!.textContent).toBe('Deep Roots');
     expect(root.querySelector('.charter-sign')!.textContent).toBe('Sign');
     expect(root.querySelector<HTMLButtonElement>('.charter-sign')!.disabled).toBe(true);

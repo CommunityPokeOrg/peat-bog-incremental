@@ -9,7 +9,7 @@ export interface CharterView {
   scale: number;
 }
 
-export const CHARTER_MIN_SCALE = 0.15;
+export const CHARTER_MIN_SCALE = 0.3;
 export const CHARTER_MAX_SCALE = 2.5;
 /** One zoom-button step (and one wheel notch). */
 export const CHARTER_ZOOM_STEP = 1.25;

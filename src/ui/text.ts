@@ -3,10 +3,12 @@ import type { CharterEffect } from '../game/charter';
 import type { ResearchEffect } from '../game/data';
 import { formatDuration, formatNumber } from '../game/format';
 
+type ResourceName = (id: string) => string;
+
 /** One-line summary of a Charter effect for the tree's detail panel. */
-export function formatCharterEffect(effect: CharterEffect): string {
+export function formatCharterEffect(effect: CharterEffect, resourceName: ResourceName = (id) => id): string {
   switch (effect.kind) {
-    case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target} ×${formatMultiplier(effect.factor)}`;
+    case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target === 'click' ? 'Click power' : resourceName(effect.target)} ×${formatMultiplier(effect.factor)}`;
     case 'heat': return `Heat ×${formatMultiplier(effect.factor)}`;
     case 'cooling': return `Cooling ×${formatMultiplier(effect.factor)}`;
     case 'researchSpeed': return `Research speed ×${formatMultiplier(effect.factor)}`;
@@ -15,10 +17,10 @@ export function formatCharterEffect(effect: CharterEffect): string {
     case 'offlineMultiplier': return `Offline production ×${formatMultiplier(effect.factor)}`;
     case 'clickBrothFraction': return `+${Math.round(effect.fraction * 100)}% of click broth as evidence`;
     case 'fieldwork': return `Fieldwork rewards ×${formatMultiplier(effect.factor)}`;
-    case 'costScale': return `${effect.line} costs ×${formatMultiplier(1 + effect.delta)}`;
+    case 'costScale': return `${resourceName(effect.line)} costs ×${formatMultiplier(1 + effect.delta)}`;
     case 'freeBuildings': return `${effect.count} free ${effect.buildingId}`;
-    case 'converterEfficiency': return `${effect.line} inputs ×${formatMultiplier(effect.factor)}`;
-    case 'byproduct': return `${effect.line} yields ${Math.round(effect.fraction * 100)}% ${effect.resource}`;
+    case 'converterEfficiency': return `${resourceName(effect.line)} inputs ×${formatMultiplier(effect.factor)}`;
+    case 'byproduct': return `${resourceName(effect.line)} yields ${Math.round(effect.fraction * 100)}% ${resourceName(effect.resource)}`;
     case 'perQuest': return `${effect.target} gains per claimed quest`;
     case 'perAchievement': return `${effect.target} gains per achievement`;
     case 'coreGain': return `Core award ×${formatMultiplier(effect.factor)}`;
@@ -39,29 +41,30 @@ export function formatMultiplier(factor: number): string {
 }
 
 /** Format a settlement quest reward for docket rows and filing toasts. */
-export function formatQuestReward(reward: QuestReward): string {
-  if (reward.kind === 'resource') return `+${formatNumber(reward.amount)} ${reward.resource}`;
-  if (reward.kind === 'production') return `${reward.seconds} s of ${reward.resource} output`;
+export function formatQuestReward(reward: QuestReward, resourceName: ResourceName = (id) => id): string {
+  if (reward.kind === 'resource') return `+${formatNumber(reward.amount)} ${resourceName(reward.resource)}`;
+  if (reward.kind === 'production') return `${reward.seconds} s of ${resourceName(reward.resource)} output`;
   if (reward.kind === 'cores') return `+${reward.amount} bog core`;
-  if (reward.kind === 'permanent') return `Permanent: ${formatCharterEffect(reward.effect)}`;
+  if (reward.kind === 'permanent') return `Permanent: ${formatCharterEffect(reward.effect, resourceName)}`;
   if (reward.kind !== 'multiplier') return '';
   const duration = reward.durationSec
     ? ` for ${Math.floor(reward.durationSec / 60)}:${String(reward.durationSec % 60).padStart(2, '0')}`
     : '';
-  return `${reward.target} ×${formatMultiplier(reward.factor)}${duration}`;
+  const target = reward.target === 'all' ? 'All production' : reward.target === 'click' ? 'Click power' : resourceName(reward.target);
+  return `${target} ×${formatMultiplier(reward.factor)}${duration}`;
 }
 
 /** Describe a Research effect in the compact language used by its row. */
-export function describeResearchEffect(effect: ResearchEffect): string {
+export function describeResearchEffect(effect: ResearchEffect, resourceName: ResourceName = (id) => id): string {
   switch (effect.kind) {
-    case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target} ×${formatMultiplier(effect.factor)}`;
+    case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target === 'click' ? 'Click power' : resourceName(effect.target)} ×${formatMultiplier(effect.factor)}`;
     case 'heat': return `Heat ×${formatMultiplier(effect.factor)}`;
     case 'cooling': return `Cooling ×${formatMultiplier(effect.factor)}`;
     case 'clickMultiplier': return `Click power ×${formatMultiplier(effect.factor)}`;
     case 'offlineRate': return `Offline rate +${Math.round(effect.add * 100)}%`;
-    case 'converterEfficiency': return `${effect.line} input use ×${formatMultiplier(effect.factor)}`;
-    case 'unlockLine': return `Unlocks ${effect.line} line`;
+    case 'converterEfficiency': return `${resourceName(effect.line)} input use ×${formatMultiplier(effect.factor)}`;
+    case 'unlockLine': return `Unlocks ${resourceName(effect.line)} line`;
     case 'researchSlots': return `Research queue +${effect.add} slot`;
-    case 'costScale': return `${effect.line} costs ×${formatMultiplier(1 + effect.delta)}`;
+    case 'costScale': return `${resourceName(effect.line)} costs ×${formatMultiplier(1 + effect.delta)}`;
   }
 }
