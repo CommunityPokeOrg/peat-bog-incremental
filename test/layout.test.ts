@@ -17,6 +17,14 @@ describe('list layout rules', () => {
     }).toEqual({ bodyHasMinWidth: true, tabContentChildShrink: false });
   });
 
+  it('keeps the leftmost resource chip reachable when the strip overflows', () => {
+    const resources = css.match(/\n\.resources\s*\{([^}]*)\}/)?.[1] ?? '';
+    const firstChip = css.match(/\n\.res:first-child\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(resources).toMatch(/overflow-x:\s*auto/);
+    expect(resources).not.toMatch(/justify-content:\s*flex-end/);
+    expect(firstChip).toMatch(/margin-inline-start:\s*auto/);
+  });
+
   it('greys out the Buy pill on unaffordable rows', () => {
     const disabledPill = css.match(/button\.item:disabled \.item-action\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(disabledPill).toMatch(/background:\s*var\(--bog-3\)/);

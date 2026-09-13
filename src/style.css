@@ -156,12 +156,21 @@ textarea:focus-visible,
 
 .resources {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--sp-2) var(--sp-4);
   min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   padding: var(--sp-1) 0;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Right-align when there is room; the auto margin collapses to 0 once the
+   chips overflow, so the leftmost chip stays reachable by scrolling. */
+.res:first-child {
+  margin-inline-start: auto;
 }
 
 .res {
@@ -1136,9 +1145,12 @@ button.item:hover:not(:disabled) .item-action {
   }
 
   .resources {
-    justify-content: flex-start;
     margin-top: var(--sp-3);
     scroll-snap-type: x mandatory;
+  }
+
+  .res:first-child {
+    margin-inline-start: 0;
   }
 
   .res {
