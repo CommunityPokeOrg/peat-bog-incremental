@@ -1,4 +1,4 @@
-import type { ResourceCost, ResourceCostSpec } from './data';
+import { RESOURCES, type ResourceCost, type ResourceCostSpec } from './data';
 import { D, Decimal, type Decimal as DecimalType } from './decimal';
 
 const SUFFIXES = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
@@ -22,12 +22,10 @@ export function formatNumber(value: DecimalType | number): string {
 
 export function formatCost(cost: ResourceCost | ResourceCostSpec): string {
   const parts: string[] = [];
-  if (cost.broth !== undefined) parts.push(`${formatNumber(cost.broth)} broth`);
-  if (cost.peat !== undefined) parts.push(`${formatNumber(cost.peat)} peat`);
-  if (cost.sphagnum !== undefined) parts.push(`${formatNumber(cost.sphagnum)} sphagnum`);
-  if (cost.methane !== undefined) parts.push(`${formatNumber(cost.methane)} methane`);
-  if (cost.compute !== undefined) parts.push(`${formatNumber(cost.compute)} compute`);
-  if (cost.evidence !== undefined) parts.push(`${formatNumber(cost.evidence)} evidence`);
+  for (const resource of RESOURCES) {
+    if (resource.id === 'bogCores' || cost[resource.id] === undefined) continue;
+    parts.push(`${formatNumber(cost[resource.id]!)} ${resource.name}`);
+  }
   return parts.join(' · ');
 }
 

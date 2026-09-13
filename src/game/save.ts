@@ -1,13 +1,16 @@
 import {
   createInitialState,
+  emptyLifetime,
+  emptyWallet,
   NIGHT_WATCH_MAX_LEVEL,
   SAVE_VERSION,
   type GameState,
   type ResearchQueueEntry,
 } from './state';
-import { productionPerSecond } from './engine';
+import { settleTick, type Rates } from './engine';
 import { CHARTER_ROOT_ID, charterSum } from './charter';
 import { safe, toDecimalOrZero, type Decimal } from './decimal';
+import type { ResourceId, SpendableResource } from './data';
 import type { QuestBuff } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
@@ -16,40 +19,12 @@ export const OFFLINE_BASE_RATE = 0.01;
 export const NIGHT_WATCH_STEP = 0.01;
 export { NIGHT_WATCH_MAX_LEVEL };
 
-const DECIMAL_FIELDS = [
-  'broth',
-  'compute',
-  'peat',
-  'sphagnum',
-  'methane',
-  'evidence',
-  'bogCores',
-  'totalBrothEarned',
-  'totalComputeEarned',
-  'totalPeatEarned',
-  'totalSphagnumEarned',
-  'totalMethaneEarned',
-  'totalEvidenceEarned',
-  'totalComputeThisRun',
-] as const;
-
-/** Serialized save shape with Decimal fields represented as strings. */
+/** Serialized save shape with data-driven Decimal wallet and lifetime records. */
 export interface SavedState {
   version: number;
-  broth: string;
-  compute: string;
-  peat: string;
-  sphagnum: string;
-  methane: string;
-  evidence: string;
-  bogCores: string;
-  totalBrothEarned: string;
-  totalComputeEarned: string;
-  totalPeatEarned: string;
-  totalSphagnumEarned: string;
-  totalMethaneEarned: string;
-  totalEvidenceEarned: string;
-  totalComputeThisRun: string;
+  wallet: Record<string, string>;
+  lifetime: Record<string, string>;
+  runCompute: string;
   totalClicks: number;
   minigameHits: number;
   calibrationStreak: number;
@@ -66,11 +41,53 @@ export interface SavedState {
   lastSaveTime: number;
 }
 
+const SPENDABLE_RESOURCES: SpendableResource[] = [
+  'broth', 'peat', 'sphagnum', 'methane', 'compute', 'evidence',
+  'sludge', 'briquettes', 'refinedBroth', 'sediment', 'essence',
+];
+const RESOURCE_IDS: ResourceId[] = [...SPENDABLE_RESOURCES, 'bogCores'];
+const LEGACY_FIELDS: Record<string, string | [string, ResourceId]> = {
+  broth: ['wallet', 'broth'],
+  compute: ['wallet', 'compute'],
+  peat: ['wallet', 'peat'],
+  sphagnum: ['wallet', 'sphagnum'],
+  methane: ['wallet', 'methane'],
+  evidence: ['wallet', 'evidence'],
+  bogCores: ['wallet', 'bogCores'],
+  totalBrothEarned: ['lifetime', 'broth'],
+  totalComputeEarned: ['lifetime', 'compute'],
+  totalPeatEarned: ['lifetime', 'peat'],
+  totalSphagnumEarned: ['lifetime', 'sphagnum'],
+  totalMethaneEarned: ['lifetime', 'methane'],
+  totalEvidenceEarned: ['lifetime', 'evidence'],
+  totalComputeThisRun: 'runCompute',
+};
+
 export function serialize(state: GameState): string {
-  const raw = { ...state } as unknown as Record<string, unknown>;
-  for (const field of DECIMAL_FIELDS) raw[field] = state[field].toString();
-  raw.version = SAVE_VERSION;
-  return JSON.stringify(raw);
+  const wallet: Record<string, string> = {};
+  for (const resource of RESOURCE_IDS) wallet[resource] = state.wallet[resource].toString();
+  const lifetime: Record<string, string> = {};
+  for (const resource of SPENDABLE_RESOURCES) lifetime[resource] = state.lifetime[resource].toString();
+  return JSON.stringify({
+    version: SAVE_VERSION,
+    wallet,
+    lifetime,
+    runCompute: state.runCompute.toString(),
+    totalClicks: state.totalClicks,
+    minigameHits: state.minigameHits,
+    calibrationStreak: state.calibrationStreak,
+    calibrationTarget: state.calibrationTarget,
+    nightWatch: state.nightWatch,
+    charter: state.charter,
+    buildings: state.buildings,
+    revealed: state.revealed,
+    upgrades: state.upgrades,
+    research: state.research,
+    researchQueue: state.researchQueue,
+    achievements: state.achievements,
+    quests: state.quests,
+    lastSaveTime: state.lastSaveTime,
+  } satisfies SavedState);
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -79,6 +96,9 @@ const isStrArr = (v: unknown): v is string[] =>
 const isBuildingMap = (v: unknown): v is Record<string, number> =>
   typeof v === 'object' && v !== null && !Array.isArray(v) &&
   Object.values(v).every((x) => isNum(x));
+const isStringRecord = (v: unknown): v is Record<string, string> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) &&
+  Object.values(v).every((x) => typeof x === 'string');
 const isResearchQueue = (v: unknown): v is ResearchQueueEntry[] =>
   Array.isArray(v) && v.every((x) =>
     typeof x === 'object' && x !== null &&
@@ -98,6 +118,20 @@ const isQuestState = (v: unknown): v is GameState['quests'] => {
     Array.isArray(record.buffs) &&
     record.buffs.every(isQuestBuff);
 };
+
+function readRecord(
+  source: unknown,
+  keys: readonly string[],
+  fallback: () => Record<string, Decimal>,
+): Record<string, Decimal> {
+  const out = fallback();
+  if (isStringRecord(source)) {
+    for (const key of keys) {
+      if (source[key] !== undefined) out[key] = toDecimalOrZero(source[key]);
+    }
+  }
+  return out;
+}
 
 export function deserialize(raw: unknown): GameState | null {
   if (raw === null || raw === undefined || raw === '') return null;
@@ -122,8 +156,27 @@ export function deserialize(raw: unknown): GameState | null {
 
   const state = createInitialState();
   state.version = SAVE_VERSION;
-  for (const field of DECIMAL_FIELDS) {
-    state[field] = toDecimalOrZero(p[field]);
+  const hasRecords = isStringRecord(p.wallet) || isStringRecord(p.lifetime);
+  if (hasRecords) {
+    const wallet = readRecord(p.wallet, RESOURCE_IDS, emptyWallet);
+    const lifetime = readRecord(p.lifetime, SPENDABLE_RESOURCES, emptyLifetime);
+    state.wallet = { ...state.wallet, ...wallet };
+    state.lifetime = { ...state.lifetime, ...lifetime };
+    state.runCompute = toDecimalOrZero(p.runCompute);
+  } else {
+    for (const field of Object.keys(LEGACY_FIELDS)) {
+      const target = LEGACY_FIELDS[field];
+      const value = toDecimalOrZero(p[field]);
+      if (typeof target === 'string') state.runCompute = value;
+      else if (target[0] === 'wallet') state.wallet[target[1]] = value;
+      else state.lifetime[target[1] as SpendableResource] = value;
+    }
+  }
+  if (hasRecords) {
+    for (const field of Object.keys(LEGACY_FIELDS)) {
+      const target = LEGACY_FIELDS[field];
+      if (typeof target === 'string' && state.runCompute.eq(0)) state.runCompute = toDecimalOrZero(p[field]);
+    }
   }
   state.totalClicks = p.totalClicks;
   state.minigameHits = isNum(p.minigameHits) ? p.minigameHits : 0;
@@ -165,6 +218,8 @@ export function load(storage: Pick<Storage, 'getItem'> = localStorage): GameStat
 export interface OfflineEarnings {
   seconds: number;
   rate: number;
+  gained: Rates;
+  spent: Rates;
   broth: Decimal;
   compute: Decimal;
   peat: Decimal;
@@ -201,17 +256,19 @@ export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: nu
 /** Offline progress at the current background rate, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
   const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
-  const rates = productionPerSecond(state);
   const rate = offlineRate(state);
+  const settlement = settleTick(state, seconds * rate);
   return {
     seconds,
     rate,
-    broth: safe(rates.broth.mul(seconds * rate)),
-    compute: safe(rates.compute.mul(seconds * rate)),
-    peat: safe(rates.peat.mul(seconds * rate)),
-    sphagnum: safe(rates.sphagnum.mul(seconds * rate)),
-    methane: safe(rates.methane.mul(seconds * rate)),
-    evidence: safe(rates.evidence.mul(seconds * rate)),
+    gained: settlement.gained,
+    spent: settlement.spent,
+    broth: safe(settlement.gained.broth),
+    compute: safe(settlement.gained.compute),
+    peat: safe(settlement.gained.peat),
+    sphagnum: safe(settlement.gained.sphagnum),
+    methane: safe(settlement.gained.methane),
+    evidence: safe(settlement.gained.evidence),
   };
 }
 

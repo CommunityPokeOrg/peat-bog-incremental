@@ -1,7 +1,8 @@
 import type { QuestBuff } from './quests';
 import { D, type Decimal } from './decimal';
+import type { ResourceId, SpendableResource } from './data';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const NIGHT_WATCH_MAX_LEVEL = 49;
 
 /** One queued research item and its remaining duration in seconds. */
@@ -12,20 +13,9 @@ export interface ResearchQueueEntry {
 
 export interface GameState {
   version: number;
-  broth: Decimal;
-  compute: Decimal;
-  peat: Decimal;
-  sphagnum: Decimal;
-  methane: Decimal;
-  evidence: Decimal;
-  bogCores: Decimal;
-  totalBrothEarned: Decimal;
-  totalComputeEarned: Decimal;
-  totalPeatEarned: Decimal;
-  totalSphagnumEarned: Decimal;
-  totalMethaneEarned: Decimal;
-  totalEvidenceEarned: Decimal;
-  totalComputeThisRun: Decimal;
+  wallet: Record<ResourceId, Decimal>;
+  lifetime: Record<SpendableResource, Decimal>;
+  runCompute: Decimal;
   totalClicks: number;
   minigameHits: number;
   calibrationStreak: number;
@@ -45,23 +35,47 @@ export interface GameState {
   lastSaveTime: number;
 }
 
-export function createInitialState(): GameState {
+/** Create a zeroed wallet for every declared resource. */
+export function emptyWallet(): Record<ResourceId, Decimal> {
   return {
-    version: SAVE_VERSION,
     broth: D(0),
-    compute: D(0),
     peat: D(0),
     sphagnum: D(0),
     methane: D(0),
+    compute: D(0),
     evidence: D(0),
+    sludge: D(0),
+    briquettes: D(0),
+    refinedBroth: D(0),
+    sediment: D(0),
+    essence: D(0),
     bogCores: D(0),
-    totalBrothEarned: D(0),
-    totalComputeEarned: D(0),
-    totalPeatEarned: D(0),
-    totalSphagnumEarned: D(0),
-    totalMethaneEarned: D(0),
-    totalEvidenceEarned: D(0),
-    totalComputeThisRun: D(0),
+  };
+}
+
+/** Create zeroed lifetime totals for every spendable resource. */
+export function emptyLifetime(): Record<SpendableResource, Decimal> {
+  return {
+    broth: D(0),
+    peat: D(0),
+    sphagnum: D(0),
+    methane: D(0),
+    compute: D(0),
+    evidence: D(0),
+    sludge: D(0),
+    briquettes: D(0),
+    refinedBroth: D(0),
+    sediment: D(0),
+    essence: D(0),
+  };
+}
+
+export function createInitialState(): GameState {
+  return {
+    version: SAVE_VERSION,
+    wallet: emptyWallet(),
+    lifetime: emptyLifetime(),
+    runCompute: D(0),
     totalClicks: 0,
     minigameHits: 0,
     calibrationStreak: 0,

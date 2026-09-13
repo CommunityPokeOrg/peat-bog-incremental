@@ -28,20 +28,54 @@ describe('Decimal save migration', () => {
       research: [],
       achievements: [],
     });
-    expect(loaded?.version).toBe(4);
-    expect(loaded?.broth.eq(123.5)).toBe(true);
-    expect(loaded?.bogCores.eq(8)).toBe(true);
+    expect(loaded?.version).toBe(5);
+    expect(loaded?.wallet.broth.eq(123.5)).toBe(true);
+    expect(loaded?.wallet.bogCores.eq(8)).toBe(true);
   });
 
   it('round-trips v4 Decimal strings', () => {
     const state = createInitialState();
-    state.broth = D('1e400');
-    state.totalComputeThisRun = D('1e310');
+    state.wallet.broth = D('1e400');
+    state.runCompute = D('1e310');
     const raw = serialize(state);
-    expect(JSON.parse(raw).broth).toBe(D('1e400').toString());
+    expect(JSON.parse(raw).wallet.broth).toBe(D('1e400').toString());
     const loaded = deserialize(raw);
-    expect(loaded?.broth.eq(D('1e400'))).toBe(true);
-    expect(loaded?.totalComputeThisRun.eq(D('1e310'))).toBe(true);
+    expect(loaded?.wallet.broth.eq(D('1e400'))).toBe(true);
+    expect(loaded?.runCompute.eq(D('1e310'))).toBe(true);
+  });
+
+  it('loads a v4 flat string save and drops unknown v5 resource keys', () => {
+    const v4 = deserialize({
+      version: 4,
+      broth: '12.5',
+      compute: '3',
+      totalBrothEarned: '20',
+      totalComputeThisRun: '3',
+      totalClicks: 0,
+      lastSaveTime: 0,
+      buildings: {},
+      upgrades: [],
+      research: [],
+      achievements: [],
+    });
+    expect(v4?.wallet.broth.eq('12.5')).toBe(true);
+    expect(v4?.lifetime.broth.eq(20)).toBe(true);
+    const v5 = deserialize({
+      version: 5,
+      wallet: { broth: '7', unknown: '999' },
+      lifetime: { broth: '8', unknown: '999' },
+      runCompute: '3',
+      totalClicks: 0,
+      lastSaveTime: 0,
+      buildings: {},
+      upgrades: [],
+      research: [],
+      achievements: [],
+    });
+    expect(v5?.wallet.broth.eq(7)).toBe(true);
+    expect((v5?.wallet as Record<string, unknown>).unknown).toBeUndefined();
+    expect(v5?.lifetime.broth.eq(8)).toBe(true);
+    expect((v5?.lifetime as Record<string, unknown>).unknown).toBeUndefined();
   });
 
   it('turns corrupt Decimal fields into zero', () => {
@@ -57,8 +91,8 @@ describe('Decimal save migration', () => {
       research: [],
       achievements: [],
     });
-    expect(loaded?.broth.eq(0)).toBe(true);
-    expect(loaded?.compute.eq(0)).toBe(true);
-    expect(loaded?.peat.eq(0)).toBe(true);
+    expect(loaded?.wallet.broth.eq(0)).toBe(true);
+    expect(loaded?.wallet.compute.eq(0)).toBe(true);
+    expect(loaded?.wallet.peat.eq(0)).toBe(true);
   });
 });

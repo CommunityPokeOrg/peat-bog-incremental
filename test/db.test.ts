@@ -12,17 +12,17 @@ describe('IndexedDB save storage', () => {
 
   it('roundtrips and clears a save', async () => {
     const state = createInitialState();
-    state.broth = D(123.5);
+    state.wallet.broth = D(123.5);
     await saveState(state);
     const loaded = await loadState();
-    expect(loaded?.broth.eq(123.5)).toBe(true);
+    expect(loaded?.wallet.broth.eq(123.5)).toBe(true);
     await clearState();
     expect(await loadState()).toBeNull();
   });
 
   it('migrates a legacy localStorage save', async () => {
     const state = createInitialState();
-    state.compute = D(42);
+    state.wallet.compute = D(42);
     const values = new Map<string, string>([[SAVE_KEY, serialize(state)]]);
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -32,8 +32,8 @@ describe('IndexedDB save storage', () => {
         removeItem: (key: string) => values.delete(key),
       },
     });
-    expect((await loadWithMigration())?.compute.eq(42)).toBe(true);
+    expect((await loadWithMigration())?.wallet.compute.eq(42)).toBe(true);
     expect(values.has(SAVE_KEY)).toBe(false);
-    expect((await loadState())?.compute.eq(42)).toBe(true);
+    expect((await loadState())?.wallet.compute.eq(42)).toBe(true);
   });
 });

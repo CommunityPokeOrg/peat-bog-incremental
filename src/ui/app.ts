@@ -7,6 +7,7 @@ import {
   FIELD_NOTES,
   UPGRADES,
   UPGRADE_BY_ID,
+  type ProductionLine,
 } from '../game/data';
 import {
   bulkCost,
@@ -262,7 +263,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   let activeTab: TabId = hooks.initialTab ?? 'buildings';
   let buyQty: Qty = 1;
-  let productionFilter: 'all' | 'broth' | 'peat' | 'sphagnum' | 'methane' | 'cooling' | 'compute' | 'evidence' = 'all';
+  let productionFilter: 'all' | ProductionLine = 'all';
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
@@ -489,8 +490,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function resourceAmount(state: GameState, id: string): Decimal {
-    if (id === 'bogCores') return state.bogCores;
-    return state[id as 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence'];
+    return state.wallet[id as keyof typeof state.wallet];
   }
 
   function formatBuffTarget(target: string): string {
@@ -549,20 +549,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       const em = chip.querySelector('em')!;
       strong.textContent = formatNumber(amount);
       em.textContent = rate === undefined ? '' : `+${formatNumber(rate)}/s`;
-      const lifetimeEarned = resource.id === 'peat'
-        ? state.totalPeatEarned
-        : resource.id === 'sphagnum'
-          ? state.totalSphagnumEarned
-          : resource.id === 'methane'
-            ? state.totalMethaneEarned
-            : resource.id === 'evidence'
-              ? state.totalEvidenceEarned
-              : amount;
-      const shouldShow = resource.id === 'broth' || resource.id === 'compute' || resource.id === 'bogCores' ||
-        lifetimeEarned.gt(0) || BUILDINGS.some((def) =>
-          (def.generates === resource.id || (resource.id === 'compute' && def.generates === 'compute')) &&
-          buildingVisible(state, def) && (state.buildings[def.id] ?? 0) > 0,
-        );
+      const shouldShow = resource.id === 'broth' || resource.id === 'compute' ||
+        amount.gt(0) || state.lifetime[resource.id as keyof typeof state.lifetime]?.gt(0);
       chip.hidden = !shouldShow;
     }
     const note = FIELD_NOTES[Math.floor(Date.now() / 20_000) % FIELD_NOTES.length];
@@ -642,10 +630,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderPrestige(state: GameState): void {
     const gain = prestigeGain(state);
     const ok = canPrestige(state);
-    const charterHint = state.bogCores.gt(0) ? ' Banked cores can be spent in the Charter tab.' : '';
+    const charterHint = state.wallet.bogCores.gt(0) ? ' Banked cores can be spent in the Charter tab.' : '';
     prestigeInfo.textContent = ok
       ? `Petition Magistrate Reino to drain the bog. Draining banks ${formatNumber(gain)} Bog Core${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production, permanent). Run resets; achievements and cores stay.${charterHint}`
-      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).${charterHint}`;
+      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.runCompute)} so far).${charterHint}`;
     prestigeBtn.disabled = !ok;
     prestigeBtn.textContent = ok ? `Drain for ${formatNumber(gain)} 💠` : 'Drain the bog';
     prestigeBtn.setAttribute(
@@ -777,7 +765,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
   }
 
-  const productionCategories = ['broth', 'peat', 'sphagnum', 'methane', 'cooling', 'compute', 'evidence'] as const;
+  const productionCategories = [...new Set(BUILDINGS.map((def) => def.line))] as ProductionLine[];
   function renderProductionFilters(state: GameState): void {
     if (!productionFilters.firstElementChild) {
       const wrap = document.createElement('div');
@@ -788,7 +776,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       pill.className = 'filter-pill';
       pill.setAttribute('aria-hidden', 'true');
       wrap.appendChild(pill);
-      for (const filter of ['all', ...productionCategories] as const) {
+      const filters: ('all' | ProductionLine)[] = ['all', ...productionCategories];
+      for (const filter of filters) {
         const button = document.createElement('button');
         button.className = 'filter-tab';
         button.dataset.filter = filter;
@@ -804,7 +793,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     const visibleCategories = new Set(
       productionCategories.filter((category) =>
-        BUILDINGS.some((def) => def.generates === category && buildingVisible(state, def)),
+        BUILDINGS.some((def) => def.line === category && buildingVisible(state, def)),
       ),
     );
     productionFilters.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
@@ -829,7 +818,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const categories = productionCategories;
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
-      const categoryBuildings = BUILDINGS.filter((def) => def.generates === category);
+      const categoryBuildings = BUILDINGS.filter((def) => def.line === category);
       const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
       const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
       if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
@@ -842,12 +831,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       for (const def of visible) {
         const desc = (): string => {
           const perUnit: string[] = [];
-          if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
-          if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
-          if (def.peatPerSecond) perUnit.push(`+${formatNumber(def.peatPerSecond)} peat/s`);
-          if (def.sphagnumPerSecond) perUnit.push(`+${formatNumber(def.sphagnumPerSecond)} sphagnum/s`);
-          if (def.methanePerSecond) perUnit.push(`+${formatNumber(def.methanePerSecond)} methane/s`);
-          if (def.evidencePerSecond) perUnit.push(`+${formatNumber(def.evidencePerSecond)} evidence/s`);
+          for (const [resource, amount] of Object.entries(def.produces ?? {})) {
+            perUnit.push(`+${formatNumber(amount)} ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}/s`);
+          }
           if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
           if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
           return `${def.description} ${perUnit.join(', ')}.`;
@@ -887,9 +873,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         });
       }
       if (nextLocked) {
-        const threshold = Object.entries(nextLocked.unlock ?? {})
-          .map(([resource, amount]) => `${formatNumber(amount)} ${resource.replace('PerSecond', '')}/s`)
-          .join(' and ');
+        const rateThreshold = Object.entries(nextLocked.unlock?.rate ?? {})
+          .map(([resource, amount]) => `${formatNumber(amount)} ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}/s`);
+        const lifetimeThreshold = Object.entries(nextLocked.unlock?.lifetime ?? {})
+          .map(([resource, amount]) => `${formatNumber(amount)} lifetime ${RESOURCES.find((item) => item.id === resource)?.name ?? resource}`);
+        const threshold = [...rateThreshold, ...lifetimeThreshold].join(' and ');
         entries.push({
           key: `locked-${nextLocked.id}`,
           create: () =>
@@ -1586,7 +1574,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           return intro;
         },
         update: (row) => {
-          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${formatNumber(state.bogCores)} 💠`;
+          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${formatNumber(state.wallet.bogCores)} 💠`;
         },
       },
       {

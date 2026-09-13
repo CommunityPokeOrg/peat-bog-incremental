@@ -15,36 +15,36 @@ describe('Drainage Charter', () => {
     const first = { id: 'roots-1', name: 'Deep Roots', emoji: '🌿', description: '', branch: 'roots' as const, cost: 1, effects: [] };
     const child = { ...first, id: 'roots-2', cost: 2, requires: 'roots-1' };
     expect(charterAvailable(state, first)).toBe(false);
-    state.bogCores = D(2);
+    state.wallet.bogCores = D(2);
     expect(charterAvailable(state, child)).toBe(false);
     expect(charterAvailable(state, first)).toBe(true);
   });
 
   it('spends cores and blocks a double purchase', () => {
     const state = createInitialState();
-    state.bogCores = D(2);
+    state.wallet.bogCores = D(2);
     expect(buyCharter(state, 'roots-1')).toBe(false);
     expect(buyCharter(state, 'seal')).toBe(true);
     expect(buyCharter(state, 'roots-1')).toBe(true);
-    expect(state.bogCores.eq(0)).toBe(true);
+    expect(state.wallet.bogCores.eq(0)).toBe(true);
     expect(buyCharter(state, 'roots-1')).toBe(false);
   });
 
   it('applies Charter multipliers and preserves terms through prestige', () => {
     const state = createInitialState();
     state.charter = ['kindling-1', 'kindling-2', 'kindling-3', 'kindling-4', 'roots-3'];
-    state.bogCores = D(1);
+    state.wallet.bogCores = D(1);
     expect(charterMultiplier(state, 'compute')).toBe(2);
-    state.totalComputeThisRun = D(1_000_000);
+    state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.charter).toContain('kindling-4');
-    expect(state.broth.eq(10_000)).toBe(true);
+    expect(state.wallet.broth.eq(10_000)).toBe(true);
   });
 
   it('multiplies prestige gain with Reino precedent', () => {
     const state = createInitialState();
     state.charter = ['filing-4'];
-    state.totalComputeThisRun = D(4_000_000);
+    state.runCompute = D(4_000_000);
     expect(prestigeGain(state).toNumber()).toBe(3);
   });
 
@@ -81,8 +81,8 @@ describe('Drainage Charter', () => {
       achievements: [],
       lastSaveTime: 0,
     }));
-    expect(state?.sphagnum.eq(0)).toBe(true);
-    expect(state?.methane.eq(0)).toBe(true);
+    expect(state?.wallet.sphagnum.eq(0)).toBe(true);
+    expect(state?.wallet.methane.eq(0)).toBe(true);
     expect(state?.charter).toEqual([]);
     expect(state?.nightWatch).toBe(0);
   });

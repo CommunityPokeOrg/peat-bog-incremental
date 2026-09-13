@@ -17,7 +17,7 @@ describe('Decimal numerics', () => {
 
   it('keeps large affordability and bulk costs finite', () => {
     const state = createInitialState();
-    state.broth = D('1e300');
+    state.wallet.broth = D('1e300');
     const count = maxAffordable(BUILDING_BY_ID.harvester, 0, state);
     expect(Number.isFinite(count)).toBe(true);
     expect(count).toBeGreaterThan(0);
@@ -29,12 +29,12 @@ describe('Decimal numerics', () => {
     const state = createInitialState();
     state.buildings.harvester = 1e300;
     tick(state, 1_000_000);
-    expect(Number.isFinite(state.broth.exponent)).toBe(true);
+    expect(Number.isFinite(state.wallet.broth.exponent)).toBe(true);
   });
 
   it('computes finite positive prestige gains at huge totals', () => {
     const state = createInitialState();
-    state.totalComputeThisRun = D('1e310');
+    state.runCompute = D('1e310');
     const gain = prestigeGain(state);
     expect(gain.gt(0)).toBe(true);
     expect(Number.isFinite(gain.exponent)).toBe(true);

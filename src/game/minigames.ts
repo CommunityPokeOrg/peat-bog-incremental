@@ -89,11 +89,11 @@ export function calibrate(
   state.calibrationStreak = streak;
   const nextZone = calibrationZone(streak);
   state.calibrationTarget = nextZone + rng() * (1 - 2 * nextZone);
-  state.compute = state.compute.add(compute);
-  state.evidence = state.evidence.add(evidence);
-  state.totalComputeEarned = state.totalComputeEarned.add(compute);
-  state.totalComputeThisRun = state.totalComputeThisRun.add(compute);
-  state.totalEvidenceEarned = state.totalEvidenceEarned.add(evidence);
+  state.wallet.compute = state.wallet.compute.add(compute);
+  state.wallet.evidence = state.wallet.evidence.add(evidence);
+  state.lifetime.compute = state.lifetime.compute.add(compute);
+  state.runCompute = state.runCompute.add(compute);
+  state.lifetime.evidence = state.lifetime.evidence.add(evidence);
   state.minigameHits += 1;
   return { hit: true, compute, evidence, streak, multiplier };
 }
@@ -111,8 +111,8 @@ export function peatCutCharge(elapsedMs: number): number {
 export function cutPeat(state: GameState, chargeFraction: number): DecimalType {
   const fraction = Math.max(0, Math.min(1, chargeFraction));
   const peat = Decimal.max(5, productionPerSecond(state).peat.mul(15)).mul(fraction);
-  state.peat = state.peat.add(peat);
-  state.totalPeatEarned = state.totalPeatEarned.add(peat);
+  state.wallet.peat = state.wallet.peat.add(peat);
+  state.lifetime.peat = state.lifetime.peat.add(peat);
   if (fraction >= 0.95) state.minigameHits += 1;
   return peat;
 }

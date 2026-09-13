@@ -74,9 +74,9 @@ describe('buildingCost / bulkCost', () => {
   it('maxAffordable respects the wallet', () => {
     const state = createInitialState();
     const h = BUILDING_BY_ID['harvester'];
-  state.broth = D(15 + 15 * 1.15 - 0.001);
+  state.wallet.broth = D(15 + 15 * 1.15 - 0.001);
     expect(maxAffordable(h, 0, state)).toBe(1);
-  state.broth = state.broth.add(0.002);
+  state.wallet.broth = state.wallet.broth.add(0.002);
     expect(maxAffordable(h, 0, state)).toBe(2);
   });
 });
@@ -86,35 +86,35 @@ describe('tick', () => {
     const state = createInitialState();
     state.buildings['harvester'] = 10; // 5 broth/s
     tick(state, 2);
-    expect(state.broth.toNumber()).toBeCloseTo(10);
-    expect(state.totalBrothEarned.toNumber()).toBeCloseTo(10);
+    expect(state.wallet.broth.toNumber()).toBeCloseTo(10);
+    expect(state.lifetime.broth.toNumber()).toBeCloseTo(10);
   });
   it('accrues peat and evidence alongside broth and compute', () => {
     const state = createInitialState();
     state.buildings.cutter = 10;
     state.buildings.clerk = 5;
     tick(state, 2);
-    expect(state.peat.toNumber()).toBeCloseTo(6);
-    expect(state.totalPeatEarned.toNumber()).toBeCloseTo(6);
-    expect(state.evidence.toNumber()).toBeCloseTo(2);
-    expect(state.totalEvidenceEarned.toNumber()).toBeCloseTo(2);
+    expect(state.wallet.peat.toNumber()).toBeCloseTo(6);
+    expect(state.lifetime.peat.toNumber()).toBeCloseTo(6);
+    expect(state.wallet.evidence.toNumber()).toBeCloseTo(2);
+    expect(state.lifetime.evidence.toNumber()).toBeCloseTo(2);
   });
   it('produces sphagnum and methane from the new buildings', () => {
     const state = createInitialState();
     state.buildings.nursery = 2;
     state.buildings.digester = 4;
     tick(state, 5);
-    expect(state.sphagnum.toNumber()).toBeCloseTo(4);
-    expect(state.methane.toNumber()).toBeCloseTo(10);
-    expect(state.totalSphagnumEarned.toNumber()).toBeCloseTo(4);
-    expect(state.totalMethaneEarned.toNumber()).toBeCloseTo(10);
+    expect(state.wallet.sphagnum.toNumber()).toBeCloseTo(4);
+    expect(state.wallet.methane.toNumber()).toBeCloseTo(10);
+    expect(state.lifetime.sphagnum.toNumber()).toBeCloseTo(4);
+    expect(state.lifetime.methane.toNumber()).toBeCloseTo(10);
   });
   it('ignores non-positive dt', () => {
     const state = createInitialState();
     state.buildings['harvester'] = 10;
     tick(state, 0);
     tick(state, -3);
-    expect(state.broth.eq(0)).toBe(true);
+    expect(state.wallet.broth.eq(0)).toBe(true);
   });
 });
 
@@ -140,26 +140,26 @@ describe('thermal throttle', () => {
 describe('economy', () => {
   it('handles peat and evidence costs generically', () => {
     const state = createInitialState();
-  state.peat = D(20);
-  state.evidence = D(4);
+  state.wallet.peat = D(20);
+  state.wallet.evidence = D(4);
     expect(canAfford(state, { peat: 20, evidence: 4 })).toBe(true);
     payCost(state, { peat: 3, evidence: 2 });
-    expect(state.peat.toNumber()).toBe(17);
-    expect(state.evidence.toNumber()).toBe(2);
+    expect(state.wallet.peat.toNumber()).toBe(17);
+    expect(state.wallet.evidence.toNumber()).toBe(2);
     expect(canAfford(state, { peat: 18 })).toBe(false);
   });
   it('formats the expanded resource cost order', () => {
     expect(formatCost({ broth: 1, peat: 2, sphagnum: 3, methane: 4, compute: 5, evidence: 6 }))
-      .toBe('1 broth · 2 peat · 3 sphagnum · 4 methane · 5 compute · 6 evidence');
+      .toBe('1 fp16 compute broth · 2 raw peat · 3 sphagnum moss · 4 bog methane · 5 compute · 6 case evidence');
   });
   it('pays sphagnum building costs', () => {
     const state = createInitialState();
     state.revealed.push('deposition');
-  state.broth = D(200_000);
-  state.compute = D(5_000);
-  state.sphagnum = D(500);
+  state.wallet.broth = D(200_000);
+  state.wallet.compute = D(5_000);
+  state.wallet.sphagnum = D(500);
     expect(buyBuilding(state, 'deposition', 1)).toBe(true);
-    expect(state.sphagnum.eq(0)).toBe(true);
+    expect(state.wallet.sphagnum.eq(0)).toBe(true);
   });
   it('reveals the Moss Terrace at 3 sphagnum per second', () => {
     const state = createInitialState();
@@ -168,17 +168,17 @@ describe('economy', () => {
   });
   it('buyBuilding spends broth and adds units', () => {
     const state = createInitialState();
-  state.broth = D(100);
+  state.wallet.broth = D(100);
     expect(buyBuilding(state, 'harvester', 1)).toBe(true);
     expect(state.buildings['harvester']).toBe(1);
-    expect(state.broth.toNumber()).toBeCloseTo(85);
+    expect(state.wallet.broth.toNumber()).toBeCloseTo(85);
     expect(buyBuilding(state, 'harvester', 99)).toBe(false);
   });
   it('click adds broth and counts', () => {
     const state = createInitialState();
     const gained = click(state);
     expect(gained.toNumber()).toBeCloseTo(1);
-    expect(state.broth.toNumber()).toBeCloseTo(1);
+    expect(state.wallet.broth.toNumber()).toBeCloseTo(1);
     expect(state.totalClicks).toBe(1);
   });
   it('click upgrades multiply power', () => {
@@ -222,7 +222,7 @@ describe('progressive building gating', () => {
 
   it('refuses to buy hidden buildings', () => {
     const state = createInitialState();
-  state.broth = D(100_000);
+  state.wallet.broth = D(100_000);
     expect(buyBuilding(state, 'dredger', 1)).toBe(false);
     state.buildings.harvester = 100;
     revealBuildings(state);
@@ -241,7 +241,7 @@ describe('progressive building gating', () => {
   it('gates click upgrades by lifetime earnings', () => {
     const state = createInitialState();
     expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(false);
-  state.totalBrothEarned = D(5);
+  state.lifetime.broth = D(5);
     expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(true);
     expect(upgradeVisible(state, UPGRADE_BY_ID.buckets)).toBe(false);
   });
@@ -281,7 +281,7 @@ describe('save', () => {
       lastSaveTime: 123,
     });
     const loaded = deserialize(raw);
-    expect(loaded?.broth.eq(12)).toBe(true);
+    expect(loaded?.wallet.broth.eq(12)).toBe(true);
     expect(loaded?.revealed).toEqual([]);
   });
   it('loads a version 2 save with new resources and queues defaulted', () => {
@@ -302,13 +302,13 @@ describe('save', () => {
       lastSaveTime: 123,
     });
     const loaded = deserialize(raw)!;
-    expect(loaded.version).toBe(4);
-    expect(loaded.peat.eq(0)).toBe(true);
-    expect(loaded.evidence.eq(0)).toBe(true);
-    expect(loaded.sphagnum.eq(0)).toBe(true);
-    expect(loaded.methane.eq(0)).toBe(true);
-    expect(loaded.totalSphagnumEarned.eq(0)).toBe(true);
-    expect(loaded.totalMethaneEarned.eq(0)).toBe(true);
+    expect(loaded.version).toBe(5);
+    expect(loaded.wallet.peat.eq(0)).toBe(true);
+    expect(loaded.wallet.evidence.eq(0)).toBe(true);
+    expect(loaded.wallet.sphagnum.eq(0)).toBe(true);
+    expect(loaded.wallet.methane.eq(0)).toBe(true);
+    expect(loaded.lifetime.sphagnum.eq(0)).toBe(true);
+    expect(loaded.lifetime.methane.eq(0)).toBe(true);
     expect(loaded.charter).toEqual([]);
     expect(loaded.calibrationStreak).toBe(0);
     expect(loaded.calibrationTarget).toBe(0.5);
@@ -317,16 +317,16 @@ describe('save', () => {
   });
   it('roundtrips a real state', () => {
     const state = createInitialState();
-  state.broth = D(123.5);
+  state.wallet.broth = D(123.5);
     state.buildings['harvester'] = 7;
     state.upgrades.push('spade');
     state.achievements.push('click-1');
-  state.peat = D(4);
-  state.evidence = D(5);
-  state.sphagnum = D(6);
-  state.methane = D(7);
-  state.totalSphagnumEarned = D(8);
-  state.totalMethaneEarned = D(9);
+  state.wallet.peat = D(4);
+  state.wallet.evidence = D(5);
+  state.wallet.sphagnum = D(6);
+  state.wallet.methane = D(7);
+  state.lifetime.sphagnum = D(8);
+  state.lifetime.methane = D(9);
     state.charter.push('seal', 'roots-1');
     state.calibrationStreak = 7;
     state.calibrationTarget = 0.3;
@@ -334,16 +334,16 @@ describe('save', () => {
     state.quests.claimed.push('q-clause');
     const back = deserialize(serialize(state));
     expect(back).not.toBeNull();
-    expect(back!.broth.toNumber()).toBeCloseTo(123.5);
+    expect(back!.wallet.broth.toNumber()).toBeCloseTo(123.5);
     expect(back!.buildings['harvester']).toBe(7);
     expect(back!.upgrades).toEqual(['spade']);
     expect(back!.achievements).toEqual(['click-1']);
-    expect(back!.peat.eq(4)).toBe(true);
-    expect(back!.evidence.eq(5)).toBe(true);
-    expect(back!.sphagnum.eq(6)).toBe(true);
-    expect(back!.methane.eq(7)).toBe(true);
-    expect(back!.totalSphagnumEarned.eq(8)).toBe(true);
-    expect(back!.totalMethaneEarned.eq(9)).toBe(true);
+    expect(back!.wallet.peat.eq(4)).toBe(true);
+    expect(back!.wallet.evidence.eq(5)).toBe(true);
+    expect(back!.wallet.sphagnum.eq(6)).toBe(true);
+    expect(back!.wallet.methane.eq(7)).toBe(true);
+    expect(back!.lifetime.sphagnum.eq(8)).toBe(true);
+    expect(back!.lifetime.methane.eq(9)).toBe(true);
     expect(back!.charter).toEqual(['seal', 'roots-1']);
     expect(back!.calibrationStreak).toBe(7);
     expect(back!.calibrationTarget).toBe(0.3);
@@ -387,15 +387,15 @@ describe('offline earnings', () => {
   it('buys Night Watch levels with exponential costs and preserves them through prestige', () => {
     const state = createInitialState();
     expect(nightWatchCost(1).broth!.toNumber()).toBe(Math.round(nightWatchCost(0).broth!.toNumber() * 1.9));
-  state.broth = nightWatchCost(0).broth!;
+  state.wallet.broth = nightWatchCost(0).broth!;
     expect(buyNightWatch(state)).toBe(true);
     expect(state.nightWatch).toBe(1);
-    expect(state.broth.eq(0)).toBe(true);
+    expect(state.wallet.broth.eq(0)).toBe(true);
     state.nightWatch = 49;
-  state.broth = D(1e100);
+  state.wallet.broth = D(1e100);
     expect(buyNightWatch(state)).toBe(false);
     state.nightWatch = 7;
-  state.totalComputeThisRun = D(1_000_000);
+  state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.nightWatch).toBe(7);
   });
@@ -404,23 +404,23 @@ describe('offline earnings', () => {
 describe('prestige', () => {
   it('gain is floor(sqrt(totalComputeThisRun / 1e6))', () => {
     const state = createInitialState();
-  state.totalComputeThisRun = D(999_999);
+  state.runCompute = D(999_999);
     expect(prestigeGain(state).eq(0)).toBe(true);
-  state.totalComputeThisRun = D(4_000_000);
+  state.runCompute = D(4_000_000);
     state.calibrationStreak = 5;
     state.calibrationTarget = 0.3;
     expect(prestigeGain(state).toNumber()).toBe(2);
   });
   it('resets the run and banks cores', () => {
     const state = createInitialState();
-  state.totalComputeThisRun = D(4_000_000);
-  state.broth = D(500);
+  state.runCompute = D(4_000_000);
+  state.wallet.broth = D(500);
     state.buildings['rack'] = 5;
     state.achievements.push('click-1');
     expect(prestige(state).toNumber()).toBe(2);
-    expect(state.bogCores.eq(2)).toBe(true);
-    expect(state.broth.eq(0)).toBe(true);
-    expect(state.totalComputeThisRun.eq(0)).toBe(true);
+    expect(state.wallet.bogCores.eq(2)).toBe(true);
+    expect(state.wallet.broth.eq(0)).toBe(true);
+    expect(state.runCompute.eq(0)).toBe(true);
     expect(state.calibrationStreak).toBe(0);
     expect(state.calibrationTarget).toBe(0.5);
     expect(state.buildings).toEqual({});
@@ -475,7 +475,7 @@ describe('Sector 4 research and upgrades', () => {
 describe('new docket achievements', () => {
   it('unlocks debt-free at 59 broth', () => {
     const state = createInitialState();
-  state.totalBrothEarned = D(59);
+  state.lifetime.broth = D(59);
     expect(checkAchievements(state)).toContain('debt-free');
   });
 

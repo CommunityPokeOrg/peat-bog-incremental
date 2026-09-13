@@ -38,21 +38,21 @@ describe('settlement quests', () => {
     const state = createInitialState();
     state.totalClicks = 10;
     expect(claimQuest(state, 'q-first-scoop')).toEqual(quest('q-first-scoop').reward);
-    expect(state.broth.eq(50)).toBe(true);
+    expect(state.wallet.broth.eq(50)).toBe(true);
     expect(claimQuest(state, 'q-first-scoop')).toBeNull();
 
     state.buildings.vat = 5;
     expect(claimQuest(state, 'q-serve-nordic')?.kind).toBe('production');
-    expect(state.broth.gte(500)).toBe(true);
+    expect(state.wallet.broth.gte(500)).toBe(true);
 
     state.research.push('nordic-verdict');
     expect(claimQuest(state, 'q-verdict')?.kind).toBe('cores');
-    expect(state.bogCores.eq(1)).toBe(true);
+    expect(state.wallet.bogCores.eq(1)).toBe(true);
   });
 
   it('applies permanent and timed multipliers and expires timed buffs', () => {
     const state = createInitialState();
-    state.totalBrothEarned = D(59);
+    state.lifetime.broth = D(59);
     expect(claimQuest(state, 'q-sanitized-change')?.kind).toBe('multiplier');
     expect(clickPower(state)).toBeCloseTo(2);
 
@@ -65,7 +65,7 @@ describe('settlement quests', () => {
     state.buildings.harvester = 10;
     const before = productionPerSecond(state).broth;
     state.upgrades.push('pulley-equity');
-    state.totalBrothEarned = D(250_000);
+    state.lifetime.broth = D(250_000);
     expect(claimQuest(state, 'q-pulley')?.kind).toBe('multiplier');
     expect(productionPerSecond(state).broth.toNumber()).toBeCloseTo(before.toNumber() * 1.15);
   });
@@ -76,7 +76,7 @@ describe('settlement quests', () => {
     claimQuest(state, 'q-first-scoop');
     state.research.push('lubrication-clause');
     claimQuest(state, 'q-clause');
-    state.totalComputeThisRun = D(1_000_000);
+    state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.quests.claimed).toEqual(['q-clause']);
     expect(state.quests.buffs).toEqual([]);
@@ -105,7 +105,7 @@ describe('settlement quests', () => {
     state.buildings.rack = 50;
     expect(claimQuest(state, 'k-kreatix')?.kind).toBe('multiplier');
     expect(questMultiplier(state, 'broth')).toBeCloseTo(1.1);
-    state.totalComputeThisRun = D(1_000_000);
+    state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.quests.claimed).toContain('k-kreatix');
   });

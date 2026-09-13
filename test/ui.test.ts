@@ -30,7 +30,7 @@ describe('UI list reconciliation', () => {
     expect(firstRow).not.toBeNull();
     expect(firstRow!.disabled).toBe(true);
 
-    state.broth = D(15);
+    state.wallet.broth = D(15);
     ui.renderLists(state);
     const updatedRow = root.querySelector<HTMLButtonElement>('[data-key="harvester"]');
     expect(updatedRow).toBe(firstRow);
@@ -121,8 +121,8 @@ describe('UI list reconciliation', () => {
       onHardReset: () => {},
     });
     const state = createInitialState();
-    state.broth = D(100);
-    state.totalBrothEarned = D(100);
+    state.wallet.broth = D(100);
+    state.lifetime.broth = D(100);
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
     const spade = root.querySelector<HTMLButtonElement>('[data-key="spade"]');

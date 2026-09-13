@@ -123,7 +123,7 @@ describe('minigame engine', () => {
     expect(cutPeat(state, 0.5).toNumber()).toBeCloseTo(2.5);
     expect(cutPeat(state, 1).toNumber()).toBeCloseTo(5);
     expect(state.minigameHits).toBe(1);
-    expect(state.totalPeatEarned.toNumber()).toBeCloseTo(7.5);
+    expect(state.lifetime.peat.toNumber()).toBeCloseTo(7.5);
   });
 
   it('follows the hold charge curve and overhold decay', () => {

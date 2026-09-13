@@ -26,6 +26,7 @@ import { claimQuest, expireBuffs } from './game/quests';
 import { calibrate, cutPeat } from './game/minigames';
 import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from './game/db';
 import { createInitialState } from './game/state';
+import { RESOURCES } from './game/data';
 import { formatDuration, formatNumber } from './game/format';
 import { createUi } from './ui/app';
 import { formatMultiplier } from './ui/text';
@@ -223,30 +224,25 @@ async function init(): Promise<void> {
   function applyOfflineProgress(seconds: number, threshold = 60): OfflineEarnings | null {
     if (seconds < threshold) return null;
     const earned = computeOfflineEarnings(state, seconds);
-    state.broth = state.broth.add(earned.broth);
-    state.compute = state.compute.add(earned.compute);
-    state.peat = state.peat.add(earned.peat);
-    state.sphagnum = state.sphagnum.add(earned.sphagnum);
-    state.methane = state.methane.add(earned.methane);
-    state.evidence = state.evidence.add(earned.evidence);
-    state.totalBrothEarned = state.totalBrothEarned.add(earned.broth);
-    state.totalComputeEarned = state.totalComputeEarned.add(earned.compute);
-    state.totalPeatEarned = state.totalPeatEarned.add(earned.peat);
-    state.totalSphagnumEarned = state.totalSphagnumEarned.add(earned.sphagnum);
-    state.totalMethaneEarned = state.totalMethaneEarned.add(earned.methane);
-    state.totalEvidenceEarned = state.totalEvidenceEarned.add(earned.evidence);
+    for (const resource of RESOURCES) {
+      if (resource.id === 'bogCores') continue;
+      const id = resource.id as keyof typeof earned.gained;
+      const gained = earned.gained[id];
+      const spent = earned.spent[id];
+      state.wallet[resource.id] = state.wallet[resource.id].sub(spent).add(gained);
+      state.lifetime[resource.id] = state.lifetime[resource.id].add(gained);
+    }
+    state.runCompute = state.runCompute.add(earned.gained.compute);
     expireBuffs(state);
     offlineResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
     return earned;
   }
 
   const offlineResourcesText = (earned: OfflineEarnings): string => [
-    `+${formatNumber(earned.broth)} broth`,
-    `+${formatNumber(earned.compute)} compute`,
-    earned.peat.gt(0) ? `+${formatNumber(earned.peat)} peat` : '',
-    earned.sphagnum.gt(0) ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
-    earned.methane.gt(0) ? `+${formatNumber(earned.methane)} methane` : '',
-    earned.evidence.gt(0) ? `+${formatNumber(earned.evidence)} evidence` : '',
+    ...RESOURCES.filter((resource) => resource.id !== 'bogCores').map((resource) => {
+      const value = earned.gained[resource.id as keyof typeof earned.gained];
+      return value.gt(0) ? `+${formatNumber(value)} ${resource.name}` : '';
+    }),
   ].filter(Boolean).join(', ');
 
   const offlineResearchText = (): string => offlineResearch.length > 0

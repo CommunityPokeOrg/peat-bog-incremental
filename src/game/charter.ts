@@ -59,13 +59,13 @@ export const CHARTER_BY_ID: Record<string, CharterNodeDef> = Object.fromEntries(
 export function charterAvailable(state: GameState, node: CharterNodeDef): boolean {
   return !state.charter.includes(node.id) &&
     (!node.requires || state.charter.includes(node.requires)) &&
-    state.bogCores.gte(node.cost);
+    state.wallet.bogCores.gte(node.cost);
 }
 
 export function buyCharter(state: GameState, id: string): boolean {
   const node = CHARTER_BY_ID[id];
   if (!node || !charterAvailable(state, node)) return false;
-  state.bogCores = state.bogCores.sub(node.cost);
+  state.wallet.bogCores = state.wallet.bogCores.sub(node.cost);
   state.charter.push(id);
   return true;
 }

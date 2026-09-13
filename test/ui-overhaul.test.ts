@@ -82,7 +82,7 @@ describe('UI overhaul', () => {
   it('pops the owned count after buying a building', () => {
     const root = document.createElement('div');
     const state = createInitialState();
-    state.broth = D(100_000);
+    state.wallet.broth = D(100_000);
     const ui = makeUi(root);
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-key="harvester"]')!.click();
@@ -196,7 +196,7 @@ describe('UI overhaul', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     state.researchQueue = [{ id: RESEARCH[0].id, remaining: 30 }];
-    state.compute = D(1_000_000);
+    state.wallet.compute = D(1_000_000);
     const ui = makeUi(root, { initialTab: 'research' });
 
     ui.renderLists(state);
@@ -224,7 +224,7 @@ describe('UI overhaul', () => {
 
     ui.renderCounters(state);
     expect(root.querySelector('[data-resource="peat"]')?.hasAttribute('hidden')).toBe(true);
-    state.totalPeatEarned = D(1);
+    state.lifetime.peat = D(1);
     ui.renderCounters(state);
     expect(root.querySelector('[data-resource="peat"]')?.hasAttribute('hidden')).toBe(false);
 
@@ -284,7 +284,7 @@ describe('UI overhaul', () => {
   it('renders the Charter as a node graph with matching states and signs from the detail panel', () => {
     const root = document.createElement('div');
     const state = createInitialState();
-    state.bogCores = D(1);
+    state.wallet.bogCores = D(1);
     const ui = makeUi(root, { initialTab: 'charter' });
     ui.renderLists(state);
     const node = (id: string): HTMLButtonElement =>
