@@ -1,34 +1,15 @@
-# Peat Bog UI design
+# Peat Bog visual system
 
-This document describes the implementation, not proposals.
+This document describes the implemented visual system, not proposals.
 
-## Palette roles
-
-- Bog greens (`--moss`, `--moss-bright`) signal growth and production.
-- Coolant cyan (`--coolant`, `--coolant-dim`) signals compute and thermal state.
-- Danger (`--danger`) signals heat and destructive actions.
-- Panel and deep backgrounds keep dense game data readable.
-
-## Type
-
-- System sans-serif carries prose, labels, and controls.
-- Monospace carries numbers, costs, rates, and save status.
-
-## Shape and spacing
-
-- `--radius-card` is the shared 10px shape for panels, resources, rows, and drawers.
-- `--radius-control` is the shared 6px shape for buttons, tiles, and compact controls.
-- `--space-row` keeps list rows dense and aligned.
-- Targets use a 44px minimum height where keyboard or touch interaction matters.
-
-## Density
-
-The game favors dense list rows so production choices remain visible together.
-Headings separate building categories and available versus upcoming upgrades.
-Changing labels reserve their space to keep the list geometry stable.
-
-## Motion
-
-Harvest feedback, floating numbers, and toast entry are the only transient motion.
-The harvest button has a slow CSS simmer to keep the core action alive.
-`prefers-reduced-motion` disables animations and transitions while preserving content.
+- **Concept:** the bog is the world; the ledger is the record.
+- **Surfaces:** `--bog-0` through `--bog-3` move from page to raised card.
+- **Ink:** cream `--ink`, dim `--ink-dim`, and faint `--ink-faint` carry the record voice.
+- **Roles:** broth is amber, coolant is cyan, moss is success, peat is brown, evidence is parchment, and cores are violet.
+- **Type:** display serif headings, system sans controls and prose, monospace numbers and rates.
+- **Shape:** cards use `--r-lg`, controls use the square `--r-sm`, and rules replace shadows.
+- **Density:** list rows stay compact with 44px minimum targets and stable three-column geometry.
+- **Composition:** the ledger strip anchors resources; the field holds harvest, thermal, fieldwork, and prestige; the panel holds tabs, filters, lists, and the buy dock.
+- **Responsive behavior:** desktop uses a fixed two-column frame; mobile stacks the field and ledger and keeps the buy dock sticky.
+- **Motion:** mist, vat bubbles, simmer, tab movement, feedback floats, and toasts are product cues; reduced motion removes them.
+- **Accessibility:** semantic buttons, meters, tabs, live regions, reserved feedback geometry, and visible coolant focus rings remain part of the interface.

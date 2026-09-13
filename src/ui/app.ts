@@ -75,15 +75,43 @@ export interface Ui {
 
 export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   root.innerHTML = `
-    <header class="site-header">
-      <h1>Peat Bog Incremental</h1>
-      <p class="subtitle">Sector 4 · The Peat Bog Trial — harvest the fp16 compute broth, cool the racks, settle McFly &amp; Chronicler LLP v Burger King Nordic before Magistrate Reino.</p>
+    <header class="ledger-strip">
+      <div class="ledger-main">
+        <div class="wordmark">
+          <h1>Peat Bog</h1>
+          <p class="case-label">Sector 4 · The Peat Bog Trial</p>
+        </div>
+        <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
+      </div>
+      <div class="ledger-subrow">
+        <div class="buffs" id="buffs" aria-live="polite"></div>
+        <div class="next-hint" id="next-hint" aria-live="polite"></div>
+      </div>
     </header>
-    <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
-    <div class="next-hint" id="next-hint" aria-live="polite"></div>
     <main class="layout">
       <section class="harvest-panel" aria-label="Harvest">
+        <div class="card harvest-card">
+          <p class="eyebrow">Primary action · broth line</p>
+          <div class="harvest-zone" id="harvest-zone">
+            <button id="harvest-btn" class="harvest-btn" aria-label="Harvest broth (shortcut: H)">
+              <span class="harvest-emoji" aria-hidden="true">🫧</span>
+              <span class="harvest-label">Harvest broth</span>
+              <span class="bubble bubble-a" aria-hidden="true"></span>
+              <span class="bubble bubble-b" aria-hidden="true"></span>
+              <span class="bubble bubble-c" aria-hidden="true"></span>
+            </button>
+            <div class="float-layer" id="float-layer" aria-hidden="true"></div>
+          </div>
+          <p class="click-power">Click power: <strong id="click-power">1</strong> broth <kbd>H</kbd></p>
+        </div>
         <div class="card thermal-card">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Thermal gauge</p>
+              <h2>Rack temperature</h2>
+            </div>
+            <span class="thermal-state">LIVE</span>
+          </div>
           <div class="thermal-labels">
             <span id="thermal-text">No heat generated</span>
             <span id="thermal-pct"></span>
@@ -93,16 +121,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           </div>
           <div class="thermal-sub" id="thermal-sub"></div>
         </div>
-        <div class="harvest-zone" id="harvest-zone">
-          <button id="harvest-btn" class="harvest-btn" aria-label="Harvest broth (shortcut: H)">
-            <span class="harvest-emoji" aria-hidden="true">🫧</span>
-            <span class="harvest-label">Harvest broth</span>
-          </button>
-          <div class="float-layer" id="float-layer" aria-hidden="true"></div>
-        </div>
-        <p class="click-power">Click power: <strong id="click-power">1</strong> broth <kbd>H</kbd></p>
         <div class="card fieldwork-card">
-          <h2>Fieldwork</h2>
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Manual systems</p>
+              <h2>Fieldwork</h2>
+            </div>
+            <span class="field-mark">FIELD 04</span>
+          </div>
           <div class="fieldwork-row">
             <button class="fieldwork-btn" id="cut-btn" aria-label="Cut peat — hold, release when full">
               <span>Cut peat</span>
@@ -136,6 +162,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <button role="tab" data-tab="achievements">Achievements</button>
           <button role="tab" data-tab="settings">Settings</button>
         </nav>
+        <div class="production-filters" id="production-filters" hidden></div>
         <div class="tab-content" id="tab-content" role="tabpanel"></div>
         <div class="panel-dock" id="panel-dock">
           <div class="qty-selector" id="qty-selector" role="group" aria-label="Buy quantity">
@@ -165,10 +192,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
   const resourcesEl = $('#resources');
-  const buffsEl = document.createElement('div');
-  buffsEl.className = 'buffs';
-  buffsEl.id = 'buffs';
-  resourcesEl.insertAdjacentElement('afterend', buffsEl);
+  const buffsEl = $('#buffs');
   const nextHint = $('#next-hint');
   const thermalText = $('#thermal-text');
   const thermalPct = $('#thermal-pct');
@@ -180,6 +204,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const clickPowerEl = $('#click-power');
   const prestigeBtn = $('#prestige-btn') as HTMLButtonElement;
   const prestigeInfo = $('#prestige-info');
+  const productionFilters = $('#production-filters');
   const tabContent = $('#tab-content');
   const toasts = $('#toasts');
   const modalBackdrop = $('#modal-backdrop');
@@ -213,6 +238,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       tab.tabIndex = selected ? 0 : -1;
     });
     panelDock.hidden = activeTab !== 'buildings';
+    productionFilters.hidden = activeTab !== 'buildings';
     forceRebuild = true;
     if (focus) btn.focus();
     if (currentState) renderLists(currentState);
@@ -236,6 +262,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     btn.setAttribute('aria-selected', String(selected));
     btn.tabIndex = selected ? 0 : -1;
   });
+  productionFilters.hidden = activeTab !== 'buildings';
 
   root.querySelectorAll<HTMLButtonElement>('#qty-selector [data-qty]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -397,6 +424,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         );
       chip.hidden = !shouldShow;
     }
+    const boil = Math.max(1.2, Math.min(6, 6 / Math.log10(rates.broth + 10)));
+    harvestBtn.style.setProperty('--boil', `${boil}s`);
     renderBuffs(state);
     const next = currentDocket(state);
     const nextCurrent = next ? Math.min(next.progress.current, next.progress.target) : 0;
@@ -456,6 +485,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           : 'Racks throttled — build more cooling!';
     }
     thermalFill.style.width = `${pct}%`;
+    thermalFill.style.setProperty('--cooled', `${pct}%`);
     thermalFill.classList.toggle('throttled', factor < 1);
     thermalMeter.setAttribute('aria-valuenow', String(pct));
   }
@@ -586,56 +616,56 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
   }
 
-  function renderBuildings(state: GameState): void {
-    const entries: RowEntry[] = [];
-    const categories = ['broth', 'peat', 'cooling', 'compute', 'evidence'] as const;
-    entries.push({
-      key: 'production-filters',
-      create: () => {
-        const wrap = document.createElement('div');
-        wrap.className = 'filter-tabs';
-        wrap.setAttribute('role', 'tablist');
-        wrap.setAttribute('aria-label', 'Filter by output');
-        const pill = document.createElement('span');
-        pill.className = 'filter-pill';
-        pill.setAttribute('aria-hidden', 'true');
-        wrap.appendChild(pill);
-        for (const filter of ['all', ...categories] as const) {
-          const button = document.createElement('button');
-          button.className = 'filter-tab';
-          button.dataset.filter = filter;
-          button.setAttribute('role', 'tab');
-          button.addEventListener('click', () => {
-            productionFilter = filter;
-            forceRebuild = true;
-            if (currentState) renderLists(currentState);
-          });
-          wrap.appendChild(button);
-        }
-        return wrap;
-      },
-      update: (row) => {
-        const visibleCategories = new Set(
-          categories.filter((category) =>
-            BUILDINGS.some((def) => def.generates === category && buildingVisible(state, def)),
-          ),
-        );
-        row.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
-          const filter = button.dataset.filter as typeof productionFilter;
-          const visible = filter === 'all' || filter === 'broth' || visibleCategories.has(filter);
-          button.hidden = !visible;
-          button.textContent = filter[0].toUpperCase() + filter.slice(1);
-          button.setAttribute('aria-selected', String(productionFilter === filter));
-          button.tabIndex = productionFilter === filter ? 0 : -1;
+  const productionCategories = ['broth', 'peat', 'cooling', 'compute', 'evidence'] as const;
+  function renderProductionFilters(state: GameState): void {
+    if (!productionFilters.firstElementChild) {
+      const wrap = document.createElement('div');
+      wrap.className = 'filter-tabs';
+      wrap.setAttribute('role', 'tablist');
+      wrap.setAttribute('aria-label', 'Filter by output');
+      const pill = document.createElement('span');
+      pill.className = 'filter-pill';
+      pill.setAttribute('aria-hidden', 'true');
+      wrap.appendChild(pill);
+      for (const filter of ['all', ...productionCategories] as const) {
+        const button = document.createElement('button');
+        button.className = 'filter-tab';
+        button.dataset.filter = filter;
+        button.setAttribute('role', 'tab');
+        button.addEventListener('click', () => {
+          productionFilter = filter;
+          forceRebuild = true;
+          if (currentState) renderLists(currentState);
         });
-        const pill = row.querySelector<HTMLElement>('.filter-pill');
-        const active = row.querySelector<HTMLElement>(`[data-filter="${productionFilter}"]`);
-        if (pill && active) {
-          pill.style.transform = `translateX(${active.offsetLeft}px)`;
-          pill.style.width = `${active.offsetWidth}px`;
-        }
-      },
+        wrap.appendChild(button);
+      }
+      productionFilters.appendChild(wrap);
+    }
+    const visibleCategories = new Set(
+      productionCategories.filter((category) =>
+        BUILDINGS.some((def) => def.generates === category && buildingVisible(state, def)),
+      ),
+    );
+    productionFilters.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
+      const filter = button.dataset.filter as typeof productionFilter;
+      const visible = filter === 'all' || filter === 'broth' || visibleCategories.has(filter);
+      button.hidden = !visible;
+      button.textContent = filter[0].toUpperCase() + filter.slice(1);
+      button.setAttribute('aria-selected', String(productionFilter === filter));
+      button.tabIndex = productionFilter === filter ? 0 : -1;
     });
+    const pill = productionFilters.querySelector<HTMLElement>('.filter-pill');
+    const active = productionFilters.querySelector<HTMLElement>(`[data-filter="${productionFilter}"]`);
+    if (pill && active) {
+      pill.style.transform = `translateX(${active.offsetLeft}px)`;
+      pill.style.width = `${active.offsetWidth}px`;
+    }
+  }
+
+  function renderBuildings(state: GameState): void {
+    renderProductionFilters(state);
+    const entries: RowEntry[] = [];
+    const categories = productionCategories;
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
       const categoryBuildings = BUILDINGS.filter((def) => def.generates === category);
