@@ -33,9 +33,11 @@ import { formatMultiplier, formatQuestReward, pluralize } from './text';
 import {
   calibrationNeedle,
   calibrationZone,
+  needleAtClick,
   peatCutCharge,
   streakMultiplier,
   type CalibrationResult,
+  type NeedleFrame,
 } from '../game/minigames';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
@@ -225,7 +227,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   let calibrateCooldownUntil = 0;
   let lastReducedNeedleFrame = 0;
   let needleStartedAt = performance.now();
-  let lastNeedlePos = 0.5;
+  let lastTarget = 0.5;
+  const needleFrames: NeedleFrame[] = [];
 
   harvestBtn.addEventListener('click', () => hooks.onHarvest());
 
@@ -314,7 +317,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   calibrateBtn.addEventListener('click', () => {
     if (calibrateBtn.disabled) return;
     const now = performance.now();
-    const drawnNeedlePos = lastNeedlePos;
+    const drawnNeedlePos = needleAtClick(needleFrames, lastTarget, now);
+    needleFrames.length = 0;
     needleStartedAt = now;
     calibrateCooldownUntil = now + 2500;
     calibrateBtn.disabled = true;
@@ -449,10 +453,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const reduced = typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduced || now - lastReducedNeedleFrame >= 250) {
-      lastNeedlePos = calibrationNeedle(now - needleStartedAt, state.calibrationStreak);
-      needle.style.left = `${lastNeedlePos * 100}%`;
+      const needlePos = calibrationNeedle(now - needleStartedAt, state.calibrationStreak);
+      needle.style.left = `${needlePos * 100}%`;
+      needleFrames.push({ at: now, pos: needlePos });
+      if (needleFrames.length > 16) needleFrames.shift();
       lastReducedNeedleFrame = now;
     }
+    lastTarget = state.calibrationTarget;
     const hasRack = (state.buildings.rack ?? 0) >= 1;
     calibrateBtn.disabled = !hasRack || now < calibrateCooldownUntil;
     calibrateBtn.textContent = !hasRack

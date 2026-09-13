@@ -5,6 +5,7 @@ import {
   calibrationZone,
   calibrate,
   cutPeat,
+  needleAtClick,
   peatCutCharge,
   streakMultiplier,
   STREAK_DIFFICULTY_CAP,
@@ -32,6 +33,18 @@ describe('minigame engine', () => {
     expect(streakMultiplier(3)).toBeCloseTo(1.69);
     expect(streakMultiplier(13)).toBe(STREAK_REWARD_CAP);
     expect(streakMultiplier(30)).toBe(STREAK_REWARD_CAP);
+  });
+
+  it('chooses the closest recently displayed needle frame', () => {
+    expect(needleAtClick([
+      { at: 100, pos: 0.55 },
+      { at: 140, pos: 0.8 },
+    ], 0.5, 180)).toBe(0.55);
+    expect(needleAtClick([
+      { at: -120, pos: 0.5 },
+      { at: 140, pos: 0.8 },
+    ], 0.5, 180)).toBe(0.8);
+    expect(needleAtClick([], 0.5, 180)).toBe(0.5);
   });
 
   it('awards a growing payout for consecutive hits', () => {

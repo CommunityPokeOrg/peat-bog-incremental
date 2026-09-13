@@ -15,6 +15,38 @@ export interface CalibrationResult {
   multiplier: number;
 }
 
+/** Maximum age of a displayed needle frame considered at click time. */
+export const CALIBRATION_GRACE_MS = 120;
+
+/** A needle position drawn at a specific clock time. */
+export interface NeedleFrame {
+  at: number;
+  pos: number;
+}
+
+/** Choose the displayed needle position most likely to explain a click. */
+export function needleAtClick(
+  frames: readonly NeedleFrame[],
+  target: number,
+  now: number,
+  graceMs = CALIBRATION_GRACE_MS,
+): number {
+  if (frames.length === 0) return 0.5;
+  const latest = frames.reduce((newest, frame) => (frame.at > newest.at ? frame : newest));
+  let closest: NeedleFrame | undefined;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (const frame of frames) {
+    const age = now - frame.at;
+    if (age < 0 || age > graceMs) continue;
+    const distance = Math.abs(frame.pos - target);
+    if (distance < closestDistance) {
+      closest = frame;
+      closestDistance = distance;
+    }
+  }
+  return closest?.pos ?? latest.pos;
+}
+
 /** Return the needle period in milliseconds for a calibration streak. */
 export function calibrationPeriod(streak: number): number {
   return 4084 / (1 + 0.16 * Math.min(streak, STREAK_DIFFICULTY_CAP));

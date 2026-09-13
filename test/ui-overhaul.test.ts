@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RESEARCH } from '../src/game/data';
+import { calibrate } from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
 import { formatQuestReward } from '../src/ui/text';
@@ -143,26 +144,43 @@ describe('UI overhaul', () => {
     const state = createInitialState();
     state.buildings.rack = 1;
     let received = -1;
-    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    let result: ReturnType<typeof calibrate> | undefined;
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
     const ui = makeUi(root, {
       onCalibrate: (needlePos) => {
         received = needlePos;
-        return {
-          hit: true,
-          compute: 2,
-          evidence: 0.2,
-          streak: 1,
-          multiplier: 1,
-        };
+        result = calibrate(state, needlePos, () => 0.5);
+        return result;
       },
     });
 
-    ui.renderFieldwork(state, 1_000);
-    const needle = root.querySelector<HTMLElement>('.needle')!;
-    const drawn = Number.parseFloat(needle.style.left) / 100;
-    now.mockReturnValue(9_000);
+    ui.renderFieldwork(state, 65);
+    ui.renderFieldwork(state, 125);
+    now.mockReturnValue(135);
     root.querySelector<HTMLButtonElement>('#calibrate-btn')!.click();
 
-    expect(received).toBe(drawn);
+    expect(result?.hit).toBe(true);
+    expect(received).toBeCloseTo(0.5 + 0.5 * Math.sin((2 * Math.PI * 65) / 4084));
+  });
+
+  it('ignores a visibly green frame older than the grace window', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.buildings.rack = 1;
+    let result: ReturnType<typeof calibrate> | undefined;
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const ui = makeUi(root, {
+      onCalibrate: (needlePos) => {
+        result = calibrate(state, needlePos);
+        return result;
+      },
+    });
+
+    ui.renderFieldwork(state, 65);
+    ui.renderFieldwork(state, 365);
+    now.mockReturnValue(375);
+    root.querySelector<HTMLButtonElement>('#calibrate-btn')!.click();
+
+    expect(result?.hit).toBe(false);
   });
 });
