@@ -16,4 +16,10 @@ describe('list layout rules', () => {
       tabContentChildShrink,
     }).toEqual({ bodyHasMinWidth: true, tabContentChildShrink: false });
   });
+
+  it('greys out the Buy pill on unaffordable rows', () => {
+    const disabledPill = css.match(/button\.item:disabled \.item-action\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(disabledPill).toMatch(/background:\s*var\(--bog-3\)/);
+    expect(disabledPill).toMatch(/color:\s*var\(--ink-faint\)/);
+  });
 });

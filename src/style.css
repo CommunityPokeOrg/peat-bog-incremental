@@ -537,6 +537,22 @@ button.item {
   cursor: not-allowed;
 }
 
+button.item:disabled .item-action {
+  border-color: var(--rule-strong);
+  border-style: dashed;
+  background: var(--bog-3);
+  color: var(--ink-faint);
+  opacity: .7;
+}
+
+button.item:disabled .item-cost {
+  color: var(--ink-faint);
+}
+
+button.item:disabled:hover {
+  background: transparent;
+}
+
 .item-emoji {
   flex-shrink: 0;
   font-size: 1.35rem;
