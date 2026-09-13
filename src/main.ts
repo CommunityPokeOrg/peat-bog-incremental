@@ -3,6 +3,7 @@ import { ACHIEVEMENT_BY_ID, BUILDING_BY_ID, RESEARCH } from './game/data';
 import {
   canPrestige,
   buyResearch,
+  buyNightWatch,
   cancelResearch,
   checkAchievements,
   click,
@@ -16,7 +17,9 @@ import {
   exportSave,
   importSave,
   SAVE_KEY,
+  sanitizeElapsedSeconds,
   save as saveLocal,
+  type OfflineEarnings,
 } from './game/save';
 import { advanceResearch } from './game/engine';
 import { claimQuest, expireBuffs } from './game/quests';
@@ -43,7 +46,7 @@ async function init(): Promise<void> {
   const loaded = await loadWithMigration();
   if (loaded) {
     state = loaded;
-    offlineSeconds = (Date.now() - state.lastSaveTime) / 1000;
+    offlineSeconds = Math.max(0, (Date.now() - state.lastSaveTime) / 1000);
   } else if (hadLegacySave) {
     corruptSave = true;
   }
@@ -206,33 +209,20 @@ async function init(): Promise<void> {
       }
       return bought;
     },
+    onBuyNightWatch: () => {
+      const bought = buyNightWatch(state);
+      if (bought) {
+        checkAchievementsNow();
+        void doSave();
+      }
+      return bought;
+    },
   });
 
-  const fireSave = (): void => {
-    try {
-      saveLocal(state);
-    } catch {
-      // IndexedDB may still complete after the page starts unloading.
-    }
-    void doSave(false);
-  };
-
-  setInterval(() => void doSave(), 15_000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') void doSave();
-  });
-  window.addEventListener('beforeunload', fireSave);
-  window.addEventListener('pagehide', fireSave);
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() !== 'h') return;
-    const target = e.target as HTMLElement | null;
-    if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-    doHarvest();
-  });
-
-  if (corruptSave) ui.toast('Save was unreadable — started a fresh bog.');
-  if (offlineSeconds > 60) {
-    const earned = computeOfflineEarnings(state, offlineSeconds);
+  let offlineResearch: string[] = [];
+  function applyOfflineProgress(seconds: number, threshold = 60): OfflineEarnings | null {
+    if (seconds < threshold) return null;
+    const earned = computeOfflineEarnings(state, seconds);
     state.broth += earned.broth;
     state.compute += earned.compute;
     state.peat += earned.peat;
@@ -246,28 +236,82 @@ async function init(): Promise<void> {
     state.totalMethaneEarned += earned.methane;
     state.totalEvidenceEarned += earned.evidence;
     expireBuffs(state);
-    const completedResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
-    const researchText = completedResearch.length > 0
-      ? ` Research finished while away: ${completedResearch
-        .map((id) => RESEARCH.find((research) => research.id === id)?.name ?? id)
-        .join(', ')}.`
+    offlineResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
+    return earned;
+  }
+
+  const offlineResourcesText = (earned: OfflineEarnings): string => [
+    `+${formatNumber(earned.broth)} broth`,
+    `+${formatNumber(earned.compute)} compute`,
+    earned.peat > 0 ? `+${formatNumber(earned.peat)} peat` : '',
+    earned.sphagnum > 0 ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
+    earned.methane > 0 ? `+${formatNumber(earned.methane)} methane` : '',
+    earned.evidence > 0 ? `+${formatNumber(earned.evidence)} evidence` : '',
+  ].filter(Boolean).join(', ');
+
+  const offlineResearchText = (): string => offlineResearch.length > 0
+    ? ` Research finished while away: ${offlineResearch
+      .map((id) => RESEARCH.find((research) => research.id === id)?.name ?? id)
+      .join(', ')}.`
+    : '';
+
+  const fireSave = (): void => {
+    try {
+      saveLocal(state);
+    } catch {
+      // IndexedDB may still complete after the page starts unloading.
+    }
+    void doSave(false);
+  };
+
+  setInterval(() => void doSave(), 15_000);
+  let last = performance.now();
+  let hiddenWall: number | null = null;
+  let hiddenMono: number | null = null;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      hiddenWall = Date.now();
+      hiddenMono = performance.now();
+      void doSave();
+      return;
+    }
+    if (hiddenWall === null || hiddenMono === null) return;
+    const seconds = sanitizeElapsedSeconds(
+      Date.now() - hiddenWall,
+      performance.now() - hiddenMono,
+    );
+    hiddenWall = null;
+    hiddenMono = null;
+    const earned = applyOfflineProgress(seconds, 5);
+    last = performance.now();
+    if (!earned) return;
+    ui.renderCounters(state);
+    ui.renderLists(state);
+    ui.toast(`Away ${formatDuration(earned.seconds)} · ${offlineResourcesText(earned)} at ${formatNumber(earned.rate * 100)}% offline rate`);
+    void doSave();
+  });
+  window.addEventListener('beforeunload', fireSave);
+  window.addEventListener('pagehide', fireSave);
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'h') return;
+    const target = e.target as HTMLElement | null;
+    if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+    doHarvest();
+  });
+
+  if (corruptSave) ui.toast('Save was unreadable — started a fresh bog.');
+  const initialOffline = applyOfflineProgress(offlineSeconds);
+  if (initialOffline) {
+    const lowRateText = initialOffline.rate < 0.1
+      ? ' Buy Night Watch levels or sign Charter terms to keep more of it.'
       : '';
-    const offlineResources = [
-      `+${formatNumber(earned.broth)} broth`,
-      `+${formatNumber(earned.compute)} compute`,
-      earned.peat > 0 ? `+${formatNumber(earned.peat)} peat` : '',
-      earned.sphagnum > 0 ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
-      earned.methane > 0 ? `+${formatNumber(earned.methane)} methane` : '',
-      earned.evidence > 0 ? `+${formatNumber(earned.evidence)} evidence` : '',
-    ].filter(Boolean).join(', ');
     ui.showModal({
       title: 'Welcome back to the bog',
-      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: ${offlineResources}.${researchText}`,
+      body: `You were away ${formatDuration(initialOffline.seconds)}. Your bog kept simmering at ${formatNumber(initialOffline.rate * 100)}% of full production: ${offlineResourcesText(initialOffline)}.${offlineResearchText()}${lowRateText}`,
       actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
     });
   }
 
-  let last = performance.now();
   let lastListRender = 0;
   function frame(now: number): void {
     const dt = Math.min((now - last) / 1000, 1);

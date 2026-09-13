@@ -9,6 +9,7 @@ import {
   checkAchievements,
   click,
   clickPower,
+  buyNightWatch,
   canAfford,
   maxAffordable,
   prestige,
@@ -21,11 +22,15 @@ import {
   totalCooling,
   totalHeat,
   upgradeVisible,
+  nightWatchCost,
 } from '../src/game/engine';
 import { formatCost, formatNumber } from '../src/game/format';
 import {
   computeOfflineEarnings,
   deserialize,
+  offlineRate,
+  offlineRateBreakdown,
+  sanitizeElapsedSeconds,
   serialize,
   OFFLINE_CAP_SECONDS,
 } from '../src/game/save';
@@ -347,14 +352,51 @@ describe('save', () => {
 });
 
 describe('offline earnings', () => {
-  it('pays 50% rate and caps at 8 hours', () => {
+  it('composes baseline, Night Watch, and Charter offline rates and caps at 8 hours', () => {
     const state = createInitialState();
     state.buildings['harvester'] = 10; // 5 broth/s
+    expect(offlineRate(state)).toBeCloseTo(0.01);
+    state.nightWatch = 5;
+    expect(offlineRate(state)).toBeCloseTo(0.06);
+    state.charter = ['filing-1', 'filing-2'];
+    expect(offlineRateBreakdown(state)).toEqual({
+      base: 0.01,
+      nightWatch: 0.05,
+      charter: 0.1,
+      total: 0.16,
+    });
     const e1 = computeOfflineEarnings(state, 100);
-    expect(e1.broth).toBeCloseTo(5 * 100 * 0.5);
+    expect(e1.rate).toBeCloseTo(0.16);
+    expect(e1.broth).toBeCloseTo(5 * 100 * 0.16);
+    state.nightWatch = 100;
+    state.charter = ['filing-1', 'filing-2', 'filing-5'];
+    expect(offlineRate(state)).toBe(1);
     const e2 = computeOfflineEarnings(state, OFFLINE_CAP_SECONDS * 4);
     expect(e2.seconds).toBe(OFFLINE_CAP_SECONDS);
-    expect(e2.broth).toBeCloseTo(5 * OFFLINE_CAP_SECONDS * 0.5);
+    expect(e2.broth).toBeCloseTo(5 * OFFLINE_CAP_SECONDS);
+  });
+
+  it('sanitizes wall-clock jumps against monotonic elapsed time', () => {
+    expect(sanitizeElapsedSeconds(10_000, 12_000)).toBe(10);
+    expect(sanitizeElapsedSeconds(-1, 12_000)).toBe(12);
+    expect(sanitizeElapsedSeconds(400_001, 100_000)).toBe(100);
+    expect(sanitizeElapsedSeconds(Number.NaN, 12_000)).toBe(12);
+  });
+
+  it('buys Night Watch levels with exponential costs and preserves them through prestige', () => {
+    const state = createInitialState();
+    expect(nightWatchCost(1).broth).toBe(Math.round(nightWatchCost(0).broth! * 1.9));
+    state.broth = nightWatchCost(0).broth!;
+    expect(buyNightWatch(state)).toBe(true);
+    expect(state.nightWatch).toBe(1);
+    expect(state.broth).toBe(0);
+    state.nightWatch = 49;
+    state.broth = 1e100;
+    expect(buyNightWatch(state)).toBe(false);
+    state.nightWatch = 7;
+    state.totalComputeThisRun = 1_000_000;
+    expect(prestige(state)).toBe(1);
+    expect(state.nightWatch).toBe(7);
   });
 });
 

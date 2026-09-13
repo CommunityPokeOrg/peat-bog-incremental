@@ -10,7 +10,7 @@ import {
   type SpendableResource,
   type UpgradeDef,
 } from './data';
-import type { GameState } from './state';
+import { NIGHT_WATCH_MAX_LEVEL, type GameState } from './state';
 import { QUESTS, expireBuffs, questMultiplier } from './quests';
 import { CHARTER, charterFactor, charterMultiplier, charterSum } from './charter';
 
@@ -67,6 +67,19 @@ export function payCost(state: GameState, cost: ResourceCost): void {
   for (const resource of SPENDABLE_RESOURCES) {
     if (cost[resource] !== undefined) state[resource] -= cost[resource]!;
   }
+}
+
+export function nightWatchCost(level: number): ResourceCost {
+  return { broth: Math.round(2_500 * 1.9 ** level) };
+}
+
+export function buyNightWatch(state: GameState): boolean {
+  if (state.nightWatch >= NIGHT_WATCH_MAX_LEVEL) return false;
+  const cost = nightWatchCost(state.nightWatch);
+  if (!canAfford(state, cost)) return false;
+  payCost(state, cost);
+  state.nightWatch += 1;
+  return true;
 }
 
 // --- multipliers -----------------------------------------------------------

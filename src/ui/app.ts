@@ -10,6 +10,7 @@ import {
 } from '../game/data';
 import {
   bulkCost,
+  buyNightWatch,
   buildingVisible,
   buyBuilding,
   buyResearch,
@@ -19,6 +20,7 @@ import {
   clickPower,
   maxAffordable,
   MAX_RESEARCH_QUEUE,
+  nightWatchCost,
   prestigeGain,
   productionPerSecond,
   researchProgress,
@@ -28,6 +30,7 @@ import {
   upgradeVisible,
 } from '../game/engine';
 import { formatCost, formatDuration, formatNumber } from '../game/format';
+import { offlineRateBreakdown } from '../game/save';
 import type { GameState } from '../game/state';
 import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
 import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
@@ -60,6 +63,7 @@ export interface UiHooks {
   onCancelResearch?(id: string): boolean | void;
   onQueueResearch?(id: string): boolean | void;
   onBuyCharter?(id: string): boolean;
+  onBuyNightWatch?(): boolean;
 }
 
 export interface Ui {
@@ -973,6 +977,42 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     };
   }
 
+  function createNightWatchEntry(state: GameState): RowEntry {
+    return {
+      key: 'night-watch',
+      create: () => createRow('night-watch', {
+        emoji: '🕯️',
+        name: 'Night Watch',
+        desc: '',
+        onClick: () => {
+          const latest = currentState;
+          if (!latest) return;
+          const bought = hooks.onBuyNightWatch
+            ? hooks.onBuyNightWatch()
+            : buyNightWatch(latest);
+          if (bought) renderLists(latest);
+        },
+      }),
+      update: (row) => {
+        const latest = currentState ?? state;
+        const breakdown = offlineRateBreakdown(latest);
+        const level = latest.nightWatch;
+        const atMax = level >= 49;
+        const next = atMax ? '' : ` Next level: +1%.`;
+        const charterText = breakdown.charter > 0 ? ` + Charter ${formatNumber(breakdown.charter * 100)}%` : '';
+        const description = `While you are away the cutters keep ${formatNumber(breakdown.total * 100)}% of production going (base 1% + Night Watch ${formatNumber(breakdown.nightWatch * 100)}%${charterText}).${next}`;
+        updateRow(row, {
+          cost: atMax ? '' : formatCost(nightWatchCost(level)),
+          owned: `Lv ${level}/49`,
+          action: atMax ? 'Maxed' : 'Buy',
+          disabled: atMax || !canAfford(latest, nightWatchCost(level)),
+          label: atMax ? 'Night Watch maxed' : `Buy Night Watch level ${level + 1}`,
+          desc: description,
+        });
+      },
+    };
+  }
+
   function renderUpgrades(state: GameState): void {
     const owned = new Set(state.upgrades);
     const available = UPGRADES
@@ -995,7 +1035,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           (a.cost.compute ?? 0) - (b.cost.compute ?? 0);
       })
       .slice(0, 6);
-    const entries: RowEntry[] = [];
+    const entries: RowEntry[] = [createNightWatchEntry(state)];
     if (owned.size > 0) entries.push(createOwnedDrawerEntry());
     if (available.length > 0) {
       entries.push({

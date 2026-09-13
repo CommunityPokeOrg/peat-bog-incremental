@@ -1,6 +1,7 @@
 import type { QuestBuff } from './quests';
 
 export const SAVE_VERSION = 3;
+export const NIGHT_WATCH_MAX_LEVEL = 49;
 
 /** One queued research item and its remaining duration in seconds. */
 export interface ResearchQueueEntry {
@@ -28,6 +29,7 @@ export interface GameState {
   minigameHits: number;
   calibrationStreak: number;
   calibrationTarget: number;
+  nightWatch: number;
   charter: string[];
   buildings: Record<string, number>;
   revealed: string[];
@@ -63,6 +65,7 @@ export function createInitialState(): GameState {
     minigameHits: 0,
     calibrationStreak: 0,
     calibrationTarget: 0.5,
+    nightWatch: 0,
     charter: [],
     buildings: {},
     revealed: [],

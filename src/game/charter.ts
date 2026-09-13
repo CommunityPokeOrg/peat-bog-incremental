@@ -40,9 +40,10 @@ export const CHARTER: CharterNodeDef[] = [
   { id: 'kindling-3', name: 'Quick Study', emoji: '📚', description: 'Research clerks stop losing the docket between pages.', branch: 'kindling', cost: 3, requires: 'kindling-2', effects: [{ kind: 'researchSpeed', factor: 2 }] },
   { id: 'kindling-4', name: 'Overclocked Verdict', emoji: '⚡', description: 'Compute gets the ruling before lunch.', branch: 'kindling', cost: 4, requires: 'kindling-3', effects: [{ kind: 'multiplier', target: 'compute', factor: 2 }] },
   { id: 'filing-1', name: "Clerk's Favour", emoji: '🖋️', description: 'Evidence receives the attention it has always deserved.', branch: 'filing', cost: 1, effects: [{ kind: 'multiplier', target: 'evidence', factor: 1.5 }] },
-  { id: 'filing-2', name: 'Standing Order', emoji: '🕰️', description: 'The court keeps its lamps on after adjournment.', branch: 'filing', cost: 2, requires: 'filing-1', effects: [{ kind: 'offlineRate', add: 0.25 }] },
+  { id: 'filing-2', name: 'Standing Order', emoji: '🕰️', description: 'The court keeps its lamps on after adjournment.', branch: 'filing', cost: 2, requires: 'filing-1', effects: [{ kind: 'offlineRate', add: 0.10 }] },
   { id: 'filing-3', name: 'Pulley Dividend', emoji: '🔩', description: 'Every click carries a little more broth into evidence.', branch: 'filing', cost: 2, requires: 'filing-2', effects: [{ kind: 'clickBrothFraction', fraction: 0.02 }] },
   { id: 'filing-4', name: "Reino's Precedent", emoji: '⚖️', description: 'The Magistrate allows a larger core award.', branch: 'filing', cost: 5, requires: 'filing-3', effects: [{ kind: 'coreGain', factor: 1.5 }] },
+  { id: 'filing-5', name: 'Night Clerk', emoji: '🌙', description: 'A clerk stays past adjournment and keeps the ledger moving.', branch: 'filing', cost: 3, requires: 'filing-2', effects: [{ kind: 'offlineRate', add: 0.15 }] },
 ];
 
 export const CHARTER_BY_ID: Record<string, CharterNodeDef> = Object.fromEntries(

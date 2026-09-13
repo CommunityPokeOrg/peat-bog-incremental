@@ -1,4 +1,10 @@
-import { createInitialState, SAVE_VERSION, type GameState, type ResearchQueueEntry } from './state';
+import {
+  createInitialState,
+  NIGHT_WATCH_MAX_LEVEL,
+  SAVE_VERSION,
+  type GameState,
+  type ResearchQueueEntry,
+} from './state';
 import { productionPerSecond } from './engine';
 import { charterSum } from './charter';
 import type { QuestBuff } from './quests';
@@ -6,7 +12,9 @@ import type { QuestBuff } from './quests';
 export const SAVE_KEY = 'peat-bog-incremental:v1';
 
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
-export const OFFLINE_RATE = 0.5;
+export const OFFLINE_BASE_RATE = 0.01;
+export const NIGHT_WATCH_STEP = 0.01;
+export { NIGHT_WATCH_MAX_LEVEL };
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -71,6 +79,7 @@ export function deserialize(raw: string | null): GameState | null {
     (p.minigameHits !== undefined && !isNum(p.minigameHits)) ||
     (p.calibrationStreak !== undefined && !isNum(p.calibrationStreak)) ||
     (p.calibrationTarget !== undefined && !isNum(p.calibrationTarget)) ||
+    (p.nightWatch !== undefined && (!isNum(p.nightWatch) || !Number.isInteger(p.nightWatch) || p.nightWatch < 0)) ||
     (p.charter !== undefined && !isStrArr(p.charter)) ||
     (p.researchQueue !== undefined && !isResearchQueue(p.researchQueue)) ||
     (p.quests !== undefined && !isQuestState(p.quests))
@@ -97,6 +106,9 @@ export function deserialize(raw: string | null): GameState | null {
   state.minigameHits = isNum(p.minigameHits) ? p.minigameHits : 0;
   state.calibrationStreak = isNum(p.calibrationStreak) ? p.calibrationStreak : 0;
   state.calibrationTarget = isNum(p.calibrationTarget) ? p.calibrationTarget : 0.5;
+  state.nightWatch = isNum(p.nightWatch)
+    ? Math.min(NIGHT_WATCH_MAX_LEVEL, Math.floor(p.nightWatch))
+    : 0;
   state.charter = isStrArr(p.charter) ? [...p.charter] : [];
   state.buildings = { ...p.buildings };
   state.revealed = isStrArr(p.revealed) ? [...p.revealed] : [];
@@ -126,6 +138,7 @@ export function load(storage: Pick<Storage, 'getItem'> = localStorage): GameStat
 
 export interface OfflineEarnings {
   seconds: number;
+  rate: number;
   broth: number;
   compute: number;
   peat: number;
@@ -134,19 +147,45 @@ export interface OfflineEarnings {
   evidence: number;
 }
 
-/** Offline progress: base 50% rate plus Charter bonuses, capped at 8 hours. */
+export function offlineRate(state: GameState): number {
+  return Math.min(1, OFFLINE_BASE_RATE + NIGHT_WATCH_STEP * state.nightWatch + charterSum(state, 'offlineRate'));
+}
+
+export function offlineRateBreakdown(state: GameState): {
+  base: number;
+  nightWatch: number;
+  charter: number;
+  total: number;
+} {
+  const base = OFFLINE_BASE_RATE;
+  const nightWatch = NIGHT_WATCH_STEP * state.nightWatch;
+  const charter = charterSum(state, 'offlineRate');
+  return { base, nightWatch, charter, total: Math.min(1, base + nightWatch + charter) };
+}
+
+/** Convert wall-clock elapsed time to guarded elapsed seconds. */
+export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: number): number {
+  const monotonic = Number.isFinite(monotonicDeltaMs) ? Math.max(0, monotonicDeltaMs) : 0;
+  if (Number.isFinite(wallDeltaMs) && wallDeltaMs >= 0 && wallDeltaMs <= monotonic + 300_000) {
+    return wallDeltaMs / 1000;
+  }
+  return monotonic / 1000;
+}
+
+/** Offline progress at the current background rate, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
   const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
   const rates = productionPerSecond(state);
-  const offlineRate = Math.min(1, OFFLINE_RATE + charterSum(state, 'offlineRate'));
+  const rate = offlineRate(state);
   return {
     seconds,
-    broth: rates.broth * seconds * offlineRate,
-    compute: rates.compute * seconds * offlineRate,
-    peat: rates.peat * seconds * offlineRate,
-    sphagnum: rates.sphagnum * seconds * offlineRate,
-    methane: rates.methane * seconds * offlineRate,
-    evidence: rates.evidence * seconds * offlineRate,
+    rate,
+    broth: rates.broth * seconds * rate,
+    compute: rates.compute * seconds * rate,
+    peat: rates.peat * seconds * rate,
+    sphagnum: rates.sphagnum * seconds * rate,
+    methane: rates.methane * seconds * rate,
+    evidence: rates.evidence * seconds * rate,
   };
 }
 

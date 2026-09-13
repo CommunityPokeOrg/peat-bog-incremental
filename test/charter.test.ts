@@ -4,7 +4,7 @@ import {
   charterAvailable,
   charterMultiplier,
 } from '../src/game/charter';
-import { computeOfflineEarnings, deserialize } from '../src/game/save';
+import { computeOfflineEarnings, deserialize, offlineRate } from '../src/game/save';
 import { createInitialState } from '../src/game/state';
 import { prestige, prestigeGain, tick } from '../src/game/engine';
 
@@ -49,7 +49,8 @@ describe('Drainage Charter', () => {
     const state = createInitialState();
     state.buildings.harvester = 10;
     state.charter = ['filing-1', 'filing-2'];
-    expect(computeOfflineEarnings(state, 100).broth).toBeCloseTo(5 * 100 * 0.75);
+    expect(computeOfflineEarnings(state, 100).broth).toBeCloseTo(5 * 100 * 0.11);
+    expect(offlineRate(state)).toBeCloseTo(0.11);
   });
 
   it('advances research at double speed with Quick Study', () => {
@@ -80,12 +81,22 @@ describe('Drainage Charter', () => {
     expect(state?.sphagnum).toBe(0);
     expect(state?.methane).toBe(0);
     expect(state?.charter).toEqual([]);
+    expect(state?.nightWatch).toBe(0);
   });
 
   it('round-trips Charter terms', () => {
     const state = createInitialState();
     state.charter = ['roots-1'];
+    state.nightWatch = 7;
     state.calibrationTarget = 0.3;
-    expect(deserialize(JSON.stringify(state))?.charter).toEqual(['roots-1']);
+    const roundTrip = deserialize(JSON.stringify(state));
+    expect(roundTrip?.charter).toEqual(['roots-1']);
+    expect(roundTrip?.nightWatch).toBe(7);
+  });
+
+  it('clamps a valid oversized Night Watch level on load', () => {
+    const state = createInitialState();
+    const raw = JSON.stringify({ ...state, nightWatch: 999 });
+    expect(deserialize(raw)?.nightWatch).toBe(49);
   });
 });

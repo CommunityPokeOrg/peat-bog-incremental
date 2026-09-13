@@ -52,6 +52,19 @@ describe('UI overhaul', () => {
     expect((panel.lastElementChild as HTMLElement).hidden).toBe(true);
   });
 
+  it('renders Night Watch and disables it at the maximum level', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    const ui = makeUi(root, { initialTab: 'upgrades' });
+    ui.renderLists(state);
+    const row = root.querySelector<HTMLElement>('[data-key="night-watch"]')!;
+    expect(row.textContent).toContain('Lv 0/49');
+    state.nightWatch = 49;
+    ui.renderLists(state);
+    expect(row.textContent).toContain('Maxed');
+    expect((row as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('claims a ready docket filing and replaces Claim with Claimed', () => {
     const root = document.createElement('div');
     const state = createInitialState();
@@ -202,7 +215,7 @@ describe('UI overhaul', () => {
     ui.renderLists(state);
     expect(root.textContent).toContain('Roots · 0/4');
     expect(root.textContent).toContain('Kindling · 0/4');
-    expect(root.textContent).toContain('Filing · 0/4');
+    expect(root.textContent).toContain('Filing · 0/5');
     const row = root.querySelector<HTMLElement>('[data-key="charter-roots-1"]')!;
     expect(row.textContent).toContain('Sign');
     row.click();
