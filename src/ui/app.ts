@@ -45,6 +45,19 @@ import {
   type CalibrationResult,
   type NeedleFrame,
 } from '../game/minigames';
+import {
+  CHARTER_DRAG_THRESHOLD_PX,
+  CHARTER_MAX_SCALE,
+  CHARTER_MIN_SCALE,
+  CHARTER_ZOOM_STEP,
+  clampPan,
+  centreOn,
+  panBy,
+  toCss,
+  wheelZoomFactor,
+  zoomAt,
+  type CharterView,
+} from './charterView';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'charter' | 'settings';
 type Qty = number | 'max';
@@ -1236,25 +1249,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   };
 
   let charterSelected: string = CHARTER_ROOT_ID;
-
-  /** Keeps the Seal in view whenever the canvas is (re)sized, until the player pans. */
-  function centreOnRoot(canvas: HTMLElement, root: { x: number; y: number }): void {
-    let panned = false;
-    canvas.addEventListener('pointerdown', (event) => {
-      if (!(event.target as HTMLElement).closest('.charter-node')) panned = true;
-    });
-    canvas.addEventListener('wheel', () => { panned = true; }, { once: true, passive: true });
-    const centre = (): void => {
-      if (panned || canvas.clientWidth === 0) return;
-      canvas.scrollLeft = root.x - canvas.clientWidth / 2;
-      canvas.scrollTop = root.y - canvas.clientHeight / 2;
-    };
-    if (typeof ResizeObserver === 'function') {
-      new ResizeObserver(centre).observe(canvas);
-    } else {
-      requestAnimationFrame(centre);
-    }
-  }
+  let charterView: CharterView | null = null;
+  let charterInteracted = false;
 
   function signCharter(node: CharterNodeDef): void {
     const latest = currentState;
@@ -1266,28 +1262,179 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     renderLists(latest);
   }
 
-  /** Drag-to-pan on a scroll container; wheel/touch/keyboard scrolling keep working natively. */
-  function enablePan(canvas: HTMLElement): void {
-    let drag: { x: number; y: number; left: number; top: number } | null = null;
-    canvas.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || (event.target as HTMLElement).closest('.charter-node')) return;
-      drag = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
-      canvas.classList.add('is-panning');
-      canvas.setPointerCapture(event.pointerId);
-    });
-    canvas.addEventListener('pointermove', (event) => {
-      if (!drag) return;
-      canvas.scrollLeft = drag.left - (event.clientX - drag.x);
-      canvas.scrollTop = drag.top - (event.clientY - drag.y);
-    });
-    const stop = (): void => {
-      drag = null;
-      canvas.classList.remove('is-panning');
-    };
-    canvas.addEventListener('pointerup', stop);
-    canvas.addEventListener('pointercancel', stop);
+  function charterViewport(canvas: HTMLElement): { width: number; height: number } {
+    return { width: canvas.clientWidth, height: canvas.clientHeight };
   }
 
+  function setCharterView(
+    canvas: HTMLElement,
+    sheet: HTMLElement,
+    layout: ReturnType<typeof layoutCharter>,
+    next: CharterView,
+    interacted = true,
+  ): void {
+    const viewport = charterViewport(canvas);
+    if (viewport.width === 0 || viewport.height === 0) return;
+    charterView = clampPan(next, { width: layout.width, height: layout.height }, viewport);
+    if (interacted) charterInteracted = true;
+    sheet.style.transform = toCss(charterView);
+    const zoomIn = canvas.querySelector<HTMLButtonElement>('[data-zoom="in"]');
+    const zoomOut = canvas.querySelector<HTMLButtonElement>('[data-zoom="out"]');
+    if (zoomIn) zoomIn.disabled = charterView.scale >= CHARTER_MAX_SCALE;
+    if (zoomOut) zoomOut.disabled = charterView.scale <= CHARTER_MIN_SCALE;
+  }
+
+  function setupCharterCamera(
+    canvas: HTMLElement,
+    sheet: HTMLElement,
+    toolbar: HTMLElement,
+    layout: ReturnType<typeof layoutCharter>,
+  ): void {
+    const viewport = charterViewport(canvas);
+    const centre = (): void => {
+      const size = charterViewport(canvas);
+      if (size.width === 0 || size.height === 0) return;
+      if (!charterView || !charterInteracted) {
+        setCharterView(canvas, sheet, layout, centreOn(layout.points[CHARTER_ROOT_ID], size, 1), false);
+      } else {
+        setCharterView(canvas, sheet, layout, charterView, false);
+      }
+    };
+    const ensureView = (): void => {
+      if (!charterView && canvas.clientWidth > 0 && canvas.clientHeight > 0) centre();
+    };
+    if (viewport.width > 0 && viewport.height > 0) centre();
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(centre).observe(canvas);
+    } else {
+      requestAnimationFrame(centre);
+    }
+
+    const pointers = new Map<number, { x: number; y: number }>();
+    const starts = new Map<number, { x: number; y: number }>();
+    let dragging = false;
+    let previousPinch: { midpoint: { x: number; y: number }; distance: number } | null = null;
+    const canCapture = 'setPointerCapture' in canvas;
+    const pairSnapshot = (): { midpoint: { x: number; y: number }; distance: number } | null => {
+      const points = [...pointers.values()];
+      if (points.length < 2) return null;
+      const [a, b] = points;
+      return {
+        midpoint: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        distance: Math.hypot(a.x - b.x, a.y - b.y),
+      };
+    };
+    const canvasPoint = (clientX: number, clientY: number): { x: number; y: number } => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+    const markDragging = (): void => {
+      dragging = true;
+      canvas.classList.add('is-panning');
+    };
+    const applyPan = (next: CharterView): void => {
+      setCharterView(canvas, sheet, layout, next);
+    };
+
+    toolbar.addEventListener('pointerdown', (event) => event.stopPropagation());
+    toolbar.querySelectorAll<HTMLButtonElement>('.charter-zoom-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        ensureView();
+        const current = charterView;
+        if (!current) return;
+        const size = charterViewport(canvas);
+        const pivot = { x: size.width / 2, y: size.height / 2 };
+        if (button.dataset.zoom === 'reset') {
+          applyPan(centreOn(layout.points[CHARTER_ROOT_ID], size, 1));
+        } else {
+          const factor = button.dataset.zoom === 'in' ? CHARTER_ZOOM_STEP : 1 / CHARTER_ZOOM_STEP;
+          applyPan(zoomAt(current, factor, pivot));
+        }
+      });
+    });
+
+    canvas.addEventListener('pointerdown', (event) => {
+      ensureView();
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      starts.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (canCapture) canvas.setPointerCapture(event.pointerId);
+      if (pointers.size >= 2) {
+        previousPinch = pairSnapshot();
+        markDragging();
+      }
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      const previous = pointers.get(event.pointerId);
+      if (!previous) return;
+      const beforePinch = pointers.size >= 2 ? pairSnapshot() : null;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        const afterPinch = pairSnapshot();
+        const prior = previousPinch ?? beforePinch;
+        if (afterPinch && prior && prior.distance > 0 && charterView) {
+          const pivot = canvasPoint(afterPinch.midpoint.x, afterPinch.midpoint.y);
+          const zoomed = zoomAt(charterView, afterPinch.distance / prior.distance, pivot);
+          applyPan(panBy(
+            zoomed,
+            afterPinch.midpoint.x - prior.midpoint.x,
+            afterPinch.midpoint.y - prior.midpoint.y,
+          ));
+        }
+        previousPinch = afterPinch;
+        markDragging();
+        return;
+      }
+      const start = starts.get(event.pointerId);
+      if (!start) return;
+      if (!dragging && Math.hypot(event.clientX - start.x, event.clientY - start.y) > CHARTER_DRAG_THRESHOLD_PX) {
+        markDragging();
+      }
+      if (dragging && charterView) {
+        applyPan(panBy(charterView, event.clientX - previous.x, event.clientY - previous.y));
+      }
+    });
+    const endPointer = (event: PointerEvent): void => {
+      pointers.delete(event.pointerId);
+      starts.delete(event.pointerId);
+      previousPinch = pointers.size >= 2 ? pairSnapshot() : null;
+      if (pointers.size > 0) return;
+      if (dragging) {
+        canvas.addEventListener('click', (click) => {
+          click.stopPropagation();
+          click.preventDefault();
+        }, { capture: true, once: true });
+      }
+      dragging = false;
+      canvas.classList.remove('is-panning');
+    };
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
+    canvas.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      ensureView();
+      if (!charterView) return;
+      applyPan(zoomAt(charterView, wheelZoomFactor(event.deltaY), canvasPoint(event.clientX, event.clientY)));
+    }, { passive: false });
+    canvas.addEventListener('keydown', (event) => {
+      if (event.target !== canvas) return;
+      ensureView();
+      if (!charterView) return;
+      const size = charterViewport(canvas);
+      const pivot = { x: size.width / 2, y: size.height / 2 };
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        const dx = event.key === 'ArrowRight' ? 40 : event.key === 'ArrowLeft' ? -40 : 0;
+        const dy = event.key === 'ArrowDown' ? 40 : event.key === 'ArrowUp' ? -40 : 0;
+        applyPan(panBy(charterView, dx, dy));
+      } else if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
+        event.preventDefault();
+        if (event.key === '0') applyPan(centreOn(layout.points[CHARTER_ROOT_ID], size, 1));
+        else applyPan(zoomAt(charterView, event.key === '-' ? 1 / CHARTER_ZOOM_STEP : CHARTER_ZOOM_STEP, pivot));
+      }
+    });
+  }
+
+  /** Render the Charter graph under a persistent pan/zoom camera. */
   function renderCharter(state: GameState): void {
     const layout = layoutCharter();
 
@@ -1309,11 +1456,17 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const canvas = document.createElement('div');
           canvas.className = 'charter-canvas';
           canvas.setAttribute('role', 'group');
-          canvas.setAttribute('aria-label', 'Drainage Charter tree. Drag or scroll to explore.');
+          canvas.setAttribute('aria-label', 'Drainage Charter tree. Drag to pan, scroll or pinch to zoom.');
+          canvas.tabIndex = 0;
           const sheet = document.createElement('div');
           sheet.className = 'charter-sheet';
+          sheet.style.position = 'absolute';
+          sheet.style.left = '0';
+          sheet.style.top = '0';
           sheet.style.width = `${layout.width}px`;
           sheet.style.height = `${layout.height}px`;
+          sheet.style.transformOrigin = '0 0';
+          sheet.style.willChange = 'transform';
 
           const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           svg.setAttribute('class', 'charter-edges');
@@ -1348,9 +1501,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             });
             sheet.appendChild(button);
           }
+          const toolbar = document.createElement('div');
+          toolbar.className = 'charter-zoom';
+          toolbar.innerHTML = `
+            <button type="button" class="charter-zoom-btn" data-zoom="in" aria-label="Zoom in">+</button>
+            <button type="button" class="charter-zoom-btn" data-zoom="out" aria-label="Zoom out">−</button>
+            <button type="button" class="charter-zoom-btn" data-zoom="reset" aria-label="Reset view">⌖</button>`;
           canvas.appendChild(sheet);
-          enablePan(canvas);
-          centreOnRoot(canvas, layout.points[CHARTER_ROOT_ID]);
+          canvas.appendChild(toolbar);
+          setupCharterCamera(canvas, sheet, toolbar, layout);
           return canvas;
         },
         update: (row) => {
@@ -1371,6 +1530,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             const child = CHARTER_BY_ID[edge.to];
             line.dataset.state = child ? charterNodeState(state, child) : 'locked';
           });
+          const sheet = row.querySelector<HTMLElement>('.charter-sheet');
+          if (sheet && charterView) {
+            sheet.style.transform = toCss(charterView);
+          }
         },
       },
       {

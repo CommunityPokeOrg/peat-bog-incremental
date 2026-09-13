@@ -781,21 +781,20 @@ button.item:hover:not(:disabled) .item-action {
   font-size: var(--fs-sm);
 }
 
-/* Charter tree: scrollable canvas, SVG branch lines, absolutely placed node buttons. */
+/* Charter tree: camera viewport, transformed sheet, and absolutely placed node buttons. */
 .charter-canvas {
+  position: relative;
   flex: 1 1 auto;
   min-height: 320px;
   max-height: 60vh;
   margin: 0 .7rem;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: var(--r-md);
   background:
     radial-gradient(circle at center, rgba(196, 140, 255, .08), transparent 60%),
     var(--bog-1);
-  cursor: grab;
-  touch-action: pan-x pan-y;
-  scrollbar-width: thin;
+  touch-action: none;
 }
 
 .charter-canvas.is-panning {
@@ -804,7 +803,49 @@ button.item:hover:not(:disabled) .item-action {
 }
 
 .charter-sheet {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.charter-zoom {
+  position: absolute;
+  z-index: 2;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.charter-zoom-btn {
+  display: grid;
+  min-width: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: rgba(12, 29, 30, .9);
+  color: var(--ink);
+  font: 600 var(--fs-md) var(--font-mono);
+  cursor: pointer;
+}
+
+.charter-zoom-btn:hover:not(:disabled) {
+  border-color: var(--coolant);
+  color: var(--coolant);
+}
+
+.charter-zoom-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.charter-zoom-btn:disabled {
+  cursor: not-allowed;
+  opacity: .4;
 }
 
 .charter-edges {

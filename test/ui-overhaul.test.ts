@@ -5,6 +5,7 @@ import { RESEARCH } from '../src/game/data';
 import { calibrate } from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
+import { CHARTER_MAX_SCALE, CHARTER_ZOOM_STEP } from '../src/ui/charterView';
 import { formatQuestReward } from '../src/ui/text';
 
 function makeUi(root: HTMLElement, overrides: Partial<Parameters<typeof createUi>[1]> = {}) {
@@ -17,6 +18,35 @@ function makeUi(root: HTMLElement, overrides: Partial<Parameters<typeof createUi
     onHardReset: () => {},
     ...overrides,
   });
+}
+
+function setCanvasSize(canvas: HTMLElement, width = 400, height = 300): void {
+  Object.defineProperty(canvas, 'clientWidth', { configurable: true, value: width });
+  Object.defineProperty(canvas, 'clientHeight', { configurable: true, value: height });
+  canvas.getBoundingClientRect = () => ({
+    width,
+    height,
+    top: 0,
+    left: 0,
+    right: width,
+    bottom: height,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+}
+
+function pointerEvent(type: string, x: number, y: number, pointerId = 1): MouseEvent {
+  const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  Object.defineProperty(event, 'pointerId', { configurable: true, value: pointerId });
+  return event;
+}
+
+function sheetTransform(canvas: HTMLElement): { x: number; y: number; scale: number } {
+  const transform = canvas.querySelector<HTMLElement>('.charter-sheet')!.style.transform;
+  const match = transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/);
+  if (!match) throw new Error(`Unexpected charter transform: ${transform}`);
+  return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 }
 
 describe('UI overhaul', () => {
@@ -234,6 +264,81 @@ describe('UI overhaul', () => {
     expect(root.querySelector('.charter-detail-name')!.textContent).toBe('Deep Roots');
     expect(root.querySelector('.charter-sign')!.textContent).toBe('Sign');
     expect(root.querySelector<HTMLButtonElement>('.charter-sign')!.disabled).toBe(true);
+  });
+
+  it('zooms and resets the Charter camera with toolbar controls', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    const ui = makeUi(root, { initialTab: 'charter' });
+    ui.renderLists(state);
+    const canvas = root.querySelector<HTMLElement>('.charter-canvas')!;
+    setCanvasSize(canvas);
+    const zoomIn = root.querySelector<HTMLButtonElement>('[data-zoom="in"]')!;
+    const zoomOut = root.querySelector<HTMLButtonElement>('[data-zoom="out"]')!;
+    const reset = root.querySelector<HTMLButtonElement>('[data-zoom="reset"]')!;
+
+    zoomIn.click();
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_ZOOM_STEP);
+    zoomOut.click();
+    expect(sheetTransform(canvas).scale).toBeCloseTo(1);
+    for (let i = 0; i < 10 && !zoomIn.disabled; i += 1) zoomIn.click();
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_MAX_SCALE);
+    expect(zoomIn.disabled).toBe(true);
+    reset.click();
+    expect(sheetTransform(canvas).scale).toBe(1);
+  });
+
+  it('wheel-zooms the Charter canvas and prevents page scrolling', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root, { initialTab: 'charter' });
+    ui.renderLists(createInitialState());
+    const canvas = root.querySelector<HTMLElement>('.charter-canvas')!;
+    setCanvasSize(canvas);
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 200, clientY: 150, deltaY: -100 });
+    canvas.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_ZOOM_STEP);
+  });
+
+  it('pans by pointer drag and suppresses the node click it starts over', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    const ui = makeUi(root, { initialTab: 'charter' });
+    ui.renderLists(state);
+    const canvas = root.querySelector<HTMLElement>('.charter-canvas')!;
+    setCanvasSize(canvas);
+    root.querySelector<HTMLButtonElement>('[data-zoom="reset"]')!.click();
+    const before = sheetTransform(canvas);
+    const node = root.querySelector<HTMLButtonElement>('.charter-node[data-node="seal"]')!;
+    canvas.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+    canvas.dispatchEvent(pointerEvent('pointermove', 60, 60));
+    node.dispatchEvent(pointerEvent('pointerup', 60, 60));
+    const afterDrag = sheetTransform(canvas);
+    expect(afterDrag.x).toBeCloseTo(before.x + 50);
+    expect(afterDrag.y).toBeCloseTo(before.y + 50);
+    node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(node.getAttribute('aria-pressed')).toBe('true');
+
+    const other = root.querySelector<HTMLButtonElement>('.charter-node[data-node="roots-1"]')!;
+    other.dispatchEvent(pointerEvent('pointerdown', 20, 20));
+    other.dispatchEvent(pointerEvent('pointerup', 20, 20));
+    other.click();
+    expect(other.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('pans the Charter camera with arrow keys', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root, { initialTab: 'charter' });
+    ui.renderLists(createInitialState());
+    const canvas = root.querySelector<HTMLElement>('.charter-canvas')!;
+    setCanvasSize(canvas);
+    root.querySelector<HTMLButtonElement>('[data-zoom="reset"]')!.click();
+    const before = sheetTransform(canvas);
+    canvas.focus();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true });
+    canvas.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(sheetTransform(canvas).x).toBeCloseTo(before.x + 40);
   });
 
   it('shows the sphagnum Production filter when its nursery is owned', () => {
