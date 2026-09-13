@@ -224,6 +224,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const calibrateLive = $('#calibrate-live');
   const calibrationStreak = $('#calibration-streak');
   let cutStartedAt: number | null = null;
+  const MISS_COOLDOWN_MS = 5000;
   let calibrateCooldownUntil = 0;
   let lastReducedNeedleFrame = 0;
   let needleStartedAt = performance.now();
@@ -320,17 +321,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const drawnNeedlePos = needleAtClick(needleFrames, lastTarget, now);
     needleFrames.length = 0;
     needleStartedAt = now;
-    calibrateCooldownUntil = now + 2500;
-    calibrateBtn.disabled = true;
-    calibrateBtn.textContent = 'Cooling down…';
     const result = hooks.onCalibrate?.(drawnNeedlePos);
     if (result?.hit) {
       calibrateLive.textContent =
         `+${formatNumber(result.compute)} compute · streak ${result.streak} (×${formatMultiplier(result.multiplier)})`;
     } else {
+      calibrateCooldownUntil = now + MISS_COOLDOWN_MS;
+      calibrateBtn.disabled = true;
+      calibrateBtn.textContent = 'Cooling down…';
       calibrateLive.textContent = 'Miss — streak reset, target recentred.';
-    }
-    if (!result?.hit) {
       needleTrack.classList.remove('is-shaking');
       void needleTrack.offsetWidth;
       needleTrack.classList.add('is-shaking');

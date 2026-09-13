@@ -136,7 +136,7 @@ describe('UI overhaul', () => {
     const calibrate = root.querySelector<HTMLButtonElement>('#calibrate-btn')!;
     expect(root.querySelector('#cut-btn')).not.toBeNull();
     calibrate.click();
-    expect(calibrate.disabled).toBe(true);
+    expect(root.querySelector('#calibrate-live')?.textContent).toContain('streak 1');
   });
 
   it('passes the rendered calibration needle position to the hook', () => {
@@ -182,5 +182,32 @@ describe('UI overhaul', () => {
     root.querySelector<HTMLButtonElement>('#calibrate-btn')!.click();
 
     expect(result?.hit).toBe(false);
+  });
+
+  it('cools down for 5 s only after a miss', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.buildings.rack = 1;
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const ui = makeUi(root, {
+      onCalibrate: (needlePos) => calibrate(state, needlePos, () => 0.5),
+    });
+    const btn = root.querySelector<HTMLButtonElement>('#calibrate-btn')!;
+
+    ui.renderFieldwork(state, 65);
+    now.mockReturnValue(70);
+    btn.click();
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe('Calibrate');
+
+    ui.renderFieldwork(state, 365);
+    now.mockReturnValue(370);
+    btn.click();
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toBe('Cooling down…');
+    ui.renderFieldwork(state, 5369);
+    expect(btn.disabled).toBe(true);
+    ui.renderFieldwork(state, 5371);
+    expect(btn.disabled).toBe(false);
   });
 });
