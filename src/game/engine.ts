@@ -51,7 +51,7 @@ export function buildingCost(def: BuildingDef, owned: number, state?: GameState)
 export function bulkCost(def: BuildingDef, owned: number, qty: number, state?: GameState): ResourceCost {
   const scale = state ? costScaleFor(state, def) : (def.costScale ?? COST_SCALE);
   const geom = qty === 1 ? D(1) : Decimal.pow(scale, qty).sub(1).div(scale - 1);
-  const base = buildingCost(def, owned);
+  const base = buildingCost(def, owned, state);
   const out: ResourceCost = {};
   for (const resource of SPENDABLE_RESOURCES) {
     if (base[resource] !== undefined) out[resource] = base[resource]!.mul(geom);
