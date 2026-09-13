@@ -22,6 +22,8 @@ export interface GameState {
   totalComputeThisRun: number;
   totalClicks: number;
   minigameHits: number;
+  calibrationStreak: number;
+  calibrationTarget: number;
   buildings: Record<string, number>;
   revealed: string[];
   upgrades: string[];
@@ -50,6 +52,8 @@ export function createInitialState(): GameState {
     totalComputeThisRun: 0,
     totalClicks: 0,
     minigameHits: 0,
+    calibrationStreak: 0,
+    calibrationTarget: 0.5,
     buildings: {},
     revealed: [],
     upgrades: [],

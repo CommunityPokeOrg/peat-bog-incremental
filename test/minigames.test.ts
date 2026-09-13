@@ -1,14 +1,105 @@
 import { describe, expect, it } from 'vitest';
-import { calibrationNeedle, calibrate, cutPeat, peatCutCharge } from '../src/game/minigames';
+import {
+  calibrationNeedle,
+  calibrationPeriod,
+  calibrationZone,
+  calibrate,
+  cutPeat,
+  peatCutCharge,
+  streakMultiplier,
+  STREAK_DIFFICULTY_CAP,
+  STREAK_REWARD_CAP,
+} from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
 
 describe('minigame engine', () => {
-  it('resolves calibration hits and misses with reward floors', () => {
-    const state = createInitialState();
+  it('shrinks and caps streak difficulty', () => {
+    expect(calibrationPeriod(0)).toBeCloseTo(4084);
+    expect(calibrationPeriod(1)).toBeLessThan(calibrationPeriod(0));
+    expect(calibrationPeriod(STREAK_DIFFICULTY_CAP)).toBeCloseTo(
+      calibrationPeriod(STREAK_DIFFICULTY_CAP + 5),
+    );
+    expect(calibrationZone(1)).toBeLessThan(calibrationZone(0));
+    expect(calibrationZone(STREAK_DIFFICULTY_CAP)).toBeCloseTo(
+      calibrationZone(STREAK_DIFFICULTY_CAP + 5),
+    );
     expect(calibrationNeedle(0)).toBeCloseTo(0.5);
-    expect(calibrate(state, 0)).toEqual({ hit: true, compute: 10, evidence: 1 });
-    expect(state.minigameHits).toBe(1);
-    expect(calibrate(state, 650 * Math.PI / 2).hit).toBe(false);
+  });
+
+  it('caps streak payout multipliers', () => {
+    expect(streakMultiplier(1)).toBe(1);
+    expect(streakMultiplier(2)).toBeCloseTo(1.3);
+    expect(streakMultiplier(3)).toBeCloseTo(1.69);
+    expect(streakMultiplier(13)).toBe(STREAK_REWARD_CAP);
+    expect(streakMultiplier(30)).toBe(STREAK_REWARD_CAP);
+  });
+
+  it('awards a growing payout for consecutive hits', () => {
+    const state = createInitialState();
+    state.buildings.rack = 1;
+    state.buildings.chiller = 1;
+    const first = calibrate(state, state.calibrationTarget, () => 0.5);
+    const second = calibrate(state, state.calibrationTarget, () => 0.5);
+    const third = calibrate(state, state.calibrationTarget, () => 0.5);
+    expect(first).toMatchObject({ hit: true, compute: 4, streak: 1, multiplier: 1 });
+    expect(second).toMatchObject({ hit: true, streak: 2, multiplier: 1.3 });
+    expect(third).toMatchObject({ hit: true, streak: 3 });
+    expect(third.multiplier).toBeCloseTo(1.69);
+    expect(second.compute / first.compute).toBeCloseTo(1.3);
+    expect(third.compute / first.compute).toBeCloseTo(1.69);
+    expect(state.minigameHits).toBe(3);
+    expect(state.calibrationStreak).toBe(3);
+  });
+
+  it('uses the current target and exact zone boundaries', () => {
+    const state = createInitialState();
+    const zone = calibrationZone(0);
+    expect(calibrate(state, 0.5 + zone, () => 0.25).hit).toBe(true);
+
+    const miss = createInitialState();
+    expect(calibrate(miss, 0.5 + zone + 0.001).hit).toBe(false);
+  });
+
+  it('moves the target after hits and recentres it after misses', () => {
+    const left = createInitialState();
+    calibrate(left, 0.5, () => 0);
+    expect(left.calibrationTarget).toBeCloseTo(calibrationZone(1));
+
+    const right = createInitialState();
+    calibrate(right, 0.5, () => 1);
+    expect(right.calibrationTarget).toBeCloseTo(1 - calibrationZone(1));
+
+    const middle = createInitialState();
+    calibrate(middle, 0.5, () => 0.25);
+    expect(middle.calibrationTarget).not.toBeCloseTo(left.calibrationTarget);
+
+    const miss = createInitialState();
+    miss.calibrationStreak = 4;
+    miss.calibrationTarget = 0.7;
+    const result = calibrate(miss, 0.5);
+    expect(result).toMatchObject({ hit: false, compute: 0, evidence: 0, streak: 0, multiplier: 1 });
+    expect(miss.calibrationTarget).toBe(0.5);
+    expect(calibrationPeriod(0)).toBeCloseTo(4084);
+    expect(calibrationZone(0)).toBeCloseTo(0.08);
+  });
+
+  it('gets harder at high streak for the same target', () => {
+    const low = createInitialState();
+    expect(calibrate(low, 0.57).hit).toBe(true);
+    const high = createInitialState();
+    high.calibrationStreak = STREAK_DIFFICULTY_CAP;
+    expect(calibrate(high, 0.57).hit).toBe(false);
+  });
+
+  it('uses the bounded base payout even with zero production', () => {
+    const state = createInitialState();
+    const base = calibrate(state, state.calibrationTarget, () => 0.5).compute;
+    expect(base).toBe(2);
+    let final = base;
+    for (let index = 1; index < 13; index += 1) {
+      final = calibrate(state, state.calibrationTarget, () => 0.5).compute;
+    }
+    expect(final).toBeCloseTo(base * STREAK_REWARD_CAP);
   });
 
   it('awards peat by charge and counts full cuts', () => {

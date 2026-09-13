@@ -351,6 +351,8 @@ export function prestige(state: GameState): number {
   state.peat = 0;
   state.evidence = 0;
   state.totalComputeThisRun = 0;
+  state.calibrationStreak = 0;
+  state.calibrationTarget = 0.5;
   state.buildings = {};
   state.revealed = [];
   state.upgrades = [];

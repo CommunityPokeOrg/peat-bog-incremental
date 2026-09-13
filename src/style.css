@@ -592,12 +592,14 @@ button.item:hover:not(:disabled) {
 }
 
 .fieldwork-copy,
-.fieldwork-live {
+.fieldwork-live,
+.fieldwork-streak {
   color: var(--text-dim);
   font-size: 0.75rem;
 }
 
-.fieldwork-live {
+.fieldwork-live,
+.fieldwork-streak {
   min-height: 1.25rem;
 }
 
@@ -627,7 +629,10 @@ button.item:hover:not(:disabled) {
 
 .needle-zone {
   position: absolute;
-  inset: 0 42% 0 42%;
+  top: 0;
+  bottom: 0;
+  left: var(--zone-left, 42%);
+  width: var(--zone-width, 16%);
   background: rgba(127, 176, 105, 0.35);
 }
 

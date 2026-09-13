@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RESEARCH } from '../src/game/data';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
@@ -18,6 +18,10 @@ function makeUi(root: HTMLElement, overrides: Partial<Parameters<typeof createUi
 }
 
 describe('UI overhaul', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('filters Production rows and restores category headings', () => {
     const root = document.createElement('div');
     const ui = makeUi(root);
@@ -111,7 +115,13 @@ describe('UI overhaul', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     const ui = makeUi(root, {
-      onCalibrate: () => true,
+      onCalibrate: () => ({
+        hit: true,
+        compute: 2,
+        evidence: 0.2,
+        streak: 1,
+        multiplier: 1,
+      }),
     });
 
     ui.renderCounters(state);
@@ -126,5 +136,33 @@ describe('UI overhaul', () => {
     expect(root.querySelector('#cut-btn')).not.toBeNull();
     calibrate.click();
     expect(calibrate.disabled).toBe(true);
+  });
+
+  it('passes the rendered calibration needle position to the hook', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.buildings.rack = 1;
+    let received = -1;
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const ui = makeUi(root, {
+      onCalibrate: (needlePos) => {
+        received = needlePos;
+        return {
+          hit: true,
+          compute: 2,
+          evidence: 0.2,
+          streak: 1,
+          multiplier: 1,
+        };
+      },
+    });
+
+    ui.renderFieldwork(state, 1_000);
+    const needle = root.querySelector<HTMLElement>('.needle')!;
+    const drawn = Number.parseFloat(needle.style.left) / 100;
+    now.mockReturnValue(9_000);
+    root.querySelector<HTMLButtonElement>('#calibrate-btn')!.click();
+
+    expect(received).toBe(drawn);
   });
 });

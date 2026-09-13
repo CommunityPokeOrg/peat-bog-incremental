@@ -7,6 +7,11 @@ export function pluralize(count: number, singular: string, plural?: string): str
   return /[^aeiou]y$/i.test(singular) ? `${singular.slice(0, -1)}ies` : `${singular}s`;
 }
 
+/** Format a multiplier with at most two decimal places. */
+export function formatMultiplier(factor: number): string {
+  return Number(factor.toFixed(2)).toString();
+}
+
 /** Format a settlement quest reward for docket rows and filing toasts. */
 export function formatQuestReward(reward: QuestReward): string {
   if (reward.kind === 'resource') return `+${formatNumber(reward.amount)} ${reward.resource}`;
@@ -15,6 +20,5 @@ export function formatQuestReward(reward: QuestReward): string {
   const duration = reward.durationSec
     ? ` for ${Math.floor(reward.durationSec / 60)}:${String(reward.durationSec % 60).padStart(2, '0')}`
     : '';
-  const factor = Number(reward.factor.toFixed(2)).toString();
-  return `${reward.target} ×${factor}${duration}`;
+  return `${reward.target} ×${formatMultiplier(reward.factor)}${duration}`;
 }

@@ -25,6 +25,7 @@ import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from '
 import { createInitialState } from './game/state';
 import { formatDuration, formatNumber } from './game/format';
 import { createUi } from './ui/app';
+import { formatMultiplier } from './ui/text';
 
 const root = document.getElementById('app')!;
 
@@ -170,14 +171,16 @@ async function init(): Promise<void> {
       void doSave(false);
       return gained;
     },
-    onCalibrate: (t) => {
-      const result = calibrate(state, t);
+    onCalibrate: (needlePos) => {
+      const result = calibrate(state, needlePos);
       if (result.hit) {
         ui.spawnFloat(result.compute, 'compute');
-        ui.toast(`Calibration hit: +${formatNumber(result.compute)} compute`);
+        ui.toast(
+          `+${formatNumber(result.compute)} compute · streak ${result.streak} (×${formatMultiplier(result.multiplier)})`,
+        );
       }
       void doSave(false);
-      return result.hit;
+      return result;
     },
     onClaimQuest: (id) => {
       const reward = claimQuest(state, id);

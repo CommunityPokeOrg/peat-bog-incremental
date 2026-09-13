@@ -256,6 +256,8 @@ describe('save', () => {
     expect(loaded.version).toBe(2);
     expect(loaded.peat).toBe(0);
     expect(loaded.evidence).toBe(0);
+    expect(loaded.calibrationStreak).toBe(0);
+    expect(loaded.calibrationTarget).toBe(0.5);
     expect(loaded.researchQueue).toEqual([]);
     expect(loaded.quests).toEqual({ claimed: [], buffs: [] });
   });
@@ -267,6 +269,8 @@ describe('save', () => {
     state.achievements.push('click-1');
     state.peat = 4;
     state.evidence = 5;
+    state.calibrationStreak = 7;
+    state.calibrationTarget = 0.3;
     state.researchQueue.push({ id: 'thermal-modelling', remaining: 12 });
     state.quests.claimed.push('q-clause');
     const back = deserialize(serialize(state));
@@ -277,6 +281,8 @@ describe('save', () => {
     expect(back!.achievements).toEqual(['click-1']);
     expect(back!.peat).toBe(4);
     expect(back!.evidence).toBe(5);
+    expect(back!.calibrationStreak).toBe(7);
+    expect(back!.calibrationTarget).toBe(0.3);
     expect(back!.researchQueue).toEqual([{ id: 'thermal-modelling', remaining: 12 }]);
     expect(back!.quests.claimed).toEqual(['q-clause']);
   });
@@ -300,6 +306,8 @@ describe('prestige', () => {
     state.totalComputeThisRun = 999_999;
     expect(prestigeGain(state)).toBe(0);
     state.totalComputeThisRun = 4_000_000;
+    state.calibrationStreak = 5;
+    state.calibrationTarget = 0.3;
     expect(prestigeGain(state)).toBe(2);
   });
   it('resets the run and banks cores', () => {
@@ -312,6 +320,8 @@ describe('prestige', () => {
     expect(state.bogCores).toBe(2);
     expect(state.broth).toBe(0);
     expect(state.totalComputeThisRun).toBe(0);
+    expect(state.calibrationStreak).toBe(0);
+    expect(state.calibrationTarget).toBe(0.5);
     expect(state.buildings).toEqual({});
     expect(state.achievements).toEqual(['click-1']);
     expect(prestige(state)).toBe(0); // cannot prestige twice

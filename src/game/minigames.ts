@@ -1,28 +1,68 @@
 import { productionPerSecond } from './engine';
 import type { GameState } from './state';
 
-/** Return the calibration needle position for a timestamp in milliseconds. */
-export function calibrationNeedle(t: number): number {
-  return 0.5 + 0.5 * Math.sin(t / 650);
+/** Maximum streak value that increases calibration difficulty. */
+export const STREAK_DIFFICULTY_CAP = 12;
+/** Maximum calibration payout multiplier. */
+export const STREAK_REWARD_CAP = 20;
+
+/** Result of a calibration attempt, including its updated streak state. */
+export interface CalibrationResult {
+  hit: boolean;
+  compute: number;
+  evidence: number;
+  streak: number;
+  multiplier: number;
 }
 
-/** Resolve a calibration attempt and award compute and evidence on a hit. */
+/** Return the needle period in milliseconds for a calibration streak. */
+export function calibrationPeriod(streak: number): number {
+  return 4084 / (1 + 0.16 * Math.min(streak, STREAK_DIFFICULTY_CAP));
+}
+
+/** Return the half-width of the calibration hit zone for a streak. */
+export function calibrationZone(streak: number): number {
+  return 0.08 - 0.00375 * Math.min(streak, STREAK_DIFFICULTY_CAP);
+}
+
+/** Return the calibration needle position for elapsed milliseconds. */
+export function calibrationNeedle(elapsedMs: number, streak = 0): number {
+  return 0.5 + 0.5 * Math.sin((2 * Math.PI * elapsedMs) / calibrationPeriod(streak));
+}
+
+/** Return the bounded payout multiplier for a successful calibration streak. */
+export function streakMultiplier(streak: number): number {
+  return Math.min(STREAK_REWARD_CAP, 1.3 ** (Math.max(1, streak) - 1));
+}
+
+/** Resolve a calibration attempt and award streak-scaled compute and evidence. */
 export function calibrate(
   state: GameState,
-  t: number,
-): { hit: boolean; compute: number; evidence: number } {
-  const hit = calibrationNeedle(t) >= 0.42 && calibrationNeedle(t) <= 0.58;
-  if (!hit) return { hit: false, compute: 0, evidence: 0 };
+  needlePos: number,
+  rng: () => number = Math.random,
+): CalibrationResult {
+  const zone = calibrationZone(state.calibrationStreak);
+  const hit = Math.abs(needlePos - state.calibrationTarget) <= zone;
+  if (!hit) {
+    state.calibrationStreak = 0;
+    state.calibrationTarget = 0.5;
+    return { hit: false, compute: 0, evidence: 0, streak: 0, multiplier: 1 };
+  }
   const rates = productionPerSecond(state);
-  const compute = Math.max(10, 20 * rates.compute);
-  const evidence = Math.max(1, 5 * rates.evidence);
+  const streak = state.calibrationStreak + 1;
+  const multiplier = streakMultiplier(streak);
+  const compute = Math.max(2, 2 * rates.compute) * multiplier;
+  const evidence = Math.max(0.2, 0.5 * rates.evidence) * multiplier;
+  state.calibrationStreak = streak;
+  const nextZone = calibrationZone(streak);
+  state.calibrationTarget = nextZone + rng() * (1 - 2 * nextZone);
   state.compute += compute;
   state.evidence += evidence;
   state.totalComputeEarned += compute;
   state.totalComputeThisRun += compute;
   state.totalEvidenceEarned += evidence;
   state.minigameHits += 1;
-  return { hit: true, compute, evidence };
+  return { hit: true, compute, evidence, streak, multiplier };
 }
 
 /** Convert a peat-cut hold duration into a clamped charge fraction. */

@@ -29,8 +29,14 @@ import {
 import { formatCost, formatDuration, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
 import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
-import { formatQuestReward, pluralize } from './text';
-import { calibrationNeedle, peatCutCharge } from '../game/minigames';
+import { formatMultiplier, formatQuestReward, pluralize } from './text';
+import {
+  calibrationNeedle,
+  calibrationZone,
+  peatCutCharge,
+  streakMultiplier,
+  type CalibrationResult,
+} from '../game/minigames';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
 type Qty = number | 'max';
@@ -45,7 +51,7 @@ export interface UiHooks {
   onImport(encoded: string): boolean;
   onHardReset(): void;
   onCutPeat?(charge: number): number | void;
-  onCalibrate?(t: number): boolean | void;
+  onCalibrate?(needlePos: number): CalibrationResult | void;
   onClaimQuest?(id: string): QuestReward | null | void;
   onCancelResearch?(id: string): boolean | void;
   onQueueResearch?(id: string): boolean | void;
@@ -111,6 +117,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
               <span class="needle"></span>
             </div>
             <button class="fieldwork-btn" id="calibrate-btn" aria-label="Calibrate the racks">Calibrate</button>
+            <div class="fieldwork-streak" id="calibration-streak"></div>
             <div class="fieldwork-live" id="calibrate-live" aria-live="polite"></div>
           </div>
         </div>
@@ -185,11 +192,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const cutLive = $('#cut-live');
   const calibrateBtn = $('#calibrate-btn') as HTMLButtonElement;
   const needle = $('.needle');
+  const needleZone = $('.needle-zone');
   const needleTrack = $('#needle-track');
   const calibrateLive = $('#calibrate-live');
+  const calibrationStreak = $('#calibration-streak');
   let cutStartedAt: number | null = null;
   let calibrateCooldownUntil = 0;
   let lastReducedNeedleFrame = 0;
+  let needleStartedAt = performance.now();
+  let lastNeedlePos = 0.5;
 
   harvestBtn.addEventListener('click', () => hooks.onHarvest());
 
@@ -275,12 +286,20 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   });
   calibrateBtn.addEventListener('click', () => {
     if (calibrateBtn.disabled) return;
-    calibrateCooldownUntil = performance.now() + 2500;
+    const now = performance.now();
+    const drawnNeedlePos = lastNeedlePos;
+    needleStartedAt = now;
+    calibrateCooldownUntil = now + 2500;
     calibrateBtn.disabled = true;
     calibrateBtn.textContent = 'Cooling down…';
-    const hit = hooks.onCalibrate?.(performance.now());
-    calibrateLive.textContent = hit === false ? 'Miss — try again.' : 'Calibration filed.';
-    if (hit === false) {
+    const result = hooks.onCalibrate?.(drawnNeedlePos);
+    if (result?.hit) {
+      calibrateLive.textContent =
+        `+${formatNumber(result.compute)} compute · streak ${result.streak} (×${formatMultiplier(result.multiplier)})`;
+    } else {
+      calibrateLive.textContent = 'Miss — streak reset, target recentred.';
+    }
+    if (!result?.hit) {
       needleTrack.classList.remove('is-shaking');
       void needleTrack.offsetWidth;
       needleTrack.classList.add('is-shaking');
@@ -392,10 +411,17 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderFieldwork(state: GameState, now = performance.now()): void {
     const charge = cutStartedAt === null ? 0 : peatCutCharge(now - cutStartedAt);
     if (cutStartedAt !== null) chargeFill.style.width = `${charge * 100}%`;
+    const zone = calibrationZone(state.calibrationStreak);
+    needleZone.style.setProperty('--zone-left', `${(state.calibrationTarget - zone) * 100}%`);
+    needleZone.style.setProperty('--zone-width', `${zone * 200}%`);
+    calibrationStreak.textContent = state.calibrationStreak === 0
+      ? 'Streak 0 · next hit ×1'
+      : `Streak ${state.calibrationStreak} · ×${formatMultiplier(streakMultiplier(state.calibrationStreak))} → next ×${formatMultiplier(streakMultiplier(state.calibrationStreak + 1))}`;
     const reduced = typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduced || now - lastReducedNeedleFrame >= 250) {
-      needle.style.left = `${calibrationNeedle(now) * 100}%`;
+      lastNeedlePos = calibrationNeedle(now - needleStartedAt, state.calibrationStreak);
+      needle.style.left = `${lastNeedlePos * 100}%`;
       lastReducedNeedleFrame = now;
     }
     const hasRack = (state.buildings.rack ?? 0) >= 1;

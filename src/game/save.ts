@@ -64,6 +64,8 @@ export function deserialize(raw: string | null): GameState | null {
     (p.totalPeatEarned !== undefined && !isNum(p.totalPeatEarned)) ||
     (p.totalEvidenceEarned !== undefined && !isNum(p.totalEvidenceEarned)) ||
     (p.minigameHits !== undefined && !isNum(p.minigameHits)) ||
+    (p.calibrationStreak !== undefined && !isNum(p.calibrationStreak)) ||
+    (p.calibrationTarget !== undefined && !isNum(p.calibrationTarget)) ||
     (p.researchQueue !== undefined && !isResearchQueue(p.researchQueue)) ||
     (p.quests !== undefined && !isQuestState(p.quests))
   ) {
@@ -83,6 +85,8 @@ export function deserialize(raw: string | null): GameState | null {
   state.totalComputeThisRun = p.totalComputeThisRun;
   state.totalClicks = p.totalClicks;
   state.minigameHits = isNum(p.minigameHits) ? p.minigameHits : 0;
+  state.calibrationStreak = isNum(p.calibrationStreak) ? p.calibrationStreak : 0;
+  state.calibrationTarget = isNum(p.calibrationTarget) ? p.calibrationTarget : 0.5;
   state.buildings = { ...p.buildings };
   state.revealed = isStrArr(p.revealed) ? [...p.revealed] : [];
   state.upgrades = [...p.upgrades];
