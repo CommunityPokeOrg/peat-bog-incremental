@@ -108,6 +108,7 @@ textarea:focus-visible,
 }
 
 #app {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(100%, 1500px);
@@ -127,7 +128,7 @@ textarea:focus-visible,
 
 .ledger-main {
   display: grid;
-  grid-template-columns: minmax(220px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, auto) minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--sp-5);
 }
@@ -247,6 +248,10 @@ textarea:focus-visible,
 
 .card,
 .panel {
+  --scene-accent: var(--peat);
+  --scene-backdrop: var(--bog-2);
+  position: relative;
+  isolation: isolate;
   background: var(--bog-1);
   border: 1px solid var(--rule);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
@@ -432,6 +437,170 @@ kbd {
   border-radius: var(--r-lg);
 }
 
+.panel[data-scene="hall"] {
+  --scene-accent: var(--evidence);
+  --scene-backdrop:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(217,201,163,.08) 28px),
+    radial-gradient(ellipse at 50% 0, rgba(217,201,163,.2), transparent 65%),
+    var(--bog-2);
+}
+
+.panel[data-scene="cut"] {
+  --scene-accent: var(--peat);
+  --scene-backdrop:
+    repeating-linear-gradient(0deg, rgba(176,122,74,.08) 0 12px, transparent 12px 26px),
+    radial-gradient(circle at 72% 18%, rgba(226,166,72,.15), transparent 36%),
+    var(--bog-1);
+}
+
+.panel[data-scene="shed"] {
+  --scene-accent: #d98a5a;
+  --scene-backdrop:
+    radial-gradient(circle at 24% 20%, rgba(217,138,90,.2), transparent 30%),
+    radial-gradient(circle at 88% 84%, rgba(224,104,74,.12), transparent 36%),
+    radial-gradient(circle, rgba(239,230,210,.07) 1px, transparent 2px) 0 0 / 18px 18px,
+    var(--bog-1);
+}
+
+.panel[data-scene="still"] {
+  --scene-accent: var(--coolant);
+  --scene-backdrop:
+    linear-gradient(145deg, rgba(99,211,232,.15), transparent 45%),
+    linear-gradient(20deg, rgba(143,191,106,.13), transparent 55%),
+    var(--bog-1);
+}
+
+.panel[data-scene="stones"] {
+  --scene-accent: var(--ink-dim);
+  --scene-backdrop:
+    linear-gradient(135deg, rgba(239,230,210,.08), transparent 40%),
+    linear-gradient(45deg, rgba(110,101,81,.12) 25%, transparent 25% 75%, rgba(110,101,81,.1) 75%),
+    var(--bog-2);
+}
+
+.panel[data-scene="sky"] {
+  --scene-accent: var(--core);
+  --scene-backdrop:
+    radial-gradient(circle at 18% 20%, rgba(196,140,255,.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 73% 34%, rgba(99,211,232,.16) 0 1px, transparent 2px),
+    linear-gradient(120deg, rgba(196,140,255,.13), transparent 42%),
+    var(--bog-0);
+}
+
+.panel[data-scene="office"] {
+  --scene-accent: var(--ink-dim);
+  --scene-backdrop: var(--bog-2);
+}
+
+.panel-scene {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  background: var(--scene-backdrop);
+  background-position: 0 0;
+  background-size: auto, auto, auto;
+  pointer-events: none;
+}
+
+.panel > :not(.panel-scene) {
+  position: relative;
+  z-index: 1;
+}
+
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--bog-2);
+  color: var(--ink-dim);
+  cursor: pointer;
+  font: var(--fs-xs) var(--font-mono);
+}
+
+.sound-toggle[aria-pressed="true"] {
+  border-color: var(--coolant);
+  color: var(--coolant);
+}
+
+.sound-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.wisps {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#app.is-hidden .wisps *,
+#app.is-hidden .panel-scene {
+  animation-play-state: paused;
+}
+
+.wisp {
+  position: absolute;
+  top: var(--y);
+  left: var(--x);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--coolant);
+  box-shadow: 0 0 14px 4px rgba(99,211,232,.5);
+  opacity: .4;
+  animation: will-o var(--d) var(--t-ease) var(--delay) infinite;
+}
+
+.panel[data-scene="sky"] .panel-scene,
+.panel[data-scene="still"] .panel-scene {
+  background-position: 0 0, 0 0, 0 0;
+  animation: aurora var(--t-duration-lg) var(--t-ease) infinite alternate;
+}
+
+.panel[data-scene="still"] .still-bubble {
+  position: absolute;
+  bottom: -12px;
+  left: var(--bubble-x);
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(99,211,232,.65);
+  border-radius: 50%;
+  animation: rise 11s var(--t-ease) var(--bubble-delay) infinite;
+}
+
+#app[data-scene="sky"] .wisp,
+#app[data-scene="still"] .wisp,
+#app[data-scene="cut"] .wisp {
+  opacity: 1;
+}
+
+.tabs [role="tab"] svg {
+  width: 17px;
+  height: 17px;
+  margin-right: var(--sp-1);
+  vertical-align: -3px;
+}
+
+.tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--scene-accent);
+}
+
+.panel .eyebrow {
+  color: var(--scene-accent);
+}
+
+.tabs [role="tab"] span {
+  display: inline;
+}
 .tabs {
   display: flex;
   min-width: 0;
@@ -500,7 +669,8 @@ kbd {
   height: 38px;
   width: 0;
   border-radius: var(--r-sm);
-  background: var(--broth-deep);
+  background: color-mix(in srgb, var(--scene-accent) 28%, transparent);
+  border: 1px solid var(--scene-accent);
   pointer-events: none;
   transition: transform var(--t-duration-md) var(--t-ease), width var(--t-duration-md) var(--t-ease);
 }
@@ -526,6 +696,7 @@ kbd {
   min-height: 44px;
   padding: .6rem .7rem;
   border: 0;
+  border-left: 3px solid transparent;
   border-bottom: 1px solid var(--rule);
   border-radius: 0;
   background: transparent;
@@ -533,6 +704,7 @@ kbd {
   cursor: default;
   font-size: var(--fs-sm);
   text-align: left;
+  transition: transform var(--t-duration-sm) var(--t-ease), box-shadow var(--t-duration-sm) var(--t-ease);
 }
 
 button.item {
@@ -542,6 +714,12 @@ button.item {
 .item:hover,
 .item:focus-within {
   background: var(--bog-3);
+  border-left-color: var(--scene-accent);
+}
+
+.item:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 0 rgba(0,0,0,.3);
 }
 
 .item:disabled {
@@ -637,8 +815,20 @@ button.item:disabled:hover {
 }
 
 button.item:hover:not(:disabled) .item-action {
-  background: var(--broth);
+  background: var(--scene-accent);
   color: var(--bog-0);
+}
+
+button.item:not(:disabled) .item-action {
+  animation: ember-breathe 2.4s var(--t-ease) infinite;
+}
+
+.owned.pop {
+  animation: number-pop 260ms var(--t-ease);
+}
+
+.harvest-btn.harvest-punch {
+  animation: harvest-punch 160ms var(--t-ease);
 }
 
 .section-heading {
@@ -791,9 +981,7 @@ button.item:hover:not(:disabled) .item-action {
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: var(--r-md);
-  background:
-    radial-gradient(circle at center, rgba(196, 140, 255, .08), transparent 60%),
-    var(--bog-1);
+  background: transparent;
   touch-action: none;
 }
 
@@ -827,7 +1015,7 @@ button.item:hover:not(:disabled) .item-action {
   padding: 0;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-sm);
-  background: rgba(12, 29, 30, .9);
+  background: var(--bog-3);
   color: var(--ink);
   font: 600 var(--fs-md) var(--font-mono);
   cursor: pointer;
@@ -874,6 +1062,7 @@ button.item:hover:not(:disabled) .item-action {
   stroke: var(--core);
   stroke-dasharray: none;
   opacity: 1;
+  animation: edge-flow 6s linear infinite;
 }
 
 .charter-node {
@@ -893,6 +1082,7 @@ button.item:hover:not(:disabled) .item-action {
 }
 
 .charter-node-glyph {
+  position: relative;
   display: grid;
   place-items: center;
   width: 52px;
@@ -935,6 +1125,19 @@ button.item:hover:not(:disabled) .item-action {
   border-color: var(--core);
   background: rgba(196, 140, 255, .14);
   box-shadow: 0 0 0 4px rgba(196, 140, 255, .18);
+}
+
+.charter-node[data-state="purchasable"] .charter-node-glyph::after {
+  position: absolute;
+  inset: -7px;
+  border: 1px dashed var(--core);
+  border-radius: 50%;
+  content: "";
+  animation: sigil-spin 40s linear infinite;
+}
+
+.charter-node[data-state="signed"] .charter-node-glyph {
+  box-shadow: 0 0 24px rgba(196,140,255,.45);
 }
 
 .charter-node[data-state="purchasable"] {
@@ -1241,8 +1444,32 @@ button.item:hover:not(:disabled) .item-action {
 }
 
 .qty-selector button[aria-pressed="true"] {
-  border-color: var(--broth);
-  background: var(--broth-deep);
+  border-color: var(--scene-accent);
+  background: color-mix(in srgb, var(--scene-accent) 25%, transparent);
+}
+
+.t-check {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: .25em;
+  vertical-align: -.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  stroke-dasharray: 28;
+  stroke-dashoffset: 28;
+  animation: success-check 320ms var(--t-ease) forwards;
+}
+
+.sound-setting {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+  color: var(--ink-dim);
 }
 
 .site-footer {
@@ -1375,6 +1602,70 @@ button.item:hover:not(:disabled) .item-action {
 
 @keyframes mist-drift-b {
   to { transform: translate3d(-4%, 4%, 0); }
+}
+
+@keyframes will-o {
+  0%, 100% { opacity: 0; transform: translate3d(-12px, 12px, 0); }
+  35% { opacity: .7; }
+  70% { opacity: .35; transform: translate3d(18px, -24px, 0); }
+}
+
+@keyframes rise {
+  0% { opacity: 0; transform: translate3d(0, 12px, 0); }
+  25% { opacity: .65; }
+  100% { opacity: 0; transform: translate3d(12px, -160px, 0); }
+}
+
+@keyframes aurora {
+  to { background-position: 8% 4%, -5% 3%, 12% 0; }
+}
+
+@keyframes ember-breathe {
+  0%, 100% { box-shadow: 0 0 0 rgba(217,138,90,0); }
+  50% { box-shadow: 0 0 12px rgba(217,138,90,.28); }
+}
+
+@keyframes number-pop {
+  0% { opacity: .3; transform: translateY(0); }
+  55% { opacity: 1; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes harvest-punch {
+  0% { transform: scale(.97); }
+  55% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes sigil-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes edge-flow {
+  to { stroke-dashoffset: -24; }
+}
+
+@keyframes success-check {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wisps,
+  .still-bubble {
+    display: none;
+  }
+
+  .panel-scene,
+  .wisp,
+  .still-bubble,
+  .item-action,
+  .owned.pop,
+  .harvest-btn.harvest-punch,
+  .charter-node[data-state="purchasable"] .charter-node-glyph::after,
+  .charter-edges line[data-state="signed"],
+  .t-check {
+    animation: none;
+  }
 }
 
 @media (max-width: 899px) {

@@ -54,6 +54,48 @@ describe('UI overhaul', () => {
     vi.restoreAllMocks();
   });
 
+  it('uses a place-specific scene for each panel tab', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root);
+    ui.renderLists(createInitialState());
+    const panel = root.querySelector<HTMLElement>('.panel')!;
+    expect(panel.dataset.scene).toBe('cut');
+    root.querySelector<HTMLButtonElement>('[data-tab="charter"]')!.click();
+    expect(panel.dataset.scene).toBe('sky');
+  });
+
+  it('keeps sound off by default and mirrors the header toggle in Settings', () => {
+    localStorage.removeItem('peat-bog:sound');
+    const root = document.createElement('div');
+    const ui = makeUi(root);
+    ui.renderLists(createInitialState());
+    const toggle = root.querySelector<HTMLButtonElement>('#sound-toggle')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    toggle.click();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('peat-bog:sound')).toBe('1');
+    root.querySelector<HTMLButtonElement>('[data-tab="settings"]')!.click();
+    expect(root.querySelector<HTMLInputElement>('#set-sound')!.checked).toBe(true);
+  });
+
+  it('pops the owned count after buying a building', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.broth = 100_000;
+    const ui = makeUi(root);
+    ui.renderLists(state);
+    root.querySelector<HTMLButtonElement>('[data-key="harvester"]')!.click();
+    expect(root.querySelector('[data-key="harvester"] .owned')?.classList.contains('pop')).toBe(true);
+  });
+
+  it('appends nine ambient wisps to the app shell', () => {
+    const root = document.createElement('div');
+    makeUi(root);
+    const wisps = root.querySelector('.wisps')!;
+    expect(wisps.getAttribute('aria-hidden')).toBe('true');
+    expect(wisps.children).toHaveLength(9);
+  });
+
   it('filters Production rows and restores category headings', () => {
     const root = document.createElement('div');
     const ui = makeUi(root);

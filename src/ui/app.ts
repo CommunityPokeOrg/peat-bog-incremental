@@ -58,9 +58,56 @@ import {
   zoomAt,
   type CharterView,
 } from './charterView';
+import {
+  EMBLEM_ALEMBIC,
+  EMBLEM_GEAR,
+  EMBLEM_SCROLL,
+  EMBLEM_SLIDERS,
+  EMBLEM_SPADE,
+  EMBLEM_SPEAKER_OFF,
+  EMBLEM_SPEAKER_ON,
+  EMBLEM_STAR,
+  EMBLEM_STONE,
+} from './emblems';
+import { createSound } from './sound';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'charter' | 'settings';
 type Qty = number | 'max';
+type SceneId = 'hall' | 'cut' | 'shed' | 'still' | 'stones' | 'sky' | 'office';
+
+const TAB_SCENES: Record<TabId, SceneId> = {
+  docket: 'hall',
+  buildings: 'cut',
+  upgrades: 'shed',
+  research: 'still',
+  achievements: 'stones',
+  charter: 'sky',
+  settings: 'office',
+};
+
+const TAB_EMBLEMS: Record<TabId, string> = {
+  docket: EMBLEM_SCROLL,
+  buildings: EMBLEM_SPADE,
+  upgrades: EMBLEM_GEAR,
+  research: EMBLEM_ALEMBIC,
+  achievements: EMBLEM_STONE,
+  charter: EMBLEM_STAR,
+  settings: EMBLEM_SLIDERS,
+};
+
+const WISP_POSITIONS = [
+  [8, 22, 16, -2],
+  [19, 68, 22, -9],
+  [31, 38, 18, -14],
+  [45, 82, 26, -6],
+  [57, 18, 20, -17],
+  [68, 54, 24, -11],
+  [76, 31, 15, -4],
+  [87, 74, 21, -20],
+  [94, 12, 25, -8],
+] as const;
+
+const SUCCESS_CHECK = '<svg class="t-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 12 4 4L19 6"/></svg>';
 
 export interface UiHooks {
   initialTab?: TabId;
@@ -105,6 +152,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <p class="case-label">Sector 4 · The Peat Bog Trial</p>
         </div>
         <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
+        <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false" aria-label="Sound off"></button>
       </div>
       <div class="ledger-subrow">
         <div class="buffs" id="buffs" aria-live="polite"></div>
@@ -176,15 +224,16 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <button id="prestige-btn" class="btn btn-prestige"></button>
         </div>
       </section>
-      <section class="panel">
+      <section class="panel" data-scene="cut">
+        <div class="panel-scene" aria-hidden="true"></div>
         <nav class="tabs" role="tablist" aria-label="Game panels">
-          <button role="tab" data-tab="docket">Docket</button>
-          <button role="tab" data-tab="buildings">Production</button>
-          <button role="tab" data-tab="upgrades">Upgrades</button>
-          <button role="tab" data-tab="research">Research</button>
-          <button role="tab" data-tab="achievements">Achievements</button>
-          <button role="tab" data-tab="charter">Charter</button>
-          <button role="tab" data-tab="settings">Settings</button>
+          <button role="tab" data-tab="docket">${TAB_EMBLEMS.docket}<span>Docket</span></button>
+          <button role="tab" data-tab="buildings">${TAB_EMBLEMS.buildings}<span>Production</span></button>
+          <button role="tab" data-tab="upgrades">${TAB_EMBLEMS.upgrades}<span>Upgrades</span></button>
+          <button role="tab" data-tab="research">${TAB_EMBLEMS.research}<span>Research</span></button>
+          <button role="tab" data-tab="achievements">${TAB_EMBLEMS.achievements}<span>Achievements</span></button>
+          <button role="tab" data-tab="charter">${TAB_EMBLEMS.charter}<span>Charter</span></button>
+          <button role="tab" data-tab="settings">${TAB_EMBLEMS.settings}<span>Settings</span></button>
         </nav>
         <div class="production-filters" id="production-filters" hidden></div>
         <div class="tab-content" id="tab-content" role="tabpanel"></div>
@@ -216,6 +265,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
+  const sound = createSound();
+  const panel = $('.panel');
+  const panelScene = $('.panel-scene');
+  const soundToggle = $('#sound-toggle') as HTMLButtonElement;
   const resourcesEl = $('#resources');
   const buffsEl = $('#buffs');
   const nextHint = $('#next-hint');
@@ -237,6 +290,45 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const saveIndicator = $('#save-indicator');
   const fieldNote = $('#field-note');
   const panelDock = $('#panel-dock');
+  const wisps = document.createElement('div');
+  wisps.className = 'wisps';
+  wisps.setAttribute('aria-hidden', 'true');
+  for (const [x, y, duration, delay] of WISP_POSITIONS) {
+    const wisp = document.createElement('span');
+    wisp.className = 'wisp';
+    wisp.style.setProperty('--x', `${x}%`);
+    wisp.style.setProperty('--y', `${y}%`);
+    wisp.style.setProperty('--d', `${duration}s`);
+    wisp.style.setProperty('--delay', `${delay}s`);
+    wisps.appendChild(wisp);
+  }
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  if (!reducedMotion) root.appendChild(wisps);
+
+  const syncSoundControls = (): void => {
+    soundToggle.innerHTML = `${sound.enabled ? EMBLEM_SPEAKER_ON : EMBLEM_SPEAKER_OFF}<span>Sound</span>`;
+    soundToggle.setAttribute('aria-pressed', String(sound.enabled));
+    soundToggle.setAttribute('aria-label', sound.enabled ? 'Sound on' : 'Sound off');
+    const settingsSound = root.querySelector<HTMLInputElement>('#set-sound');
+    if (settingsSound) settingsSound.checked = sound.enabled;
+  };
+  const syncScene = (): void => {
+    const scene = TAB_SCENES[activeTab];
+    root.dataset.scene = scene;
+    panel.dataset.scene = scene;
+    panelScene.replaceChildren();
+    if (scene === 'still') {
+      for (let i = 0; i < 6; i += 1) {
+        const bubble = document.createElement('span');
+        bubble.className = 'still-bubble';
+        bubble.style.setProperty('--bubble-delay', `${-i * 1.7}s`);
+        bubble.style.setProperty('--bubble-x', `${12 + i * 15}%`);
+        panelScene.appendChild(bubble);
+      }
+    }
+  };
+  syncSoundControls();
+  syncScene();
   panelDock.hidden = activeTab !== 'buildings';
   const cutBtn = $('#cut-btn') as HTMLButtonElement;
   const chargeFill = $('.charge-fill');
@@ -255,7 +347,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   let lastTarget = 0.5;
   const needleFrames: NeedleFrame[] = [];
 
-  harvestBtn.addEventListener('click', () => hooks.onHarvest());
+  harvestBtn.addEventListener('click', () => {
+    sound.play('click');
+    hooks.onHarvest();
+    harvestBtn.classList.remove('harvest-punch');
+    void harvestBtn.offsetWidth;
+    harvestBtn.classList.add('harvest-punch');
+  });
+
+  soundToggle.addEventListener('click', () => {
+    sound.setEnabled(!sound.enabled);
+    syncSoundControls();
+    if (sound.enabled) sound.play('click');
+  });
 
   const tabButtons = [...root.querySelectorAll<HTMLButtonElement>('.tabs [role="tab"]')];
   const activateTab = (btn: HTMLButtonElement, focus = false): void => {
@@ -267,6 +371,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     });
     panelDock.hidden = activeTab !== 'buildings';
     productionFilters.hidden = activeTab !== 'buildings';
+    syncScene();
     forceRebuild = true;
     if (focus) btn.focus();
     if (currentState) renderLists(currentState);
@@ -303,7 +408,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     });
   });
 
-  prestigeBtn.addEventListener('click', () => hooks.onPrestige());
+  prestigeBtn.addEventListener('click', () => {
+    sound.play('drain');
+    hooks.onPrestige();
+  });
 
   const finishCut = (now = performance.now()): void => {
     if (cutStartedAt === null) return;
@@ -350,6 +458,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       calibrateLive.textContent =
         `+${formatNumber(result.compute)} compute · streak ${result.streak} (×${formatMultiplier(result.multiplier)})`;
     } else {
+      sound.play('miss');
       calibrateCooldownUntil = now + MISS_COOLDOWN_MS;
       calibrateBtn.disabled = true;
       calibrateBtn.textContent = 'Cooling down…';
@@ -583,8 +692,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <span class="item-cost"></span>
         </span>
         <span class="${parts.trailingClass ?? 'item-action'}" aria-hidden="true"></span>`;
+    row.querySelector<HTMLElement>('.owned')?.addEventListener('animationend', () => {
+      row.querySelector<HTMLElement>('.owned')?.classList.remove('pop');
+    });
     if (parts.onClick) row.addEventListener('click', parts.onClick);
     return row;
+  }
+
+  function popRowCount(key: string): void {
+    const count = tabContent.querySelector<HTMLElement>(`[data-key="${key}"] .owned`);
+    if (!count) return;
+    count.classList.remove('pop');
+    void count.offsetWidth;
+    count.classList.add('pop');
   }
 
   function updateRow(row: HTMLElement, update: RowUpdate): void {
@@ -742,7 +862,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
                 const latest = currentState;
                 if (!latest) return;
                 const qty = effectiveQty(latest, def.id);
-                if (buyBuilding(latest, def.id, qty)) renderLists(latest);
+                if (buyBuilding(latest, def.id, qty)) {
+                  sound.play('buy');
+                  renderLists(latest);
+                  popRowCount(def.id);
+                }
               },
             }),
           update: (row) => {
@@ -864,9 +988,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
                 const reward = hooks.onClaimQuest?.(quest.id) ??
                   claimQuest(latest, quest.id);
                 if (!reward) return;
+                sound.play('claim');
                 toast(`Filed: ${quest.name} — ${formatQuestReward(reward)}`);
                 renderCounters(latest);
                 renderLists(latest);
+                const claimedAction = tabContent.querySelector<HTMLElement>(`[data-key="${quest.id}"] .quest-action`);
+                if (claimedAction) claimedAction.insertAdjacentHTML('afterbegin', SUCCESS_CHECK);
               });
               action.appendChild(button);
             } else {
@@ -969,7 +1096,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             ? undefined
             : () => {
                 const latest = currentState;
-                if (latest && buyUpgrade(latest, upgrade.id)) renderLists(latest);
+                if (latest && buyUpgrade(latest, upgrade.id)) {
+                  sound.play('buy');
+                  renderLists(latest);
+                  popRowCount(upgrade.id);
+                }
               },
         }),
       update: (row) => {
@@ -1004,7 +1135,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const bought = hooks.onBuyNightWatch
             ? hooks.onBuyNightWatch()
             : buyNightWatch(latest);
-          if (bought) renderLists(latest);
+          if (bought) {
+            sound.play('buy');
+            renderLists(latest);
+            popRowCount('night-watch');
+          }
         },
       }),
       update: (row) => {
@@ -1257,9 +1392,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     if (!latest || charterNodeState(latest, node) !== 'purchasable') return;
     const bought = hooks.onBuyCharter ? hooks.onBuyCharter(node.id) : buyCharter(latest, node.id);
     if (!bought) return;
+    sound.play('claim');
     toast(`Charter signed: ${node.name}`);
     renderCounters(latest);
     renderLists(latest);
+    const signed = tabContent.querySelector<HTMLButtonElement>('.charter-sign');
+    if (signed) signed.insertAdjacentHTML('afterbegin', SUCCESS_CHECK);
   }
 
   function charterViewport(canvas: HTMLElement): { width: number; height: number } {
@@ -1595,12 +1733,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     wrap.className = 'settings';
     wrap.innerHTML = `
       <p class="persistence-status">Persistence: ${hooks.persistenceBackend ?? 'IndexedDB (idb) · slot main'}</p>
+      <label class="sound-setting"><input type="checkbox" id="set-sound"> Sound effects</label>
       <button class="btn" id="set-save">Save now</button>
       <button class="btn" id="set-export">Export save</button>
       <button class="btn" id="set-import">Import save</button>
       <button class="btn btn-danger" id="set-reset">Hard reset</button>
       <textarea id="save-io" rows="4" aria-label="Save data" placeholder="Exported save appears here; paste a save here to import."></textarea>
     `;
+    const soundSetting = wrap.querySelector<HTMLInputElement>('#set-sound')!;
+    soundSetting.checked = sound.enabled;
+    soundSetting.addEventListener('change', () => {
+      sound.setEnabled(soundSetting.checked);
+      syncSoundControls();
+    });
     wrap.querySelector('#set-save')!.addEventListener('click', () => hooks.onSaveNow());
     const io = wrap.querySelector<HTMLTextAreaElement>('#save-io')!;
     wrap.querySelector('#set-export')!.addEventListener('click', () => {

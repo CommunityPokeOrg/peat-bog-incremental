@@ -269,6 +269,7 @@ async function init(): Promise<void> {
   let hiddenWall: number | null = null;
   let hiddenMono: number | null = null;
   document.addEventListener('visibilitychange', () => {
+    root.classList.toggle('is-hidden', document.visibilityState === 'hidden');
     if (document.visibilityState === 'hidden') {
       hiddenWall = Date.now();
       hiddenMono = performance.now();
