@@ -597,6 +597,10 @@ button.item:hover:not(:disabled) {
   font-size: 0.75rem;
 }
 
+.fieldwork-live {
+  min-height: 1.25rem;
+}
+
 .charge {
   display: block;
   height: 0.35rem;

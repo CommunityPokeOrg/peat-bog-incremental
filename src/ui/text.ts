@@ -15,5 +15,6 @@ export function formatQuestReward(reward: QuestReward): string {
   const duration = reward.durationSec
     ? ` for ${Math.floor(reward.durationSec / 60)}:${String(reward.durationSec % 60).padStart(2, '0')}`
     : '';
-  return `${reward.target} ×${formatNumber(reward.factor)}${duration}`;
+  const factor = Number(reward.factor.toFixed(2)).toString();
+  return `${reward.target} ×${factor}${duration}`;
 }

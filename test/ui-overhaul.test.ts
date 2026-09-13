@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { RESEARCH } from '../src/game/data';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
+import { formatQuestReward } from '../src/ui/text';
 
 function makeUi(root: HTMLElement, overrides: Partial<Parameters<typeof createUi>[1]> = {}) {
   return createUi(root, {
@@ -64,6 +65,29 @@ describe('UI overhaul', () => {
     claim.click();
     expect(root.querySelector('.quest-claim')).toBeNull();
     expect(root.textContent).toContain('Claimed ✓');
+  });
+
+  it('clamps docket progress text and formats multiplier rewards precisely', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.totalClicks = 999;
+    const ui = makeUi(root, { initialTab: 'docket' });
+
+    ui.renderCounters(state);
+    ui.renderLists(state);
+
+    expect(root.querySelector('#next-hint')?.textContent).toContain('(10 / 10)');
+    expect(root.querySelector('.quest-progress')?.textContent).toBe('10 / 10');
+    expect(formatQuestReward({
+      kind: 'multiplier',
+      target: 'compute',
+      factor: 1.15,
+    })).toBe('compute ×1.15');
+    expect(formatQuestReward({
+      kind: 'multiplier',
+      target: 'broth',
+      factor: 1.25,
+    })).toBe('broth ×1.25');
   });
 
   it('renders research progress, cancel, duration, and queue-full state', () => {

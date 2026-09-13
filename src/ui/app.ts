@@ -380,8 +380,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     renderBuffs(state);
     const next = currentDocket(state);
+    const nextCurrent = next ? Math.min(next.progress.current, next.progress.target) : 0;
     nextHint.textContent = next
-      ? `Next up: ${next.name} (${formatNumber(next.progress.current)}/${formatNumber(next.progress.target)})`
+      ? `Next up: ${next.name} (${formatNumber(nextCurrent)} / ${formatNumber(next.progress.target)})`
       : 'Settlement docket complete — the peat bog trial is settled.';
     clickPowerEl.textContent = formatNumber(clickPower(state));
     renderThermal(state);
@@ -736,10 +737,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
                 element.className = 'progress-fill';
                 bar.appendChild(element);
                 return element;
-              })();
+            })();
             fill.style.width = `${progress.fraction * 100}%`;
+            const current = Math.min(progress.current, progress.target);
             row.querySelector<HTMLElement>('.quest-progress')!.textContent =
-              `${formatNumber(progress.current)} / ${formatNumber(progress.target)}`;
+              `${formatNumber(current)} / ${formatNumber(progress.target)}`;
             row.querySelector<HTMLElement>('.quest-reward')!.textContent =
               `Reward: ${formatQuestReward(quest.reward)}`;
             const action = row.querySelector<HTMLElement>('.quest-action')!;
