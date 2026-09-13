@@ -54,12 +54,13 @@ describe('minigame engine', () => {
     const first = calibrate(state, state.calibrationTarget, () => 0.5);
     const second = calibrate(state, state.calibrationTarget, () => 0.5);
     const third = calibrate(state, state.calibrationTarget, () => 0.5);
-    expect(first).toMatchObject({ hit: true, compute: 4, streak: 1, multiplier: 1 });
+    expect(first).toMatchObject({ hit: true, streak: 1, multiplier: 1 });
+    expect(first.compute.eq(4)).toBe(true);
     expect(second).toMatchObject({ hit: true, streak: 2, multiplier: 1.3 });
     expect(third).toMatchObject({ hit: true, streak: 3 });
     expect(third.multiplier).toBeCloseTo(1.69);
-    expect(second.compute / first.compute).toBeCloseTo(1.3);
-    expect(third.compute / first.compute).toBeCloseTo(1.69);
+    expect(second.compute.div(first.compute).toNumber()).toBeCloseTo(1.3);
+    expect(third.compute.div(first.compute).toNumber()).toBeCloseTo(1.69);
     expect(state.minigameHits).toBe(3);
     expect(state.calibrationStreak).toBe(3);
   });
@@ -90,7 +91,9 @@ describe('minigame engine', () => {
     miss.calibrationStreak = 4;
     miss.calibrationTarget = 0.7;
     const result = calibrate(miss, 0.5);
-    expect(result).toMatchObject({ hit: false, compute: 0, evidence: 0, streak: 0, multiplier: 1 });
+    expect(result).toMatchObject({ hit: false, streak: 0, multiplier: 1 });
+    expect(result.compute.eq(0)).toBe(true);
+    expect(result.evidence.eq(0)).toBe(true);
     expect(miss.calibrationTarget).toBe(0.5);
     expect(calibrationPeriod(0)).toBeCloseTo(4084);
     expect(calibrationZone(0)).toBeCloseTo(0.08);
@@ -107,20 +110,20 @@ describe('minigame engine', () => {
   it('uses the bounded base payout even with zero production', () => {
     const state = createInitialState();
     const base = calibrate(state, state.calibrationTarget, () => 0.5).compute;
-    expect(base).toBe(2);
+    expect(base.eq(2)).toBe(true);
     let final = base;
     for (let index = 1; index < 13; index += 1) {
       final = calibrate(state, state.calibrationTarget, () => 0.5).compute;
     }
-    expect(final).toBeCloseTo(base * STREAK_REWARD_CAP);
+    expect(final.toNumber()).toBeCloseTo(base.toNumber() * STREAK_REWARD_CAP);
   });
 
   it('awards peat by charge and counts full cuts', () => {
     const state = createInitialState();
-    expect(cutPeat(state, 0.5)).toBeCloseTo(2.5);
-    expect(cutPeat(state, 1)).toBeCloseTo(5);
+    expect(cutPeat(state, 0.5).toNumber()).toBeCloseTo(2.5);
+    expect(cutPeat(state, 1).toNumber()).toBeCloseTo(5);
     expect(state.minigameHits).toBe(1);
-    expect(state.totalPeatEarned).toBeCloseTo(7.5);
+    expect(state.totalPeatEarned.toNumber()).toBeCloseTo(7.5);
   });
 
   it('follows the hold charge curve and overhold decay', () => {

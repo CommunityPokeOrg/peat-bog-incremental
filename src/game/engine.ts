@@ -10,67 +10,63 @@ import {
   type SpendableResource,
   type UpgradeDef,
 } from './data';
+import { D, Decimal, safe } from './decimal';
 import { NIGHT_WATCH_MAX_LEVEL, type GameState } from './state';
 import { QUESTS, expireBuffs, questMultiplier } from './quests';
 import { CHARTER, charterFactor, charterMultiplier, charterSum } from './charter';
 
 export const SPENDABLE_RESOURCES: SpendableResource[] = ['broth', 'peat', 'sphagnum', 'methane', 'compute', 'evidence'];
-/** Maximum number of research items that may be queued at once. */
 export const MAX_RESEARCH_QUEUE = 3;
 
 export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
-  const factor = Math.pow(COST_SCALE, owned);
+  const factor = Decimal.pow(COST_SCALE, owned);
   const out: ResourceCost = {};
   for (const resource of SPENDABLE_RESOURCES) {
-    if (def.baseCost[resource] !== undefined) out[resource] = def.baseCost[resource]! * factor;
+    if (def.baseCost[resource] !== undefined) out[resource] = D(def.baseCost[resource]!).mul(factor);
   }
   return out;
 }
 
-/** Total cost of buying `qty` units starting at `owned`. */
 export function bulkCost(def: BuildingDef, owned: number, qty: number): ResourceCost {
-  const geom = (Math.pow(COST_SCALE, qty) - 1) / (COST_SCALE - 1);
+  const geom = qty === 1 ? D(1) : Decimal.pow(COST_SCALE, qty).sub(1).div(COST_SCALE - 1);
   const base = buildingCost(def, owned);
   const out: ResourceCost = {};
   for (const resource of SPENDABLE_RESOURCES) {
-    if (base[resource] !== undefined) out[resource] = base[resource]! * geom;
+    if (base[resource] !== undefined) out[resource] = base[resource]!.mul(geom);
   }
   return out;
 }
 
-/** Max quantity affordable with current resources. */
 export function maxAffordable(def: BuildingDef, owned: number, state: GameState): number {
-  let qty = 0;
-  // Each resource budget contributes a bound; take the minimum across costs.
-  for (const key of SPENDABLE_RESOURCES) {
-    const base = def.baseCost[key];
+  let qty: number | null = null;
+  for (const resource of SPENDABLE_RESOURCES) {
+    const base = def.baseCost[resource];
     if (base === undefined) continue;
-    const price = base * Math.pow(COST_SCALE, owned);
-    const budget = state[key];
-    if (price <= 0) continue;
+    const budget = state[resource];
+    if (budget.lte(0)) return 0;
+    const price = D(base).mul(Decimal.pow(COST_SCALE, owned));
     const n = Math.floor(
-      Math.log((budget * (COST_SCALE - 1)) / price + 1) / Math.log(COST_SCALE),
+      budget.mul(COST_SCALE - 1).div(price).add(1).log10() / Math.log10(COST_SCALE),
     );
-    qty = qty === 0 ? n : Math.min(qty, n);
+    qty = qty === null ? Math.max(0, n) : Math.min(qty, Math.max(0, n));
   }
-  return qty;
+  return qty ?? 0;
 }
 
-export function canAfford(state: GameState, cost: ResourceCost): boolean {
+export function canAfford(state: GameState, cost: ResourceCost | Partial<Record<SpendableResource, number>>): boolean {
   return SPENDABLE_RESOURCES.every((resource) =>
-    cost[resource] === undefined || state[resource] >= cost[resource]!,
+    cost[resource] === undefined || state[resource].gte(D(cost[resource]!)),
   );
 }
 
-/** Subtract a generic resource cost from the state wallet. */
-export function payCost(state: GameState, cost: ResourceCost): void {
+export function payCost(state: GameState, cost: ResourceCost | Partial<Record<SpendableResource, number>>): void {
   for (const resource of SPENDABLE_RESOURCES) {
-    if (cost[resource] !== undefined) state[resource] -= cost[resource]!;
+    if (cost[resource] !== undefined) state[resource] = state[resource].sub(D(cost[resource]!));
   }
 }
 
 export function nightWatchCost(level: number): ResourceCost {
-  return { broth: Math.round(2_500 * 1.9 ** level) };
+  return { broth: D(Math.round(2_500 * 1.9 ** level)) };
 }
 
 export function buyNightWatch(state: GameState): boolean {
@@ -82,11 +78,8 @@ export function buyNightWatch(state: GameState): boolean {
   return true;
 }
 
-// --- multipliers -----------------------------------------------------------
-
-/** +5% per Bog Core, +1% per achievement. */
-export function globalMultiplier(state: GameState): number {
-  return 1 + state.bogCores * 0.05 + state.achievements.length * 0.01;
+export function globalMultiplier(state: GameState): Decimal {
+  return D(1).add(state.bogCores.mul(0.05)).add(state.achievements.length * 0.01);
 }
 
 export function buildingMultiplier(state: GameState, buildingId: string): number {
@@ -96,157 +89,145 @@ export function buildingMultiplier(state: GameState, buildingId: string): number
   }).length;
 }
 
-export function totalHeat(state: GameState): number {
+export function totalHeat(state: GameState): Decimal {
   let heatMult = 1;
   if (state.research.includes('liquid-immersion')) heatMult *= 0.8;
   if (state.research.includes('lubrication-clause')) heatMult *= 0.85;
   for (const id of state.upgrades) {
     const upgrade = UPGRADE_BY_ID[id];
-    if (upgrade?.kind === 'thermal' && upgrade.heatMultiplier) {
-      heatMult *= upgrade.heatMultiplier;
-    }
+    if (upgrade?.kind === 'thermal' && upgrade.heatMultiplier) heatMult *= upgrade.heatMultiplier;
   }
-  let heat = 0;
+  let heat = D(0);
   for (const b of BUILDINGS) {
-    if (b.heat) heat += (state.buildings[b.id] ?? 0) * b.heat;
+    if (b.heat) heat = heat.add(D(b.heat).mul(state.buildings[b.id] ?? 0));
   }
-  return heat * heatMult * charterFactor(state, 'heat');
+  return heat.mul(heatMult).mul(charterFactor(state, 'heat'));
 }
 
-export function totalCooling(state: GameState): number {
+export function totalCooling(state: GameState): Decimal {
   let coolMult = state.research.includes('thermal-modelling') ? 1.25 : 1;
   for (const id of state.upgrades) {
     const upgrade = UPGRADE_BY_ID[id];
-    if (upgrade?.kind === 'thermal' && upgrade.coolingMultiplier) {
-      coolMult *= upgrade.coolingMultiplier;
-    }
+    if (upgrade?.kind === 'thermal' && upgrade.coolingMultiplier) coolMult *= upgrade.coolingMultiplier;
   }
-  let cooling = 0;
+  let cooling = D(0);
   for (const b of BUILDINGS) {
-    if (b.cooling) cooling += (state.buildings[b.id] ?? 0) * b.cooling;
+    if (b.cooling) cooling = cooling.add(D(b.cooling).mul(state.buildings[b.id] ?? 0));
   }
-  return cooling * coolMult * charterFactor(state, 'cooling');
+  return cooling.mul(coolMult).mul(charterFactor(state, 'cooling'));
 }
 
-/** Fraction of full speed the racks run at: min(1, cooling/heat). */
-export function thermalFactor(state: GameState): number {
+export function thermalFactor(state: GameState): Decimal {
   const heat = totalHeat(state);
-  if (heat <= 0) return 1;
-  return Math.min(1, totalCooling(state) / heat);
+  if (heat.lte(0)) return D(1);
+  return totalCooling(state).div(heat).min(1);
 }
 
-/** Current production rates for all generated resources. */
 export interface Rates {
-  broth: number;
-  peat: number;
-  sphagnum: number;
-  methane: number;
-  compute: number;
-  evidence: number;
+  broth: Decimal;
+  peat: Decimal;
+  sphagnum: Decimal;
+  methane: Decimal;
+  compute: Decimal;
+  evidence: Decimal;
 }
 
 export function productionPerSecond(state: GameState, now = Date.now()): Rates {
   const global = globalMultiplier(state);
-  const brothMult =
-    global *
-    (state.research.includes('broth-distillation') ? 1.5 : 1) *
-    (state.research.includes('broth-standard') ? 1.25 : 1) *
-    (state.research.includes('nordic-verdict') ? 1.5 : 1) *
-    (state.research.includes('quantum-peat') ? 2 : 1);
-  const computeMult =
-    global *
-    (state.research.includes('edge-caching') ? 1.5 : 1) *
-    (state.research.includes('nordic-verdict') ? 1.5 : 1) *
-    (state.research.includes('quantum-peat') ? 2 : 1);
-
-  let broth = 0;
-  let compute = 0;
-  let peat = 0;
-  let sphagnum = 0;
-  let methane = 0;
-  let evidence = 0;
+  const brothMult = global
+    .mul(state.research.includes('broth-distillation') ? 1.5 : 1)
+    .mul(state.research.includes('broth-standard') ? 1.25 : 1)
+    .mul(state.research.includes('nordic-verdict') ? 1.5 : 1)
+    .mul(state.research.includes('quantum-peat') ? 2 : 1);
+  const computeMult = global
+    .mul(state.research.includes('edge-caching') ? 1.5 : 1)
+    .mul(state.research.includes('nordic-verdict') ? 1.5 : 1)
+    .mul(state.research.includes('quantum-peat') ? 2 : 1);
+  const totals: Rates = {
+    broth: D(0),
+    compute: D(0),
+    peat: D(0),
+    sphagnum: D(0),
+    methane: D(0),
+    evidence: D(0),
+  };
   for (const b of BUILDINGS) {
     const owned = state.buildings[b.id] ?? 0;
     if (!owned) continue;
     const mult = buildingMultiplier(state, b.id);
-    if (b.brothPerSecond) broth += owned * b.brothPerSecond * mult;
-    if (b.computePerSecond) compute += owned * b.computePerSecond * mult;
-    if (b.peatPerSecond) peat += owned * b.peatPerSecond * mult;
-    if (b.sphagnumPerSecond) sphagnum += owned * b.sphagnumPerSecond * mult;
-    if (b.methanePerSecond) methane += owned * b.methanePerSecond * mult;
-    if (b.evidencePerSecond) evidence += owned * b.evidencePerSecond * mult;
+    if (b.brothPerSecond) totals.broth = totals.broth.add(D(b.brothPerSecond).mul(owned).mul(mult));
+    if (b.computePerSecond) totals.compute = totals.compute.add(D(b.computePerSecond).mul(owned).mul(mult));
+    if (b.peatPerSecond) totals.peat = totals.peat.add(D(b.peatPerSecond).mul(owned).mul(mult));
+    if (b.sphagnumPerSecond) totals.sphagnum = totals.sphagnum.add(D(b.sphagnumPerSecond).mul(owned).mul(mult));
+    if (b.methanePerSecond) totals.methane = totals.methane.add(D(b.methanePerSecond).mul(owned).mul(mult));
+    if (b.evidencePerSecond) totals.evidence = totals.evidence.add(D(b.evidencePerSecond).mul(owned).mul(mult));
   }
   const resourceMult = (resource: keyof Rates): number => {
     const charter = charterMultiplier(state, resource as 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence');
-    const upgrades = state.upgrades.reduce((product, id) => {
+    return state.upgrades.reduce((product, id) => {
       const upgrade = UPGRADE_BY_ID[id];
       return upgrade?.kind === 'resource' && upgrade.resourceMultiplier?.resource === resource
         ? product * upgrade.resourceMultiplier.factor
         : product;
-    }, 1);
-    return charter * upgrades;
+    }, charter);
   };
   return {
-    broth: broth * brothMult * resourceMult('broth') * questMultiplier(state, 'broth', now),
-    peat: peat * global * resourceMult('peat') * questMultiplier(state, 'peat', now),
-    sphagnum: sphagnum * global * resourceMult('sphagnum') * questMultiplier(state, 'sphagnum', now),
-    methane: methane * global * resourceMult('methane') * questMultiplier(state, 'methane', now),
-    compute: compute * computeMult * thermalFactor(state) * resourceMult('compute') * questMultiplier(state, 'compute', now),
-    evidence: evidence * global * resourceMult('evidence') * questMultiplier(state, 'evidence', now),
+    broth: totals.broth.mul(brothMult).mul(resourceMult('broth')).mul(questMultiplier(state, 'broth', now)),
+    peat: totals.peat.mul(global).mul(resourceMult('peat')).mul(questMultiplier(state, 'peat', now)),
+    sphagnum: totals.sphagnum.mul(global).mul(resourceMult('sphagnum')).mul(questMultiplier(state, 'sphagnum', now)),
+    methane: totals.methane.mul(global).mul(resourceMult('methane')).mul(questMultiplier(state, 'methane', now)),
+    compute: totals.compute.mul(computeMult).mul(thermalFactor(state)).mul(resourceMult('compute')).mul(questMultiplier(state, 'compute', now)),
+    evidence: totals.evidence.mul(global).mul(resourceMult('evidence')).mul(questMultiplier(state, 'evidence', now)),
   };
 }
 
-export function clickPower(state: GameState, now = Date.now()): number {
-  let power = 1;
+export function clickPower(state: GameState, now = Date.now()): Decimal {
+  let power = D(1);
   let brothFraction = 0;
   for (const id of state.upgrades) {
     const u = UPGRADE_BY_ID[id];
     if (!u || u.kind !== 'click') continue;
-    if (u.clickMultiplier) power *= u.clickMultiplier;
+    if (u.clickMultiplier) power = power.mul(u.clickMultiplier);
     if (u.clickBrothFraction) brothFraction += u.clickBrothFraction;
   }
   brothFraction += charterSum(state, 'clickBrothFraction');
-  power += productionPerSecond(state, now).broth * brothFraction;
-  return power * globalMultiplier(state) * charterMultiplier(state, 'click') * questMultiplier(state, 'click', now);
+  power = power.add(productionPerSecond(state, now).broth.mul(brothFraction));
+  return power.mul(globalMultiplier(state)).mul(charterMultiplier(state, 'click')).mul(questMultiplier(state, 'click', now));
 }
 
-// --- actions ----------------------------------------------------------------
-
-/** Advance the simulation by dtSeconds (the rAF loop clamps dt to ≤1s per frame). */
 export function tick(state: GameState, dtSeconds: number, now = Date.now()): GameState {
   if (dtSeconds <= 0) return state;
   expireBuffs(state, now);
   advanceResearch(state, dtSeconds * charterFactor(state, 'researchSpeed'));
-  const dt = dtSeconds;
   const rates = productionPerSecond(state, now);
   const gains = {
-    broth: rates.broth * dt,
-    compute: rates.compute * dt,
-    peat: rates.peat * dt,
-    sphagnum: rates.sphagnum * dt,
-    methane: rates.methane * dt,
-    evidence: rates.evidence * dt,
+    broth: safe(rates.broth.mul(dtSeconds)),
+    compute: safe(rates.compute.mul(dtSeconds)),
+    peat: safe(rates.peat.mul(dtSeconds)),
+    sphagnum: safe(rates.sphagnum.mul(dtSeconds)),
+    methane: safe(rates.methane.mul(dtSeconds)),
+    evidence: safe(rates.evidence.mul(dtSeconds)),
   };
-  state.broth += gains.broth;
-  state.compute += gains.compute;
-  state.peat += gains.peat;
-  state.sphagnum += gains.sphagnum;
-  state.methane += gains.methane;
-  state.evidence += gains.evidence;
-  state.totalBrothEarned += gains.broth;
-  state.totalComputeEarned += gains.compute;
-  state.totalPeatEarned += gains.peat;
-  state.totalSphagnumEarned += gains.sphagnum;
-  state.totalMethaneEarned += gains.methane;
-  state.totalEvidenceEarned += gains.evidence;
-  state.totalComputeThisRun += gains.compute;
+  state.broth = state.broth.add(gains.broth);
+  state.compute = state.compute.add(gains.compute);
+  state.peat = state.peat.add(gains.peat);
+  state.sphagnum = state.sphagnum.add(gains.sphagnum);
+  state.methane = state.methane.add(gains.methane);
+  state.evidence = state.evidence.add(gains.evidence);
+  state.totalBrothEarned = state.totalBrothEarned.add(gains.broth);
+  state.totalComputeEarned = state.totalComputeEarned.add(gains.compute);
+  state.totalPeatEarned = state.totalPeatEarned.add(gains.peat);
+  state.totalSphagnumEarned = state.totalSphagnumEarned.add(gains.sphagnum);
+  state.totalMethaneEarned = state.totalMethaneEarned.add(gains.methane);
+  state.totalEvidenceEarned = state.totalEvidenceEarned.add(gains.evidence);
+  state.totalComputeThisRun = state.totalComputeThisRun.add(gains.compute);
   return state;
 }
 
-export function click(state: GameState): number {
+export function click(state: GameState): Decimal {
   const gain = clickPower(state);
-  state.broth += gain;
-  state.totalBrothEarned += gain;
+  state.broth = state.broth.add(gain);
+  state.totalBrothEarned = state.totalBrothEarned.add(gain);
   state.totalClicks += 1;
   return gain;
 }
@@ -264,11 +245,7 @@ export function buyBuilding(state: GameState, id: string, qty: number): boolean 
 
 export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
   if (state.upgrades.includes(u.id)) return true;
-  if (u.requires?.length) {
-    return u.requires.every(
-      ({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count,
-    );
-  }
+  if (u.requires?.length) return u.requires.every(({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count);
   return SPENDABLE_RESOURCES.every((resource) => {
     const cost = u.cost[resource];
     if (cost === undefined) return true;
@@ -283,7 +260,7 @@ export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
             : resource === 'compute'
               ? state.totalComputeEarned
               : state.totalEvidenceEarned;
-    return earned >= cost * 0.1;
+    return earned.gte(D(cost).mul(0.1));
   });
 }
 
@@ -296,22 +273,13 @@ export function revealBuildings(state: GameState): string[] {
   const newlyRevealed: string[] = [];
   for (const def of BUILDINGS) {
     if (!def.unlock || state.revealed.includes(def.id)) continue;
-    const brothReady =
-      def.unlock.brothPerSecond === undefined ||
-      rates.broth >= def.unlock.brothPerSecond;
-    const computeReady =
-      def.unlock.computePerSecond === undefined ||
-      rates.compute >= def.unlock.computePerSecond;
-    const peatReady =
-      def.unlock.peatPerSecond === undefined ||
-      rates.peat >= def.unlock.peatPerSecond;
-    const sphagnumReady =
-      def.unlock.sphagnumPerSecond === undefined ||
-      rates.sphagnum >= def.unlock.sphagnumPerSecond;
-    const methaneReady =
-      def.unlock.methanePerSecond === undefined ||
-      rates.methane >= def.unlock.methanePerSecond;
-    if (brothReady && computeReady && peatReady && sphagnumReady && methaneReady) {
+    const ready = (key: keyof Rates, threshold?: number): boolean =>
+      threshold === undefined || rates[key].gte(threshold);
+    if (ready('broth', def.unlock.brothPerSecond) &&
+      ready('compute', def.unlock.computePerSecond) &&
+      ready('peat', def.unlock.peatPerSecond) &&
+      ready('sphagnum', def.unlock.sphagnumPerSecond) &&
+      ready('methane', def.unlock.methanePerSecond)) {
       state.revealed.push(def.id);
       newlyRevealed.push(def.id);
     }
@@ -319,27 +287,33 @@ export function revealBuildings(state: GameState): string[] {
   return newlyRevealed;
 }
 
+function decimalCost(spec: Partial<Record<SpendableResource, number>>): ResourceCost {
+  return Object.fromEntries(
+    Object.entries(spec).map(([resource, amount]) => [resource, D(amount)]),
+  ) as ResourceCost;
+}
+
 export function buyUpgrade(state: GameState, id: string): boolean {
   const def = UPGRADE_BY_ID[id];
   if (!def || state.upgrades.includes(id) || !upgradeVisible(state, def)) return false;
-  if (!canAfford(state, def.cost)) return false;
-  payCost(state, def.cost);
+  const cost = decimalCost(def.cost);
+  if (!canAfford(state, cost)) return false;
+  payCost(state, cost);
   state.upgrades.push(id);
   return true;
 }
 
 export function buyResearch(state: GameState, id: string): boolean {
   const def = RESEARCH_BY_ID[id];
-  if (!def || state.research.includes(id) ||
-    state.researchQueue.some((entry) => entry.id === id) ||
+  if (!def || state.research.includes(id) || state.researchQueue.some((entry) => entry.id === id) ||
     state.researchQueue.length >= MAX_RESEARCH_QUEUE) return false;
-  if (!canAfford(state, def.cost)) return false;
-  payCost(state, def.cost);
+  const cost = decimalCost(def.cost);
+  if (!canAfford(state, cost)) return false;
+  payCost(state, cost);
   state.researchQueue.push({ id, remaining: def.durationSec });
   return true;
 }
 
-/** Cancel queued research and refund its full cost. */
 export function cancelResearch(state: GameState, id: string): boolean {
   const index = state.researchQueue.findIndex((entry) => entry.id === id);
   if (index < 0) return false;
@@ -347,13 +321,12 @@ export function cancelResearch(state: GameState, id: string): boolean {
   const def = RESEARCH_BY_ID[id];
   if (def) {
     for (const resource of SPENDABLE_RESOURCES) {
-      if (def.cost[resource] !== undefined) state[resource] += def.cost[resource]!;
+      if (def.cost[resource] !== undefined) state[resource] = state[resource].add(def.cost[resource]!);
     }
   }
   return true;
 }
 
-/** Return queued research progress, or null for research not in the queue. */
 export function researchProgress(
   state: GameState,
   id: string,
@@ -367,7 +340,6 @@ export function researchProgress(
   };
 }
 
-/** Advance queued research in order and return ids completed during the advance. */
 export function advanceResearch(state: GameState, seconds: number): string[] {
   let remaining = Math.max(0, seconds);
   const completed: string[] = [];
@@ -386,30 +358,27 @@ export function advanceResearch(state: GameState, seconds: number): string[] {
   return completed;
 }
 
-// --- prestige ---------------------------------------------------------------
-
 export const PRESTIGE_THRESHOLD = 1_000_000;
 
-export function prestigeGain(state: GameState): number {
-  return Math.floor(Math.sqrt(state.totalComputeThisRun / PRESTIGE_THRESHOLD) * charterFactor(state, 'coreGain'));
+export function prestigeGain(state: GameState): Decimal {
+  return state.totalComputeThisRun.div(PRESTIGE_THRESHOLD).sqrt().mul(charterFactor(state, 'coreGain')).floor();
 }
 
 export function canPrestige(state: GameState): boolean {
-  return prestigeGain(state) > 0;
+  return prestigeGain(state).gt(0);
 }
 
-/** Drain the bog: bank Bog Cores, reset the run, keep achievements/cores/lifetime totals. */
-export function prestige(state: GameState): number {
+export function prestige(state: GameState): Decimal {
   const gain = prestigeGain(state);
-  if (gain <= 0) return 0;
-  state.bogCores += gain;
-  state.broth = 0;
-  state.compute = 0;
-  state.peat = 0;
-  state.sphagnum = 0;
-  state.methane = 0;
-  state.evidence = 0;
-  state.totalComputeThisRun = 0;
+  if (gain.lte(0)) return D(0);
+  state.bogCores = state.bogCores.add(gain);
+  state.broth = D(0);
+  state.compute = D(0);
+  state.peat = D(0);
+  state.sphagnum = D(0);
+  state.methane = D(0);
+  state.evidence = D(0);
+  state.totalComputeThisRun = D(0);
   state.calibrationStreak = 0;
   state.calibrationTarget = 0.5;
   state.buildings = {};
@@ -421,40 +390,37 @@ export function prestige(state: GameState): number {
     QUESTS.find((quest) => quest.id === id)?.persistsThroughPrestige === true,
   );
   state.quests.buffs = [];
-  state.broth = charterSum(state, 'startingBroth');
+  state.broth = D(charterSum(state, 'startingBroth'));
   return gain;
 }
 
-// --- achievements -------------------------------------------------------------
-
-/** Unlock any newly-earned achievements; returns the newly unlocked ids. */
 export function checkAchievements(state: GameState): string[] {
   const owned = (id: string) => state.buildings[id] ?? 0;
   const has = (id: string) => state.achievements.includes(id);
   const checks: Record<string, boolean> = {
     'click-1': state.totalClicks >= 1,
-    'debt-free': state.totalBrothEarned >= 59,
+    'debt-free': state.totalBrothEarned.gte(59),
     'click-100': state.totalClicks >= 100,
     'click-1000': state.totalClicks >= 1000,
-    'broth-1k': state.totalBrothEarned >= 1_000,
-    'broth-1m': state.totalBrothEarned >= 1_000_000,
-    'broth-1b': state.totalBrothEarned >= 1_000_000_000,
+    'broth-1k': state.totalBrothEarned.gte(1_000),
+    'broth-1m': state.totalBrothEarned.gte(1_000_000),
+    'broth-1b': state.totalBrothEarned.gte(1_000_000_000),
     'first-rack': owned('rack') >= 1,
     'chiller-10': owned('chiller') >= 10,
     'chiller-50': owned('chiller') >= 50,
-    'first-compute': state.totalComputeEarned >= 1,
-    'compute-1m': state.totalComputeEarned >= 1_000_000,
-    'full-cool': totalHeat(state) >= 100 && thermalFactor(state) >= 1,
-    'prestige-1': state.bogCores >= 1,
-    'cores-10': state.bogCores >= 10,
+    'first-compute': state.totalComputeEarned.gte(1),
+    'compute-1m': state.totalComputeEarned.gte(1_000_000),
+    'full-cool': totalHeat(state).gte(100) && thermalFactor(state).gte(1),
+    'prestige-1': state.bogCores.gte(1),
+    'cores-10': state.bogCores.gte(10),
     'harvester-100': owned('harvester') >= 100,
     hyperscaler: owned('hyperscaler') >= 1,
     'hot-fries': state.upgrades.includes('hot-fries'),
     'pulley-equity': state.upgrades.includes('pulley-equity'),
     'clause-struck': state.research.includes('lubrication-clause'),
     'reino-verdict': state.research.includes('nordic-verdict'),
-    'moss-1k': state.totalSphagnumEarned >= 1_000,
-    'methane-1k': state.totalMethaneEarned >= 1_000,
+    'moss-1k': state.totalSphagnumEarned.gte(1_000),
+    'methane-1k': state.totalMethaneEarned.gte(1_000),
     'charter-1': state.charter.length >= 1,
     'charter-all': CHARTER.every((node) => state.charter.includes(node.id)),
     'keepers-all': QUESTS.filter((quest) => quest.chapter === 'keepers')

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { D } from '../src/game/decimal';
 import { CHARTER } from '../src/game/charter';
 import { RESEARCH } from '../src/game/data';
 import { calibrate } from '../src/game/minigames';
@@ -81,7 +82,7 @@ describe('UI overhaul', () => {
   it('pops the owned count after buying a building', () => {
     const root = document.createElement('div');
     const state = createInitialState();
-    state.broth = 100_000;
+    state.broth = D(100_000);
     const ui = makeUi(root);
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-key="harvester"]')!.click();
@@ -195,7 +196,7 @@ describe('UI overhaul', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     state.researchQueue = [{ id: RESEARCH[0].id, remaining: 30 }];
-    state.compute = 1_000_000;
+    state.compute = D(1_000_000);
     const ui = makeUi(root, { initialTab: 'research' });
 
     ui.renderLists(state);
@@ -214,8 +215,8 @@ describe('UI overhaul', () => {
     const ui = makeUi(root, {
       onCalibrate: () => ({
         hit: true,
-        compute: 2,
-        evidence: 0.2,
+        compute: D(2),
+        evidence: D(0.2),
         streak: 1,
         multiplier: 1,
       }),
@@ -223,7 +224,7 @@ describe('UI overhaul', () => {
 
     ui.renderCounters(state);
     expect(root.querySelector('[data-resource="peat"]')?.hasAttribute('hidden')).toBe(true);
-    state.totalPeatEarned = 1;
+    state.totalPeatEarned = D(1);
     ui.renderCounters(state);
     expect(root.querySelector('[data-resource="peat"]')?.hasAttribute('hidden')).toBe(false);
 
@@ -283,7 +284,7 @@ describe('UI overhaul', () => {
   it('renders the Charter as a node graph with matching states and signs from the detail panel', () => {
     const root = document.createElement('div');
     const state = createInitialState();
-    state.bogCores = 1;
+    state.bogCores = D(1);
     const ui = makeUi(root, { initialTab: 'charter' });
     ui.renderLists(state);
     const node = (id: string): HTMLButtonElement =>

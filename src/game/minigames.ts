@@ -1,5 +1,6 @@
 import { productionPerSecond } from './engine';
 import type { GameState } from './state';
+import { Decimal, type Decimal as DecimalType } from './decimal';
 
 /** Maximum streak value that increases calibration difficulty. */
 export const STREAK_DIFFICULTY_CAP = 12;
@@ -9,8 +10,8 @@ export const STREAK_REWARD_CAP = 20;
 /** Result of a calibration attempt, including its updated streak state. */
 export interface CalibrationResult {
   hit: boolean;
-  compute: number;
-  evidence: number;
+  compute: DecimalType;
+  evidence: DecimalType;
   streak: number;
   multiplier: number;
 }
@@ -78,21 +79,21 @@ export function calibrate(
   if (!hit) {
     state.calibrationStreak = 0;
     state.calibrationTarget = 0.5;
-    return { hit: false, compute: 0, evidence: 0, streak: 0, multiplier: 1 };
+    return { hit: false, compute: Decimal.fromNumber(0), evidence: Decimal.fromNumber(0), streak: 0, multiplier: 1 };
   }
   const rates = productionPerSecond(state);
   const streak = state.calibrationStreak + 1;
   const multiplier = streakMultiplier(streak);
-  const compute = Math.max(2, 2 * rates.compute) * multiplier;
-  const evidence = Math.max(0.2, 0.5 * rates.evidence) * multiplier;
+  const compute = Decimal.max(2, rates.compute.mul(2)).mul(multiplier);
+  const evidence = Decimal.max(0.2, rates.evidence.mul(0.5)).mul(multiplier);
   state.calibrationStreak = streak;
   const nextZone = calibrationZone(streak);
   state.calibrationTarget = nextZone + rng() * (1 - 2 * nextZone);
-  state.compute += compute;
-  state.evidence += evidence;
-  state.totalComputeEarned += compute;
-  state.totalComputeThisRun += compute;
-  state.totalEvidenceEarned += evidence;
+  state.compute = state.compute.add(compute);
+  state.evidence = state.evidence.add(evidence);
+  state.totalComputeEarned = state.totalComputeEarned.add(compute);
+  state.totalComputeThisRun = state.totalComputeThisRun.add(compute);
+  state.totalEvidenceEarned = state.totalEvidenceEarned.add(evidence);
   state.minigameHits += 1;
   return { hit: true, compute, evidence, streak, multiplier };
 }
@@ -107,11 +108,11 @@ export function peatCutCharge(elapsedMs: number): number {
 }
 
 /** Cut peat at a charge fraction and count a near-perfect cut as a hit. */
-export function cutPeat(state: GameState, chargeFraction: number): number {
+export function cutPeat(state: GameState, chargeFraction: number): DecimalType {
   const fraction = Math.max(0, Math.min(1, chargeFraction));
-  const peat = Math.max(5, 15 * productionPerSecond(state).peat) * fraction;
-  state.peat += peat;
-  state.totalPeatEarned += peat;
+  const peat = Decimal.max(5, productionPerSecond(state).peat.mul(15)).mul(fraction);
+  state.peat = state.peat.add(peat);
+  state.totalPeatEarned = state.totalPeatEarned.add(peat);
   if (fraction >= 0.95) state.minigameHits += 1;
   return peat;
 }

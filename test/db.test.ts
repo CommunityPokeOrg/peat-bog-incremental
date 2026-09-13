@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
+import { D } from '../src/game/decimal';
 import { clearState, loadState, loadWithMigration, saveState } from '../src/game/db';
 import { SAVE_KEY, serialize } from '../src/game/save';
 import { createInitialState } from '../src/game/state';
@@ -11,17 +12,17 @@ describe('IndexedDB save storage', () => {
 
   it('roundtrips and clears a save', async () => {
     const state = createInitialState();
-    state.broth = 123.5;
+    state.broth = D(123.5);
     await saveState(state);
     const loaded = await loadState();
-    expect(loaded?.broth).toBe(123.5);
+    expect(loaded?.broth.eq(123.5)).toBe(true);
     await clearState();
     expect(await loadState()).toBeNull();
   });
 
   it('migrates a legacy localStorage save', async () => {
     const state = createInitialState();
-    state.compute = 42;
+    state.compute = D(42);
     const values = new Map<string, string>([[SAVE_KEY, serialize(state)]]);
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
@@ -31,8 +32,8 @@ describe('IndexedDB save storage', () => {
         removeItem: (key: string) => values.delete(key),
       },
     });
-    expect(await loadWithMigration()).toMatchObject({ compute: 42 });
+    expect((await loadWithMigration())?.compute.eq(42)).toBe(true);
     expect(values.has(SAVE_KEY)).toBe(false);
-    expect(await loadState()).toMatchObject({ compute: 42 });
+    expect((await loadState())?.compute.eq(42)).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import { productionPerSecond, thermalFactor, totalCooling, totalHeat } from './engine';
 import type { GameState } from './state';
+import { D, type Decimal } from './decimal';
 
 /** Requirement types used by settlement quests. */
 export type QuestRequirement =
@@ -73,38 +74,38 @@ export const QUESTS: QuestDef[] = [
   { id: 'k-poke', name: 'Poke, Oracle of the Bog', emoji: '🔮', brief: 'Meet the other nine Keepers. The spirit the bog itself answers to; it speaks in bubbles and every Keeper listens.', chapter: 'keepers', requirement: { kind: 'quests', ids: ['k-pierre','k-mia','k-shrome','k-samkals','k-spaced','k-vwh','k-hermano','k-tassie','k-kreatix'] }, reward: { kind: 'multiplier', target: 'all', factor: 1.2 }, persistsThroughPrestige: true },
 ];
 
-function requirementValue(state: GameState, requirement: QuestRequirement): number {
+function requirementValue(state: GameState, requirement: QuestRequirement): Decimal {
   switch (requirement.kind) {
     case 'stat':
-      return state[requirement.stat];
+      return D(state[requirement.stat] as number | Decimal);
     case 'owned':
-      return state.buildings[requirement.buildingId] ?? 0;
+      return D(state.buildings[requirement.buildingId] ?? 0);
     case 'rate':
       return productionPerSecond(state)[requirement.resource];
     case 'research':
-      return state.research.includes(requirement.id) ? 1 : 0;
+      return D(state.research.includes(requirement.id) ? 1 : 0);
     case 'upgrade':
-      return state.upgrades.includes(requirement.id) ? 1 : 0;
+      return D(state.upgrades.includes(requirement.id) ? 1 : 0);
     case 'quests':
-      return requirement.ids.filter((id) => state.quests.claimed.includes(id)).length;
+      return D(requirement.ids.filter((id) => state.quests.claimed.includes(id)).length);
     case 'cooled': {
       const heat = totalHeat(state);
-      if (heat >= requirement.minHeat && thermalFactor(state) >= 1) return requirement.minHeat;
-      if (heat < requirement.minHeat) return heat;
-      return Math.min(requirement.minHeat, totalCooling(state));
+      if (heat.gte(requirement.minHeat) && thermalFactor(state).gte(1)) return D(requirement.minHeat);
+      if (heat.lt(requirement.minHeat)) return heat;
+      return totalCooling(state).min(requirement.minHeat);
     }
   }
 }
 
-function requirementTarget(requirement: QuestRequirement): number {
+function requirementTarget(requirement: QuestRequirement): Decimal {
   switch (requirement.kind) {
-    case 'stat': return requirement.target;
-    case 'owned': return requirement.count;
-    case 'rate': return requirement.perSecond;
+    case 'stat': return D(requirement.target);
+    case 'owned': return D(requirement.count);
+    case 'rate': return D(requirement.perSecond);
     case 'research':
-    case 'upgrade': return 1;
-    case 'quests': return requirement.ids.length;
-    case 'cooled': return requirement.minHeat;
+    case 'upgrade': return D(1);
+    case 'quests': return D(requirement.ids.length);
+    case 'cooled': return D(requirement.minHeat);
   }
 }
 
@@ -112,28 +113,30 @@ function requirementTarget(requirement: QuestRequirement): number {
 export function questProgress(
   state: GameState,
   quest: QuestDef,
-): { current: number; target: number; fraction: number } {
+): { current: Decimal; target: Decimal; fraction: number } {
   const current = requirementValue(state, quest.requirement);
   const target = requirementTarget(quest.requirement);
-  return { current, target, fraction: target <= 0 ? 1 : Math.min(1, current / target) };
+  return { current, target, fraction: target.lte(0) ? 1 : Math.min(1, current.div(target).toNumber()) };
 }
 
 /** Return whether a quest requirement is currently satisfied. */
 export function questReady(state: GameState, quest: QuestDef): boolean {
-  return questProgress(state, quest).fraction >= 1;
+  const progress = questProgress(state, quest);
+  return progress.target.lte(0) || progress.current.gte(progress.target);
 }
 
-function addResource(state: GameState, resource: EarnedResource, amount: number): void {
-  state[resource] += amount;
-  if (resource === 'broth') state.totalBrothEarned += amount;
+function addResource(state: GameState, resource: EarnedResource, amount: Decimal | number): void {
+  const value = D(amount);
+  state[resource] = state[resource].add(value);
+  if (resource === 'broth') state.totalBrothEarned = state.totalBrothEarned.add(value);
   if (resource === 'compute') {
-    state.totalComputeEarned += amount;
-    state.totalComputeThisRun += amount;
+    state.totalComputeEarned = state.totalComputeEarned.add(value);
+    state.totalComputeThisRun = state.totalComputeThisRun.add(value);
   }
-  if (resource === 'peat') state.totalPeatEarned += amount;
-  if (resource === 'sphagnum') state.totalSphagnumEarned += amount;
-  if (resource === 'methane') state.totalMethaneEarned += amount;
-  if (resource === 'evidence') state.totalEvidenceEarned += amount;
+  if (resource === 'peat') state.totalPeatEarned = state.totalPeatEarned.add(value);
+  if (resource === 'sphagnum') state.totalSphagnumEarned = state.totalSphagnumEarned.add(value);
+  if (resource === 'methane') state.totalMethaneEarned = state.totalMethaneEarned.add(value);
+  if (resource === 'evidence') state.totalEvidenceEarned = state.totalEvidenceEarned.add(value);
 }
 
 /** Apply a ready quest reward once and return its definition reward. */
@@ -144,10 +147,10 @@ export function claimQuest(state: GameState, id: string, now = Date.now()): Ques
   const reward = quest.reward;
   if (reward.kind === 'resource') addResource(state, reward.resource, reward.amount);
   if (reward.kind === 'production') {
-    const amount = Math.max(reward.floor ?? 0, productionPerSecond(state)[reward.resource] * reward.seconds);
+    const amount = productionPerSecond(state)[reward.resource].mul(reward.seconds).max(reward.floor ?? 0);
     addResource(state, reward.resource, amount);
   }
-  if (reward.kind === 'cores') state.bogCores += reward.amount;
+  if (reward.kind === 'cores') state.bogCores = state.bogCores.add(reward.amount);
   if (reward.kind === 'multiplier') {
     if (reward.durationSec) {
       state.quests.buffs.push({

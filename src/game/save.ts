@@ -7,17 +7,69 @@ import {
 } from './state';
 import { productionPerSecond } from './engine';
 import { CHARTER_ROOT_ID, charterSum } from './charter';
+import { safe, toDecimalOrZero, type Decimal } from './decimal';
 import type { QuestBuff } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
-
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
 export const OFFLINE_BASE_RATE = 0.01;
 export const NIGHT_WATCH_STEP = 0.01;
 export { NIGHT_WATCH_MAX_LEVEL };
 
+const DECIMAL_FIELDS = [
+  'broth',
+  'compute',
+  'peat',
+  'sphagnum',
+  'methane',
+  'evidence',
+  'bogCores',
+  'totalBrothEarned',
+  'totalComputeEarned',
+  'totalPeatEarned',
+  'totalSphagnumEarned',
+  'totalMethaneEarned',
+  'totalEvidenceEarned',
+  'totalComputeThisRun',
+] as const;
+
+export interface SavedState {
+  version: number;
+  broth: string;
+  compute: string;
+  peat: string;
+  sphagnum: string;
+  methane: string;
+  evidence: string;
+  bogCores: string;
+  totalBrothEarned: string;
+  totalComputeEarned: string;
+  totalPeatEarned: string;
+  totalSphagnumEarned: string;
+  totalMethaneEarned: string;
+  totalEvidenceEarned: string;
+  totalComputeThisRun: string;
+  totalClicks: number;
+  minigameHits: number;
+  calibrationStreak: number;
+  calibrationTarget: number;
+  nightWatch: number;
+  charter: string[];
+  buildings: Record<string, number>;
+  revealed: string[];
+  upgrades: string[];
+  research: string[];
+  researchQueue: ResearchQueueEntry[];
+  achievements: string[];
+  quests: GameState['quests'];
+  lastSaveTime: number;
+}
+
 export function serialize(state: GameState): string {
-  return JSON.stringify(state);
+  const raw = { ...state } as unknown as Record<string, unknown>;
+  for (const field of DECIMAL_FIELDS) raw[field] = state[field].toString();
+  raw.version = SAVE_VERSION;
+  return JSON.stringify(raw);
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -46,68 +98,38 @@ const isQuestState = (v: unknown): v is GameState['quests'] => {
     record.buffs.every(isQuestBuff);
 };
 
-export function deserialize(raw: string | null): GameState | null {
-  if (!raw) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
+export function deserialize(raw: unknown): GameState | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
   if (typeof parsed !== 'object' || parsed === null) return null;
   const p = parsed as Record<string, unknown>;
-  if (
-    !isNum(p.version) || p.version > SAVE_VERSION ||
-    !isNum(p.broth) || !isNum(p.compute) || !isNum(p.bogCores) ||
-    !isNum(p.totalBrothEarned) || !isNum(p.totalComputeEarned) ||
-    !isNum(p.totalComputeThisRun) || !isNum(p.totalClicks) ||
-    !isBuildingMap(p.buildings) ||
+  if (!isNum(p.version) || p.version > SAVE_VERSION ||
+    !isNum(p.totalClicks) || !isBuildingMap(p.buildings) ||
     !isStrArr(p.upgrades) || !isStrArr(p.research) || !isStrArr(p.achievements) ||
-    !isNum(p.lastSaveTime)
-  ) {
-    return null;
-  }
-  if (
-    (p.peat !== undefined && !isNum(p.peat)) ||
-    (p.sphagnum !== undefined && !isNum(p.sphagnum)) ||
-    (p.methane !== undefined && !isNum(p.methane)) ||
-    (p.evidence !== undefined && !isNum(p.evidence)) ||
-    (p.totalPeatEarned !== undefined && !isNum(p.totalPeatEarned)) ||
-    (p.totalSphagnumEarned !== undefined && !isNum(p.totalSphagnumEarned)) ||
-    (p.totalMethaneEarned !== undefined && !isNum(p.totalMethaneEarned)) ||
-    (p.totalEvidenceEarned !== undefined && !isNum(p.totalEvidenceEarned)) ||
-    (p.minigameHits !== undefined && !isNum(p.minigameHits)) ||
-    (p.calibrationStreak !== undefined && !isNum(p.calibrationStreak)) ||
-    (p.calibrationTarget !== undefined && !isNum(p.calibrationTarget)) ||
-    (p.nightWatch !== undefined && (!isNum(p.nightWatch) || !Number.isInteger(p.nightWatch) || p.nightWatch < 0)) ||
+    !isNum(p.lastSaveTime)) return null;
+  if ((p.revealed !== undefined && !isStrArr(p.revealed)) ||
     (p.charter !== undefined && !isStrArr(p.charter)) ||
     (p.researchQueue !== undefined && !isResearchQueue(p.researchQueue)) ||
-    (p.quests !== undefined && !isQuestState(p.quests))
-  ) {
-    return null;
-  }
+    (p.quests !== undefined && !isQuestState(p.quests))) return null;
+
   const state = createInitialState();
-  state.version = p.version;
-  state.broth = p.broth;
-  state.compute = p.compute;
-  state.peat = isNum(p.peat) ? p.peat : 0;
-  state.sphagnum = isNum(p.sphagnum) ? p.sphagnum : 0;
-  state.methane = isNum(p.methane) ? p.methane : 0;
-  state.evidence = isNum(p.evidence) ? p.evidence : 0;
-  state.bogCores = p.bogCores;
-  state.totalBrothEarned = p.totalBrothEarned;
-  state.totalComputeEarned = p.totalComputeEarned;
-  state.totalPeatEarned = isNum(p.totalPeatEarned) ? p.totalPeatEarned : 0;
-  state.totalSphagnumEarned = isNum(p.totalSphagnumEarned) ? p.totalSphagnumEarned : 0;
-  state.totalMethaneEarned = isNum(p.totalMethaneEarned) ? p.totalMethaneEarned : 0;
-  state.totalEvidenceEarned = isNum(p.totalEvidenceEarned) ? p.totalEvidenceEarned : 0;
-  state.totalComputeThisRun = p.totalComputeThisRun;
+  state.version = SAVE_VERSION;
+  for (const field of DECIMAL_FIELDS) {
+    state[field] = toDecimalOrZero(p[field]);
+  }
   state.totalClicks = p.totalClicks;
   state.minigameHits = isNum(p.minigameHits) ? p.minigameHits : 0;
   state.calibrationStreak = isNum(p.calibrationStreak) ? p.calibrationStreak : 0;
   state.calibrationTarget = isNum(p.calibrationTarget) ? p.calibrationTarget : 0.5;
   state.nightWatch = isNum(p.nightWatch)
-    ? Math.min(NIGHT_WATCH_MAX_LEVEL, Math.floor(p.nightWatch))
+    ? Math.min(NIGHT_WATCH_MAX_LEVEL, Math.max(0, Math.floor(p.nightWatch)))
     : 0;
   state.charter = isStrArr(p.charter) ? [...p.charter] : [];
   if (state.charter.length > 0 && !state.charter.includes(CHARTER_ROOT_ID)) {
@@ -142,12 +164,12 @@ export function load(storage: Pick<Storage, 'getItem'> = localStorage): GameStat
 export interface OfflineEarnings {
   seconds: number;
   rate: number;
-  broth: number;
-  compute: number;
-  peat: number;
-  sphagnum: number;
-  methane: number;
-  evidence: number;
+  broth: Decimal;
+  compute: Decimal;
+  peat: Decimal;
+  sphagnum: Decimal;
+  methane: Decimal;
+  evidence: Decimal;
 }
 
 export function offlineRate(state: GameState): number {
@@ -166,7 +188,6 @@ export function offlineRateBreakdown(state: GameState): {
   return { base, nightWatch, charter, total: Math.min(1, base + nightWatch + charter) };
 }
 
-/** Convert wall-clock elapsed time to guarded elapsed seconds. */
 export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: number): number {
   const monotonic = Number.isFinite(monotonicDeltaMs) ? Math.max(0, monotonicDeltaMs) : 0;
   if (Number.isFinite(wallDeltaMs) && wallDeltaMs >= 0 && wallDeltaMs <= monotonic + 300_000) {
@@ -175,7 +196,6 @@ export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: nu
   return monotonic / 1000;
 }
 
-/** Offline progress at the current background rate, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
   const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
   const rates = productionPerSecond(state);
@@ -183,16 +203,15 @@ export function computeOfflineEarnings(state: GameState, elapsedSec: number): Of
   return {
     seconds,
     rate,
-    broth: rates.broth * seconds * rate,
-    compute: rates.compute * seconds * rate,
-    peat: rates.peat * seconds * rate,
-    sphagnum: rates.sphagnum * seconds * rate,
-    methane: rates.methane * seconds * rate,
-    evidence: rates.evidence * seconds * rate,
+    broth: safe(rates.broth.mul(seconds * rate)),
+    compute: safe(rates.compute.mul(seconds * rate)),
+    peat: safe(rates.peat.mul(seconds * rate)),
+    sphagnum: safe(rates.sphagnum.mul(seconds * rate)),
+    methane: safe(rates.methane.mul(seconds * rate)),
+    evidence: safe(rates.evidence.mul(seconds * rate)),
   };
 }
 
-/** Base64 export. Save JSON contains only ASCII (numbers, ids), so btoa is safe. */
 export function exportSave(state: GameState): string {
   return btoa(serialize(state));
 }

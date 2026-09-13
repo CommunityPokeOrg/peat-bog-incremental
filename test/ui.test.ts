@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import { D } from '../src/game/decimal';
 import { BUILDING_BY_ID } from '../src/game/data';
 import { buildingVisible } from '../src/game/engine';
 import { createInitialState } from '../src/game/state';
@@ -29,7 +30,7 @@ describe('UI list reconciliation', () => {
     expect(firstRow).not.toBeNull();
     expect(firstRow!.disabled).toBe(true);
 
-    state.broth = 15;
+    state.broth = D(15);
     ui.renderLists(state);
     const updatedRow = root.querySelector<HTMLButtonElement>('[data-key="harvester"]');
     expect(updatedRow).toBe(firstRow);
@@ -120,8 +121,8 @@ describe('UI list reconciliation', () => {
       onHardReset: () => {},
     });
     const state = createInitialState();
-    state.broth = 100;
-    state.totalBrothEarned = 100;
+    state.broth = D(100);
+    state.totalBrothEarned = D(100);
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
     const spade = root.querySelector<HTMLButtonElement>('[data-key="spade"]');

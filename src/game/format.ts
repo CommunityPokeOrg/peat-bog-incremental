@@ -1,31 +1,26 @@
+import type { ResourceCost, ResourceCostSpec } from './data';
+import { D, Decimal, type Decimal as DecimalType } from './decimal';
+
 const SUFFIXES = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
 
-export function formatNumber(n: number): string {
-  if (!Number.isFinite(n)) return n > 0 ? '∞' : '0';
-  const sign = n < 0 ? '-' : '';
-  const abs = Math.abs(n);
-  if (abs < 1000) {
-    // Plain: up to 1 decimal, no trailing .0
-    const rounded = Math.round(abs * 10) / 10;
+export function formatNumber(value: DecimalType | number): string {
+  const n = D(value);
+  if (Number.isNaN(n.mantissa) || !Number.isFinite(n.exponent)) return '∞';
+  const sign = n.sign() < 0 ? '-' : '';
+  const abs = n.abs();
+  const numeric = abs.toNumber();
+  if (numeric < 1000) {
+    const rounded = Math.round(numeric * 10) / 10;
     return sign + (Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1));
   }
-  const tier = Math.floor(Math.log10(abs) / 3);
-  if (tier > SUFFIXES.length) {
-    return sign + abs.toExponential(2);
-  }
-  const scaled = abs / Math.pow(1000, tier);
+  const tier = Math.floor(abs.exponent / 3);
+  if (tier > SUFFIXES.length) return sign + `${abs.mantissa.toFixed(2)}e${abs.exponent}`;
+  const scaled = abs.div(Decimal.pow(1000, tier)).toNumber();
   const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
   return sign + scaled.toFixed(digits) + SUFFIXES[tier - 1];
 }
 
-export function formatCost(cost: {
-  broth?: number;
-  peat?: number;
-  sphagnum?: number;
-  methane?: number;
-  compute?: number;
-  evidence?: number;
-}): string {
+export function formatCost(cost: ResourceCost | ResourceCostSpec): string {
   const parts: string[] = [];
   if (cost.broth !== undefined) parts.push(`${formatNumber(cost.broth)} broth`);
   if (cost.peat !== undefined) parts.push(`${formatNumber(cost.peat)} peat`);

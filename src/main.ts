@@ -97,17 +97,17 @@ async function init(): Promise<void> {
     if (!canPrestige(state)) return;
     ui.showModal({
       title: 'Drain the bog?',
-      body: `Gain ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
+      body: `Gain ${formatNumber(gain)} Bog Core${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
       actions: [
         { label: 'Cancel', onClick: () => ui.closeModal() },
         {
-          label: `Drain for ${gain} 💠`,
+          label: `Drain for ${formatNumber(gain)} 💠`,
           danger: true,
           onClick: () => {
             prestige(state);
             ui.closeModal();
             ui.renderLists(state);
-            ui.toast(`The bog drains. +${gain} Bog Cores.`);
+            ui.toast(`The bog drains. +${formatNumber(gain)} Bog Cores.`);
             checkAchievementsNow();
             void doSave();
           },
@@ -223,18 +223,18 @@ async function init(): Promise<void> {
   function applyOfflineProgress(seconds: number, threshold = 60): OfflineEarnings | null {
     if (seconds < threshold) return null;
     const earned = computeOfflineEarnings(state, seconds);
-    state.broth += earned.broth;
-    state.compute += earned.compute;
-    state.peat += earned.peat;
-    state.sphagnum += earned.sphagnum;
-    state.methane += earned.methane;
-    state.evidence += earned.evidence;
-    state.totalBrothEarned += earned.broth;
-    state.totalComputeEarned += earned.compute;
-    state.totalPeatEarned += earned.peat;
-    state.totalSphagnumEarned += earned.sphagnum;
-    state.totalMethaneEarned += earned.methane;
-    state.totalEvidenceEarned += earned.evidence;
+    state.broth = state.broth.add(earned.broth);
+    state.compute = state.compute.add(earned.compute);
+    state.peat = state.peat.add(earned.peat);
+    state.sphagnum = state.sphagnum.add(earned.sphagnum);
+    state.methane = state.methane.add(earned.methane);
+    state.evidence = state.evidence.add(earned.evidence);
+    state.totalBrothEarned = state.totalBrothEarned.add(earned.broth);
+    state.totalComputeEarned = state.totalComputeEarned.add(earned.compute);
+    state.totalPeatEarned = state.totalPeatEarned.add(earned.peat);
+    state.totalSphagnumEarned = state.totalSphagnumEarned.add(earned.sphagnum);
+    state.totalMethaneEarned = state.totalMethaneEarned.add(earned.methane);
+    state.totalEvidenceEarned = state.totalEvidenceEarned.add(earned.evidence);
     expireBuffs(state);
     offlineResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
     return earned;
@@ -243,10 +243,10 @@ async function init(): Promise<void> {
   const offlineResourcesText = (earned: OfflineEarnings): string => [
     `+${formatNumber(earned.broth)} broth`,
     `+${formatNumber(earned.compute)} compute`,
-    earned.peat > 0 ? `+${formatNumber(earned.peat)} peat` : '',
-    earned.sphagnum > 0 ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
-    earned.methane > 0 ? `+${formatNumber(earned.methane)} methane` : '',
-    earned.evidence > 0 ? `+${formatNumber(earned.evidence)} evidence` : '',
+    earned.peat.gt(0) ? `+${formatNumber(earned.peat)} peat` : '',
+    earned.sphagnum.gt(0) ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
+    earned.methane.gt(0) ? `+${formatNumber(earned.methane)} methane` : '',
+    earned.evidence.gt(0) ? `+${formatNumber(earned.evidence)} evidence` : '',
   ].filter(Boolean).join(', ');
 
   const offlineResearchText = (): string => offlineResearch.length > 0

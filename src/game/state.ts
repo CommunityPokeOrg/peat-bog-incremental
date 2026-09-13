@@ -1,6 +1,7 @@
 import type { QuestBuff } from './quests';
+import { D, type Decimal } from './decimal';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const NIGHT_WATCH_MAX_LEVEL = 49;
 
 /** One queued research item and its remaining duration in seconds. */
@@ -11,20 +12,20 @@ export interface ResearchQueueEntry {
 
 export interface GameState {
   version: number;
-  broth: number;
-  compute: number;
-  peat: number;
-  sphagnum: number;
-  methane: number;
-  evidence: number;
-  bogCores: number;
-  totalBrothEarned: number;
-  totalComputeEarned: number;
-  totalPeatEarned: number;
-  totalSphagnumEarned: number;
-  totalMethaneEarned: number;
-  totalEvidenceEarned: number;
-  totalComputeThisRun: number;
+  broth: Decimal;
+  compute: Decimal;
+  peat: Decimal;
+  sphagnum: Decimal;
+  methane: Decimal;
+  evidence: Decimal;
+  bogCores: Decimal;
+  totalBrothEarned: Decimal;
+  totalComputeEarned: Decimal;
+  totalPeatEarned: Decimal;
+  totalSphagnumEarned: Decimal;
+  totalMethaneEarned: Decimal;
+  totalEvidenceEarned: Decimal;
+  totalComputeThisRun: Decimal;
   totalClicks: number;
   minigameHits: number;
   calibrationStreak: number;
@@ -47,20 +48,20 @@ export interface GameState {
 export function createInitialState(): GameState {
   return {
     version: SAVE_VERSION,
-    broth: 0,
-    compute: 0,
-    peat: 0,
-    sphagnum: 0,
-    methane: 0,
-    evidence: 0,
-    bogCores: 0,
-    totalBrothEarned: 0,
-    totalComputeEarned: 0,
-    totalPeatEarned: 0,
-    totalSphagnumEarned: 0,
-    totalMethaneEarned: 0,
-    totalEvidenceEarned: 0,
-    totalComputeThisRun: 0,
+    broth: D(0),
+    compute: D(0),
+    peat: D(0),
+    sphagnum: D(0),
+    methane: D(0),
+    evidence: D(0),
+    bogCores: D(0),
+    totalBrothEarned: D(0),
+    totalComputeEarned: D(0),
+    totalPeatEarned: D(0),
+    totalSphagnumEarned: D(0),
+    totalMethaneEarned: D(0),
+    totalEvidenceEarned: D(0),
+    totalComputeThisRun: D(0),
     totalClicks: 0,
     minigameHits: 0,
     calibrationStreak: 0,

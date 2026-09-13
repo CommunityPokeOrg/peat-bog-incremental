@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { D } from '../src/game/decimal';
 import {
   buyCharter,
   charterAvailable,
@@ -14,44 +15,44 @@ describe('Drainage Charter', () => {
     const first = { id: 'roots-1', name: 'Deep Roots', emoji: '🌿', description: '', branch: 'roots' as const, cost: 1, effects: [] };
     const child = { ...first, id: 'roots-2', cost: 2, requires: 'roots-1' };
     expect(charterAvailable(state, first)).toBe(false);
-    state.bogCores = 2;
+    state.bogCores = D(2);
     expect(charterAvailable(state, child)).toBe(false);
     expect(charterAvailable(state, first)).toBe(true);
   });
 
   it('spends cores and blocks a double purchase', () => {
     const state = createInitialState();
-    state.bogCores = 2;
+    state.bogCores = D(2);
     expect(buyCharter(state, 'roots-1')).toBe(false);
     expect(buyCharter(state, 'seal')).toBe(true);
     expect(buyCharter(state, 'roots-1')).toBe(true);
-    expect(state.bogCores).toBe(0);
+    expect(state.bogCores.eq(0)).toBe(true);
     expect(buyCharter(state, 'roots-1')).toBe(false);
   });
 
   it('applies Charter multipliers and preserves terms through prestige', () => {
     const state = createInitialState();
     state.charter = ['kindling-1', 'kindling-2', 'kindling-3', 'kindling-4', 'roots-3'];
-    state.bogCores = 1;
+    state.bogCores = D(1);
     expect(charterMultiplier(state, 'compute')).toBe(2);
-    state.totalComputeThisRun = 1_000_000;
-    expect(prestige(state)).toBe(1);
+    state.totalComputeThisRun = D(1_000_000);
+    expect(prestige(state).toNumber()).toBe(1);
     expect(state.charter).toContain('kindling-4');
-    expect(state.broth).toBe(10_000);
+    expect(state.broth.eq(10_000)).toBe(true);
   });
 
   it('multiplies prestige gain with Reino precedent', () => {
     const state = createInitialState();
     state.charter = ['filing-4'];
-    state.totalComputeThisRun = 4_000_000;
-    expect(prestigeGain(state)).toBe(3);
+    state.totalComputeThisRun = D(4_000_000);
+    expect(prestigeGain(state).toNumber()).toBe(3);
   });
 
   it('adds Charter offline rate', () => {
     const state = createInitialState();
     state.buildings.harvester = 10;
     state.charter = ['filing-1', 'filing-2'];
-    expect(computeOfflineEarnings(state, 100).broth).toBeCloseTo(5 * 100 * 0.11);
+    expect(computeOfflineEarnings(state, 100).broth.toNumber()).toBeCloseTo(5 * 100 * 0.11);
     expect(offlineRate(state)).toBeCloseTo(0.11);
   });
 
@@ -80,8 +81,8 @@ describe('Drainage Charter', () => {
       achievements: [],
       lastSaveTime: 0,
     }));
-    expect(state?.sphagnum).toBe(0);
-    expect(state?.methane).toBe(0);
+    expect(state?.sphagnum.eq(0)).toBe(true);
+    expect(state?.methane.eq(0)).toBe(true);
     expect(state?.charter).toEqual([]);
     expect(state?.nightWatch).toBe(0);
   });

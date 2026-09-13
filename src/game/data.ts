@@ -1,3 +1,5 @@
+import type { Decimal } from './decimal';
+
 /** Resource identifiers used by wallets, rates, and costs. */
 export type ResourceId = 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence' | 'bogCores';
 /** Resources that can be spent; Bog Cores are prestige currency. */
@@ -20,14 +22,15 @@ export const RESOURCES: ResourceDef[] = [
   { id: 'bogCores', name: 'bog cores', emoji: '💠' },
 ];
 
-export type ResourceCost = Partial<Record<SpendableResource, number>>;
+export type ResourceCostSpec = Partial<Record<SpendableResource, number>>;
+export type ResourceCost = Partial<Record<SpendableResource, Decimal>>;
 
 export interface BuildingDef {
   id: string;
   name: string;
   emoji: string;
   description: string;
-  baseCost: ResourceCost;
+  baseCost: ResourceCostSpec;
   generates: 'broth' | 'peat' | 'sphagnum' | 'methane' | 'cooling' | 'compute' | 'evidence';
   unlock?: {
     brothPerSecond?: number;
@@ -98,7 +101,7 @@ export interface UpgradeDef {
   name: string;
   emoji: string;
   description: string;
-  cost: ResourceCost;
+  cost: ResourceCostSpec;
   kind: UpgradeKind;
   requires?: { buildingId: string; count: number }[];
   buildingId?: string;
@@ -109,8 +112,8 @@ export interface UpgradeDef {
   resourceMultiplier?: { resource: Exclude<SpendableResource, 'bogCores'>; factor: number };
 }
 
-function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
-  const out: ResourceCost = {};
+function scaleCost(cost: ResourceCostSpec, factor: number): ResourceCostSpec {
+  const out: ResourceCostSpec = {};
   for (const [resource, amount] of Object.entries(cost) as [SpendableResource, number][]) {
     out[resource] = amount * factor;
   }
@@ -261,7 +264,7 @@ export interface ResearchDef {
   name: string;
   emoji: string;
   description: string;
-  cost: ResourceCost;
+  cost: ResourceCostSpec;
   durationSec: number;
 }
 

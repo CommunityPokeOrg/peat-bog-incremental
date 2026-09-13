@@ -31,6 +31,7 @@ import {
 } from '../game/engine';
 import { formatCost, formatDuration, formatNumber } from '../game/format';
 import { offlineRateBreakdown } from '../game/save';
+import { type Decimal } from '../game/decimal';
 import type { GameState } from '../game/state';
 import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
 import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, CHARTER_ROOT_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
@@ -118,7 +119,7 @@ export interface UiHooks {
   onExport(): string;
   onImport(encoded: string): boolean;
   onHardReset(): void;
-  onCutPeat?(charge: number): number | void;
+  onCutPeat?(charge: number): Decimal | void;
   onCalibrate?(needlePos: number): CalibrationResult | void;
   onClaimQuest?(id: string): QuestReward | null | void;
   onCancelResearch?(id: string): boolean | void;
@@ -136,7 +137,7 @@ export interface Ui {
   renderPrestige(state: GameState): void;
   toast(message: string): void;
   /** Floating "+N" at the harvest button. */
-  spawnFloat(amount: number, resource?: string): void;
+  spawnFloat(amount: Decimal | number, resource?: string): void;
   renderFieldwork(state: GameState, now?: number): void;
   showModal(opts: { title: string; body: string; actions: { label: string; danger?: boolean; onClick(): void }[] }): void;
   closeModal(): void;
@@ -487,7 +488,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     resourceChips.set(resource.id, chip);
   }
 
-  function resourceAmount(state: GameState, id: string): number {
+  function resourceAmount(state: GameState, id: string): Decimal {
     if (id === 'bogCores') return state.bogCores;
     return state[id as 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence'];
   }
@@ -514,7 +515,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
   }
 
-  function spawnFloat(amount: number, resource = 'broth'): void {
+  function spawnFloat(amount: Decimal | number, resource = 'broth'): void {
     const el = document.createElement('span');
     el.className = 'float-num';
     el.textContent = `+${formatNumber(amount)} ${resource}`;
@@ -558,7 +559,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
               ? state.totalEvidenceEarned
               : amount;
       const shouldShow = resource.id === 'broth' || resource.id === 'compute' || resource.id === 'bogCores' ||
-        lifetimeEarned > 0 || BUILDINGS.some((def) =>
+        lifetimeEarned.gt(0) || BUILDINGS.some((def) =>
           (def.generates === resource.id || (resource.id === 'compute' && def.generates === 'compute')) &&
           buildingVisible(state, def) && (state.buildings[def.id] ?? 0) > 0,
         );
@@ -569,11 +570,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       fieldNote.textContent = note;
       renderedFieldNote = note;
     }
-    const boil = Math.max(1.2, Math.min(6, 6 / Math.log10(rates.broth + 10)));
+    const boil = Math.max(1.2, Math.min(6, 6 / Math.log10(rates.broth.toNumber() + 10)));
     harvestBtn.style.setProperty('--boil', `${boil}s`);
     renderBuffs(state);
     const next = currentDocket(state);
-    const nextCurrent = next ? Math.min(next.progress.current, next.progress.target) : 0;
+    const nextCurrent = next ? next.progress.current.min(next.progress.target) : 0;
     nextHint.textContent = next
       ? `Next up: ${next.name} (${formatNumber(nextCurrent)} / ${formatNumber(next.progress.target)})`
       : 'Settlement docket complete — the peat bog trial is settled.';
@@ -619,8 +620,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const heat = totalHeat(state);
     const cooling = totalCooling(state);
     const factor = thermalFactor(state);
-    const pct = Math.round(factor * 100);
-    if (heat <= 0) {
+    const pct = Math.round(factor.toNumber() * 100);
+    if (heat.lte(0)) {
       thermalText.textContent = 'No heat generated';
       thermalPct.textContent = '';
       thermalSub.textContent = 'Buy Server Racks to generate compute.';
@@ -628,28 +629,28 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       thermalText.textContent = `Heat ${formatNumber(heat)} / Cooling ${formatNumber(cooling)}`;
       thermalPct.textContent = `${pct}% cooled`;
       thermalSub.textContent =
-        factor >= 1
+        factor.gte(1)
           ? 'Racks running at full speed.'
           : 'Racks throttled — build more cooling!';
     }
     thermalFill.style.width = `${pct}%`;
     thermalFill.style.setProperty('--cooled', `${pct}%`);
-    thermalFill.classList.toggle('throttled', factor < 1);
+    thermalFill.classList.toggle('throttled', factor.lt(1));
     thermalMeter.setAttribute('aria-valuenow', String(pct));
   }
 
   function renderPrestige(state: GameState): void {
     const gain = prestigeGain(state);
     const ok = canPrestige(state);
-    const charterHint = state.bogCores > 0 ? ' Banked cores can be spent in the Charter tab.' : '';
+    const charterHint = state.bogCores.gt(0) ? ' Banked cores can be spent in the Charter tab.' : '';
     prestigeInfo.textContent = ok
-      ? `Petition Magistrate Reino to drain the bog. Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.${charterHint}`
+      ? `Petition Magistrate Reino to drain the bog. Draining banks ${formatNumber(gain)} Bog Core${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production, permanent). Run resets; achievements and cores stay.${charterHint}`
       : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).${charterHint}`;
     prestigeBtn.disabled = !ok;
-    prestigeBtn.textContent = ok ? `Drain for ${gain} 💠` : 'Drain the bog';
+    prestigeBtn.textContent = ok ? `Drain for ${formatNumber(gain)} 💠` : 'Drain the bog';
     prestigeBtn.setAttribute(
       'aria-label',
-      ok ? `Drain the bog and gain ${gain} Bog Cores` : 'Drain the bog (locked)',
+      ok ? `Drain the bog and gain ${formatNumber(gain)} Bog Cores` : 'Drain the bog (locked)',
     );
   }
 
@@ -965,7 +966,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
                 return element;
             })();
             fill.style.width = `${progress.fraction * 100}%`;
-            const current = Math.min(progress.current, progress.target);
+            const current = progress.current.min(progress.target);
             row.querySelector<HTMLElement>('.quest-progress')!.textContent =
               `${formatNumber(current)} / ${formatNumber(progress.target)}`;
             row.querySelector<HTMLElement>('.quest-reward')!.textContent =
@@ -1585,7 +1586,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           return intro;
         },
         update: (row) => {
-          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${state.bogCores} 💠`;
+          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${formatNumber(state.bogCores)} 💠`;
         },
       },
       {
