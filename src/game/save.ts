@@ -9,9 +9,9 @@ import {
 } from './state';
 import { settleTick, type Rates } from './engine';
 import { CHARTER_ROOT_ID, charterEffects, charterSum } from './charter';
-import { safe, toDecimalOrZero, type Decimal } from './decimal';
+import { D, safe, toDecimalOrZero, type Decimal } from './decimal';
 import type { ResourceId, SpendableResource } from './data';
-import type { QuestBuff, QuestPermanentEffect } from './quests';
+import { BOUNTIES, type QuestBuff, type QuestPermanentEffect } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
@@ -107,35 +107,72 @@ const isResearchQueue = (v: unknown): v is ResearchQueueEntry[] =>
     typeof (x as Record<string, unknown>).id === 'string' &&
     isNum((x as Record<string, unknown>).remaining),
   );
-const isQuestBuff = (v: unknown): v is QuestBuff =>
-  typeof v === 'object' && v !== null &&
-  typeof (v as Record<string, unknown>).questId === 'string' &&
-  typeof (v as Record<string, unknown>).target === 'string' &&
-  isNum((v as Record<string, unknown>).factor) &&
-  isNum((v as Record<string, unknown>).expiresAt);
+const isObjectRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
 const isQuestPermanent = (v: unknown): v is QuestPermanentEffect =>
-  typeof v === 'object' && v !== null &&
+  isObjectRecord(v) &&
   typeof (v as Record<string, unknown>).questId === 'string' &&
   typeof (v as Record<string, unknown>).effect === 'object' &&
   (v as Record<string, unknown>).effect !== null &&
   typeof ((v as Record<string, unknown>).effect as Record<string, unknown>).kind === 'string';
-const isNumRecord = (v: unknown): v is Record<string, number> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v) &&
-  Object.values(v).every((x) => isNum(x));
-const isStringMap = (v: unknown): v is Record<string, string> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v) &&
-  Object.values(v).every((x) => typeof x === 'string');
 const isQuestState = (v: unknown): v is GameState['quests'] => {
-  if (typeof v !== 'object' || v === null) return false;
+  if (!isObjectRecord(v)) return false;
   const record = v as Record<string, unknown>;
   return isStrArr(record.claimed) &&
     Array.isArray(record.buffs) &&
-    record.buffs.every(isQuestBuff) &&
     (record.permanent === undefined ||
-      (Array.isArray(record.permanent) && record.permanent.every(isQuestPermanent))) &&
-    (record.bountyCount === undefined || isNumRecord(record.bountyCount)) &&
-    (record.bountyBase === undefined || isStringMap(record.bountyBase));
+      Array.isArray(record.permanent)) &&
+    (record.bountyCount === undefined || isObjectRecord(record.bountyCount)) &&
+    (record.bountyBase === undefined || isObjectRecord(record.bountyBase));
 };
+
+function validQuestBuff(v: unknown): v is QuestBuff {
+  if (!isObjectRecord(v) || typeof v.questId !== 'string' || typeof v.target !== 'string') return false;
+  return isNum(v.factor) && v.factor > 0 && isNum(v.expiresAt);
+}
+
+function validQuestPermanent(v: unknown, bountyIds: Set<string>): v is QuestPermanentEffect {
+  if (!isQuestPermanent(v) || bountyIds.has(v.questId)) return false;
+  const effect = v.effect as unknown as Record<string, unknown>;
+  for (const field of ['factor', 'add']) {
+    if (field in effect && (!isNum(effect[field]) || (effect[field] as number) <= 0)) return false;
+  }
+  return true;
+}
+
+function parseBountyBase(raw: unknown): string | null {
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return D(raw).toString();
+  if (typeof raw !== 'string' || raw.trim() === '' || /^[+-]?infinity$/i.test(raw.trim())) return null;
+  try {
+    const value = D(raw);
+    return Number.isNaN(value.mantissa) || !Number.isFinite(value.exponent) || value.lt(0)
+      ? null
+      : raw.trim();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeQuestState(quests: GameState['quests']): GameState['quests'] {
+  const bountyIds = new Set(BOUNTIES.map((bounty) => bounty.id));
+  const bountyCount: Record<string, number> = {};
+  for (const [id, raw] of Object.entries(quests.bountyCount ?? {})) {
+    const value = Number(raw);
+    if (Number.isFinite(value) && value >= 0) bountyCount[id] = Math.floor(value);
+  }
+  const bountyBase: Record<string, string> = {};
+  for (const [id, raw] of Object.entries(quests.bountyBase ?? {})) {
+    const value = parseBountyBase(raw);
+    if (value !== null) bountyBase[id] = value;
+  }
+  return {
+    claimed: [...quests.claimed],
+    buffs: quests.buffs.filter(validQuestBuff),
+    permanent: quests.permanent.filter((entry) => validQuestPermanent(entry, bountyIds)),
+    bountyCount,
+    bountyBase,
+  };
+}
 
 function readRecord(
   source: unknown,
@@ -217,13 +254,7 @@ export function deserialize(raw: unknown): GameState | null {
     : {};
   state.achievements = [...p.achievements];
   state.quests = isQuestState(p.quests)
-    ? {
-      claimed: [...p.quests.claimed],
-      buffs: [...p.quests.buffs],
-      permanent: p.quests.permanent ? [...p.quests.permanent] : [],
-      bountyCount: p.quests.bountyCount ? { ...p.quests.bountyCount } : {},
-      bountyBase: p.quests.bountyBase ? { ...p.quests.bountyBase } : {},
-    }
+    ? sanitizeQuestState(p.quests)
     : { claimed: [], buffs: [], permanent: [], bountyCount: {}, bountyBase: {} };
   state.lastSaveTime = p.lastSaveTime;
   return state;

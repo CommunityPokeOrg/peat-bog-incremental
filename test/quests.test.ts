@@ -3,7 +3,11 @@ import { D } from '../src/game/decimal';
 import { UPGRADE_BY_ID } from '../src/game/data';
 import { clickPower, prestige, productionPerSecond } from '../src/game/engine';
 import {
+  BOUNTIES,
   QUESTS,
+  acceptBounty,
+  bountyProgress,
+  claimBounty,
   claimQuest,
   expireBuffs,
   questMultiplier,
@@ -58,9 +62,9 @@ describe('settlement quests', () => {
 
     state.minigameHits = 25;
     expect(claimQuest(state, 'q-calibrated', 1_000)?.kind).toBe('multiplier');
-    expect(questMultiplier(state, 'compute', 1_000)).toBeCloseTo(1.5);
+    expect(questMultiplier(state, 'compute', 1_000).toNumber()).toBeCloseTo(1.5);
     expireBuffs(state, 601_001);
-    expect(questMultiplier(state, 'compute', 601_001)).toBe(1);
+    expect(questMultiplier(state, 'compute', 601_001).toNumber()).toBe(1);
 
     state.buildings.harvester = 10;
     const before = productionPerSecond(state).broth;
@@ -104,9 +108,36 @@ describe('settlement quests', () => {
     const state = createInitialState();
     state.buildings.rack = 50;
     expect(claimQuest(state, 'k-kreatix')?.kind).toBe('multiplier');
-    expect(questMultiplier(state, 'broth')).toBeCloseTo(1.1);
+    expect(questMultiplier(state, 'broth').toNumber()).toBeCloseTo(1.1);
     state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.quests.claimed).toContain('k-kreatix');
+  });
+
+  it('bounds bounty rewards and keeps multiplier rewards timed', () => {
+    for (const bounty of BOUNTIES) {
+      for (let instance = 1; instance <= 80; instance += 1) {
+        const requirement = bounty.requirement(instance);
+        const reward = bounty.reward(instance);
+        expect(requirement.kind).toBe('lifetime');
+        if (requirement.kind === 'lifetime') expect(Number.isFinite(requirement.target)).toBe(true);
+        if (reward.kind === 'multiplier') {
+          expect(reward.durationSec).toBeDefined();
+          expect(Number.isFinite(reward.factor)).toBe(true);
+        }
+        if (reward.kind === 'cores') expect(Number.isFinite(reward.amount)).toBe(true);
+      }
+    }
+  });
+
+  it('requires new lifetime progress for each bounty and does not chain reward resources', () => {
+    const state = createInitialState();
+    acceptBounty(state, 'bounty-peat');
+    state.lifetime.peat = D(10_000);
+    const first = claimBounty(state, 'bounty-peat');
+    expect(first?.kind).toBe('resource');
+    expect(state.lifetime.peat.eq(10_000)).toBe(true);
+    expect(claimBounty(state, 'bounty-peat')).toBeNull();
+    expect(bountyProgress(state, 'bounty-peat').current.eq(0)).toBe(true);
   });
 });

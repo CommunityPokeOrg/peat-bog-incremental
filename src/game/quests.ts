@@ -4,6 +4,9 @@ import { D, type Decimal } from './decimal';
 import type { ProductionLine, SpendableResource } from './data';
 import type { CharterEffect } from './charter';
 
+/** Maximum repeatable bounty instance used for exponential scaling. */
+export const BOUNTY_SCALE_CAP = 60;
+
 /** Requirement types used by settlement quests. */
 export type QuestRequirement =
   | { kind: 'lifetime'; resource: SpendableResource; target: number }
@@ -135,20 +138,20 @@ export const STORY_QUESTS: QuestDef[] = [...WORKS_QUESTS, ...APPEAL_QUESTS];
 const BOUNTY_DEFS: BountyDef[] = [
   { id: 'bounty-peat', name: 'Peat Delivery Order', emoji: '🟫', brief: (n) => `Deliver ${formatBountyNumber(10_000, n)} peat from the upper bog.`, requirement: (n) => ({ kind: 'lifetime', resource: 'peat', target: bountyTarget(10_000, n) }), reward: (n) => ({ kind: 'resource', resource: 'broth', amount: bountyReward(500, n) }) },
   { id: 'bounty-broth', name: 'Broth Transfer', emoji: '🫧', brief: (n) => `Move ${formatBountyNumber(50_000, n)} broth through the line.`, requirement: (n) => ({ kind: 'lifetime', resource: 'broth', target: bountyTarget(50_000, n) }), reward: (n) => ({ kind: 'resource', resource: 'compute', amount: bountyReward(1_000, n) }) },
-  { id: 'bounty-sphagnum', name: 'Moss Packing List', emoji: '🌱', brief: (n) => `Pack ${formatBountyNumber(10_000, n)} sphagnum.`, requirement: (n) => ({ kind: 'lifetime', resource: 'sphagnum', target: bountyTarget(10_000, n) }), reward: (n) => ({ kind: 'multiplier', target: 'sphagnum', factor: 1.05 * 2 ** (n - 1) }) },
+  { id: 'bounty-sphagnum', name: 'Moss Packing List', emoji: '🌱', brief: (n) => `Pack ${formatBountyNumber(10_000, n)} sphagnum.`, requirement: (n) => ({ kind: 'lifetime', resource: 'sphagnum', target: bountyTarget(10_000, n) }), reward: () => ({ kind: 'multiplier', target: 'sphagnum', factor: 1.5, durationSec: 600 }) },
   { id: 'bounty-methane', name: 'Gas Collection Warrant', emoji: '💨', brief: (n) => `Collect ${formatBountyNumber(5_000, n)} methane.`, requirement: (n) => ({ kind: 'lifetime', resource: 'methane', target: bountyTarget(5_000, n) }), reward: (n) => ({ kind: 'resource', resource: 'broth', amount: bountyReward(2_000, n) }) },
-  { id: 'bounty-evidence', name: 'Exhibit Intake', emoji: '📁', brief: (n) => `File ${formatBountyNumber(2_500, n)} evidence.`, requirement: (n) => ({ kind: 'lifetime', resource: 'evidence', target: bountyTarget(2_500, n) }), reward: (n) => ({ kind: 'multiplier', target: 'evidence', factor: 1.05 * 2 ** (n - 1) }) },
+  { id: 'bounty-evidence', name: 'Exhibit Intake', emoji: '📁', brief: (n) => `File ${formatBountyNumber(2_500, n)} evidence.`, requirement: (n) => ({ kind: 'lifetime', resource: 'evidence', target: bountyTarget(2_500, n) }), reward: () => ({ kind: 'multiplier', target: 'evidence', factor: 1.5, durationSec: 600 }) },
   { id: 'bounty-sludge', name: 'Sludge Manifest', emoji: '🟤', brief: (n) => `Account for ${formatBountyNumber(1_000, n)} sludge.`, requirement: (n) => ({ kind: 'lifetime', resource: 'sludge', target: bountyTarget(1_000, n) }), reward: (n) => ({ kind: 'resource', resource: 'briquettes', amount: bountyReward(100, n) }) },
   { id: 'bounty-refined', name: 'Refinery Requisition', emoji: '🏺', brief: (n) => `Produce ${formatBountyNumber(500, n)} refined broth.`, requirement: (n) => ({ kind: 'lifetime', resource: 'refinedBroth', target: bountyTarget(500, n) }), reward: (n) => ({ kind: 'resource', resource: 'sediment', amount: bountyReward(50, n) }) },
-  { id: 'bounty-essence', name: 'Essence Affidavit', emoji: '✨', brief: (n) => `Submit ${formatBountyNumber(100, n)} essence.`, requirement: (n) => ({ kind: 'lifetime', resource: 'essence', target: bountyTarget(100, n) }), reward: (n) => ({ kind: 'cores', amount: bountyReward(1, n) }) },
+  { id: 'bounty-essence', name: 'Essence Affidavit', emoji: '✨', brief: (n) => `Submit ${formatBountyNumber(100, n)} essence.`, requirement: (n) => ({ kind: 'lifetime', resource: 'essence', target: bountyTarget(100, n) }), reward: (n) => ({ kind: 'cores', amount: Math.min(n, BOUNTY_SCALE_CAP) }) },
 ];
 
 function bountyTarget(base: number, instance: number): number {
-  return base * 2.5 ** (instance - 1);
+  return base * 2.5 ** (Math.min(instance, BOUNTY_SCALE_CAP) - 1);
 }
 
 function bountyReward(base: number, instance: number): number {
-  return base * 2 ** (instance - 1);
+  return base * 2 ** (Math.min(instance, BOUNTY_SCALE_CAP) - 1);
 }
 
 function formatBountyNumber(base: number, instance: number): string {
@@ -244,13 +247,6 @@ function applyReward(state: GameState, questId: string, reward: QuestReward, now
   }
   if (reward.kind === 'cores') state.wallet.bogCores = state.wallet.bogCores.add(reward.amount);
   if (reward.kind === 'permanent') state.quests.permanent.push({ questId, effect: reward.effect });
-  if (reward.kind === 'multiplier' && !reward.durationSec &&
-    !ALL_QUESTS.some((quest) => quest.id === questId)) {
-    state.quests.permanent.push({
-      questId,
-      effect: { kind: 'multiplier', target: reward.target, factor: reward.factor },
-    });
-  }
   if (reward.kind === 'multiplier' && reward.durationSec) {
     state.quests.buffs.push({
       questId,
@@ -322,35 +318,38 @@ export function questMultiplier(
   state: GameState,
   target: MultiplierTarget,
   now = Date.now(),
-): number {
-  let multiplier = 1;
+): Decimal {
+  let multiplier = D(1);
   for (const id of state.quests.claimed) {
     const quest = ALL_QUESTS.find((candidate) => candidate.id === id);
     const reward = quest?.reward;
     if (reward?.kind === 'multiplier' && !reward.durationSec &&
       (reward.target === target || reward.target === 'all')) {
-      multiplier *= reward.factor;
+      if (Number.isFinite(reward.factor) && reward.factor > 0) multiplier = multiplier.mul(reward.factor);
     }
   }
   for (const buff of state.quests.buffs) {
     if (buff.expiresAt > now && (buff.target === target || buff.target === 'all')) {
-      multiplier *= buff.factor;
+      if (Number.isFinite(buff.factor) && buff.factor > 0) multiplier = multiplier.mul(buff.factor);
     }
   }
   for (const permanent of state.quests.permanent) {
     const effect = permanent.effect;
     if (effect.kind === 'multiplier' &&
-      (effect.target === target || effect.target === 'all')) multiplier *= effect.factor;
+      (effect.target === target || effect.target === 'all') &&
+      Number.isFinite(effect.factor) && effect.factor > 0) multiplier = multiplier.mul(effect.factor);
   }
   return multiplier;
 }
 
 /** Return the product of permanent quest effects for a Charter effect kind. */
-export function questPermanentFactor(state: GameState, kind: 'coreGain'): number {
-  let factor = 1;
+export function questPermanentFactor(state: GameState, kind: 'coreGain'): Decimal {
+  let factor = D(1);
   for (const permanent of state.quests.permanent) {
     const effect = permanent.effect;
-    if (effect.kind === kind) factor *= effect.factor;
+    if (effect.kind === kind && Number.isFinite(effect.factor) && effect.factor > 0) {
+      factor = factor.mul(effect.factor);
+    }
   }
   return factor;
 }

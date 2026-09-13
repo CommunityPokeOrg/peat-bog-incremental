@@ -16,12 +16,12 @@ export function safe(value: Decimal): Decimal {
 
 /** Parse a save value as Decimal, converting invalid inputs to zero. */
 export function toDecimalOrZero(raw: unknown): Decimal {
-  if (typeof raw === 'number') return Number.isFinite(raw) ? D(raw) : ZERO;
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 ? D(raw) : ZERO;
   if (typeof raw === 'string') {
     if (/^[+-]?infinity$/i.test(raw.trim())) return ZERO;
     try {
       const value = Decimal.fromString(raw);
-      return Number.isNaN(value.mantissa) || !Number.isFinite(value.exponent) ? ZERO : value;
+      return Number.isNaN(value.mantissa) || !Number.isFinite(value.exponent) || value.lt(0) ? ZERO : value;
     } catch {
       return ZERO;
     }

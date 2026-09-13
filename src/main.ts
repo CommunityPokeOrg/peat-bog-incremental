@@ -234,7 +234,11 @@ async function init(): Promise<void> {
     }
     state.runCompute = state.runCompute.add(earned.gained.compute);
     expireBuffs(state);
-    offlineResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
+    const researchSpeed = charterFactor(state, 'researchSpeed').toNumber();
+    offlineResearch = advanceResearch(
+      state,
+      earned.seconds * (Number.isFinite(researchSpeed) ? researchSpeed : 0),
+    );
     return earned;
   }
 

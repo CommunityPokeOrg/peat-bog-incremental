@@ -117,7 +117,7 @@ describe('Drainage Charter', () => {
     const state = createInitialState();
     state.charter = ['kindling-1', 'kindling-2', 'kindling-3', 'kindling-4', 'roots-3'];
     state.wallet.bogCores = D(1);
-    expect(charterMultiplier(state, 'compute')).toBe(2);
+    expect(charterMultiplier(state, 'compute').toNumber()).toBe(2);
     state.runCompute = D(1_000_000);
     expect(prestige(state).toNumber()).toBe(1);
     expect(state.charter).toContain('kindling-4');
@@ -193,7 +193,7 @@ describe('Drainage Charter', () => {
     const state = createInitialState();
     state.charter = ['keepers-1-1'];
     state.quests.claimed = Array.from({ length: 100 }, (_, index) => `quest-${index}`);
-    expect(charterMultiplier(state, 'broth')).toBeCloseTo(1.1);
+    expect(charterMultiplier(state, 'broth').toNumber()).toBeCloseTo(1.1);
   });
 
   it('grants generalized starting resources on drain', () => {

@@ -178,7 +178,7 @@ export function totalHeat(state: GameState): Decimal {
   for (const b of BUILDINGS) {
     if (b.heat) heat = heat.add(D(b.heat).mul(effectiveOwned(state, b.id)));
   }
-  return heat.mul(heatMult).mul(charterFactor(state, 'heat'));
+  return safe(heat.mul(heatMult).mul(charterFactor(state, 'heat')));
 }
 
 export function totalCooling(state: GameState): Decimal {
@@ -191,7 +191,7 @@ export function totalCooling(state: GameState): Decimal {
   for (const b of BUILDINGS) {
     if (b.cooling) cooling = cooling.add(D(b.cooling).mul(effectiveOwned(state, b.id)));
   }
-  return cooling.mul(coolMult).mul(charterFactor(state, 'cooling'));
+  return safe(cooling.mul(coolMult).mul(charterFactor(state, 'cooling')));
 }
 
 /** Fraction of full speed the racks run at: min(1, cooling/heat). */
@@ -226,7 +226,7 @@ export function resourceMultiplier(state: GameState, resource: SpendableResource
       multiplier = multiplier.mul(Math.min(upgrade.synergy.cap, 1 + sourceValue * upgrade.synergy.perUnit));
     }
   }
-  return multiplier;
+  return safe(multiplier);
 }
 
 function effectiveOwned(state: GameState, buildingId: string): number {
@@ -245,7 +245,7 @@ export function productionPerSecond(state: GameState, now = Date.now()): Rates {
     }
   }
   for (const resource of SPENDABLE_RESOURCES) {
-    totals[resource] = totals[resource].mul(resourceMultiplier(state, resource, now));
+    totals[resource] = safe(totals[resource].mul(resourceMultiplier(state, resource, now)));
   }
   return totals;
 }
@@ -303,9 +303,9 @@ export function settleTick(state: GameState, dtSeconds: number, now = Date.now()
     const throttle = Object.entries(building.consumes ?? {}).reduce((limit, [resource, amount]) => {
       const need = D(amount).mul(owned).mul(multiplier)
         .mul(converterEfficiency(state, building.line));
-      return need.lte(0)
-        ? limit
-        : Math.min(limit, available[resource as SpendableResource].div(need.mul(dtSeconds)).toNumber());
+      if (need.lte(0)) return limit;
+      const ratio = available[resource as SpendableResource].div(need.mul(dtSeconds)).toNumber();
+      return Math.min(limit, Number.isNaN(ratio) ? 0 : ratio);
     }, 1);
     const factor = Math.max(0, Math.min(1, throttle));
     for (const [resource, amount] of Object.entries(building.consumes ?? {}) as [SpendableResource, number][]) {
@@ -359,7 +359,8 @@ export function autoBuy(state: GameState, dtSeconds: number): void {
 export function tick(state: GameState, dtSeconds: number, now = Date.now()): GameState {
   if (dtSeconds <= 0) return state;
   expireBuffs(state, now);
-  advanceResearch(state, dtSeconds * charterFactor(state, 'researchSpeed'));
+  const researchSpeed = charterFactor(state, 'researchSpeed').toNumber();
+  advanceResearch(state, dtSeconds * (Number.isFinite(researchSpeed) ? researchSpeed : 0));
   applySettlement(state, settleTick(state, dtSeconds, now));
   autoBuy(state, dtSeconds);
   return state;

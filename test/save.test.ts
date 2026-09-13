@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deserialize, serialize } from '../src/game/save';
 import { D } from '../src/game/decimal';
+import { productionPerSecond } from '../src/game/engine';
 import { createInitialState } from '../src/game/state';
 
 describe('Decimal save migration', () => {
@@ -94,5 +95,39 @@ describe('Decimal save migration', () => {
     expect(loaded?.wallet.broth.eq(0)).toBe(true);
     expect(loaded?.wallet.compute.eq(0)).toBe(true);
     expect(loaded?.wallet.peat.eq(0)).toBe(true);
+  });
+
+  it('sanitizes invalid legacy bounty effects and counters', () => {
+    const loaded = deserialize({
+      version: 4,
+      totalClicks: 0,
+      lastSaveTime: 0,
+      buildings: { nursery: 1 },
+      upgrades: [],
+      research: [],
+      achievements: [],
+      quests: {
+        claimed: [],
+        buffs: [
+          { questId: 'bounty-sphagnum', target: 'sphagnum', factor: Infinity, expiresAt: 0 },
+          { questId: 'q-calibrated', target: 'compute', factor: 1.5, expiresAt: 2_000 },
+        ],
+        permanent: [
+          { questId: 'bounty-sphagnum', effect: { kind: 'multiplier', target: 'sphagnum', factor: Infinity } },
+          { questId: 'q-valid', effect: { kind: 'multiplier', target: 'broth', factor: 1.5 } },
+        ],
+        bountyCount: { 'bounty-sphagnum': Infinity, 'bounty-peat': 2.8, 'bounty-broth': 3 },
+        bountyBase: { 'bounty-peat': '1e300', 'bounty-broth': 'Infinity', bad: 'NaN' },
+      },
+    });
+    expect(loaded).not.toBeNull();
+    expect(loaded?.quests.permanent).toHaveLength(1);
+    expect(loaded?.quests.buffs).toHaveLength(1);
+    expect(loaded?.quests.bountyCount).toEqual({ 'bounty-peat': 2, 'bounty-broth': 3 });
+    expect(loaded?.quests.bountyBase).toEqual({ 'bounty-peat': '1e300' });
+    if (!loaded) throw new Error('expected sanitized save');
+    const rate = productionPerSecond(loaded).sphagnum;
+    expect(Number.isFinite(rate.exponent)).toBe(true);
+    expect(rate.gt(0)).toBe(true);
   });
 });

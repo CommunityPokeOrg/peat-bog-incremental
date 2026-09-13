@@ -1,6 +1,7 @@
 import type { MultiplierTarget } from './quests';
 import type { GameState } from './state';
 import { WING_NODES } from './charterWings';
+import { D, type Decimal } from './decimal';
 
 export type CharterEffect =
   | { kind: 'multiplier'; target: MultiplierTarget; factor: number }
@@ -96,34 +97,38 @@ export function charterEffects(state: GameState): CharterEffect[] {
   return state.charter.flatMap((id) => CHARTER_BY_ID[id]?.effects ?? []);
 }
 
-export function charterMultiplier(state: GameState, target: MultiplierTarget): number {
+export function charterMultiplier(state: GameState, target: MultiplierTarget): Decimal {
   const effects = charterEffects(state);
   const direct = effects
     .filter((effect): effect is Extract<CharterEffect, { kind: 'multiplier' }> =>
       effect.kind === 'multiplier' && (effect.target === target || effect.target === 'all'),
     )
-    .reduce((product, effect) => product * effect.factor, 1);
+    .reduce((product, effect) =>
+      Number.isFinite(effect.factor) && effect.factor > 0 ? product.mul(effect.factor) : product, D(1));
   const questCount = state.quests.claimed.length;
   const achievementCount = state.achievements.length;
   const scaled = effects.reduce((product, effect) => {
     if (effect.kind === 'perQuest' && (effect.target === target || effect.target === 'all')) {
-      return product * Math.min(effect.cap, 1 + questCount * effect.perUnit);
+      const value = Math.min(effect.cap, 1 + questCount * effect.perUnit);
+      return Number.isFinite(value) && value > 0 ? product.mul(value) : product;
     }
     if (effect.kind === 'perAchievement' && (effect.target === target || effect.target === 'all')) {
-      return product * Math.min(effect.cap, 1 + achievementCount * effect.perUnit);
+      const value = Math.min(effect.cap, 1 + achievementCount * effect.perUnit);
+      return Number.isFinite(value) && value > 0 ? product.mul(value) : product;
     }
     return product;
-  }, 1);
-  return direct * scaled;
+  }, D(1));
+  return direct.mul(scaled);
 }
 
 export function charterFactor(
   state: GameState,
   kind: 'heat' | 'cooling' | 'researchSpeed' | 'coreGain' | 'fieldwork',
-): number {
+): Decimal {
   return charterEffects(state)
     .filter((effect): effect is Extract<CharterEffect, { kind: typeof kind }> => effect.kind === kind)
-    .reduce((product, effect) => product * effect.factor, 1);
+    .reduce((product, effect) =>
+      Number.isFinite(effect.factor) && effect.factor > 0 ? product.mul(effect.factor) : product, D(1));
 }
 
 export function charterSum(
