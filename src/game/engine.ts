@@ -7,15 +7,22 @@ import {
   UPGRADE_BY_ID,
   type BuildingDef,
   type ResourceCost,
+  type SpendableResource,
   type UpgradeDef,
 } from './data';
 import type { GameState } from './state';
+import { QUESTS, expireBuffs, questMultiplier } from './quests';
+
+const SPENDABLE_RESOURCES: SpendableResource[] = ['broth', 'compute', 'peat', 'evidence'];
+/** Maximum number of research items that may be queued at once. */
+export const MAX_RESEARCH_QUEUE = 3;
 
 export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
   const factor = Math.pow(COST_SCALE, owned);
   const out: ResourceCost = {};
-  if (def.baseCost.broth !== undefined) out.broth = def.baseCost.broth * factor;
-  if (def.baseCost.compute !== undefined) out.compute = def.baseCost.compute * factor;
+  for (const resource of SPENDABLE_RESOURCES) {
+    if (def.baseCost[resource] !== undefined) out[resource] = def.baseCost[resource]! * factor;
+  }
   return out;
 }
 
@@ -24,16 +31,17 @@ export function bulkCost(def: BuildingDef, owned: number, qty: number): Resource
   const geom = (Math.pow(COST_SCALE, qty) - 1) / (COST_SCALE - 1);
   const base = buildingCost(def, owned);
   const out: ResourceCost = {};
-  if (base.broth !== undefined) out.broth = base.broth * geom;
-  if (base.compute !== undefined) out.compute = base.compute * geom;
+  for (const resource of SPENDABLE_RESOURCES) {
+    if (base[resource] !== undefined) out[resource] = base[resource]! * geom;
+  }
   return out;
 }
 
 /** Max quantity affordable with current resources. */
 export function maxAffordable(def: BuildingDef, owned: number, state: GameState): number {
   let qty = 0;
-  // Broth and compute scale independently; take the min over both resources.
-  for (const key of ['broth', 'compute'] as const) {
+  // Each resource budget contributes a bound; take the minimum across costs.
+  for (const key of SPENDABLE_RESOURCES) {
     const base = def.baseCost[key];
     if (base === undefined) continue;
     const price = base * Math.pow(COST_SCALE, owned);
@@ -48,14 +56,16 @@ export function maxAffordable(def: BuildingDef, owned: number, state: GameState)
 }
 
 export function canAfford(state: GameState, cost: ResourceCost): boolean {
-  if (cost.broth !== undefined && state.broth < cost.broth) return false;
-  if (cost.compute !== undefined && state.compute < cost.compute) return false;
-  return true;
+  return SPENDABLE_RESOURCES.every((resource) =>
+    cost[resource] === undefined || state[resource] >= cost[resource]!,
+  );
 }
 
-function payCost(state: GameState, cost: ResourceCost): void {
-  if (cost.broth !== undefined) state.broth -= cost.broth;
-  if (cost.compute !== undefined) state.compute -= cost.compute;
+/** Subtract a generic resource cost from the state wallet. */
+export function payCost(state: GameState, cost: ResourceCost): void {
+  for (const resource of SPENDABLE_RESOURCES) {
+    if (cost[resource] !== undefined) state[resource] -= cost[resource]!;
+  }
 }
 
 // --- multipliers -----------------------------------------------------------
@@ -111,12 +121,15 @@ export function thermalFactor(state: GameState): number {
   return Math.min(1, totalCooling(state) / heat);
 }
 
+/** Current production rates for all generated resources. */
 export interface Rates {
-  brothPerSecond: number;
-  computePerSecond: number;
+  broth: number;
+  compute: number;
+  peat: number;
+  evidence: number;
 }
 
-export function productionPerSecond(state: GameState): Rates {
+export function productionPerSecond(state: GameState, now = Date.now()): Rates {
   const global = globalMultiplier(state);
   const brothMult =
     global *
@@ -132,20 +145,26 @@ export function productionPerSecond(state: GameState): Rates {
 
   let broth = 0;
   let compute = 0;
+  let peat = 0;
+  let evidence = 0;
   for (const b of BUILDINGS) {
     const owned = state.buildings[b.id] ?? 0;
     if (!owned) continue;
     const mult = buildingMultiplier(state, b.id);
     if (b.brothPerSecond) broth += owned * b.brothPerSecond * mult;
     if (b.computePerSecond) compute += owned * b.computePerSecond * mult;
+    if (b.peatPerSecond) peat += owned * b.peatPerSecond * mult;
+    if (b.evidencePerSecond) evidence += owned * b.evidencePerSecond * mult;
   }
   return {
-    brothPerSecond: broth * brothMult,
-    computePerSecond: compute * computeMult * thermalFactor(state),
+    broth: broth * brothMult * questMultiplier(state, 'broth', now),
+    compute: compute * computeMult * thermalFactor(state) * questMultiplier(state, 'compute', now),
+    peat: peat * global * questMultiplier(state, 'peat', now),
+    evidence: evidence * global * questMultiplier(state, 'evidence', now),
   };
 }
 
-export function clickPower(state: GameState): number {
+export function clickPower(state: GameState, now = Date.now()): number {
   let power = 1;
   let brothFraction = 0;
   for (const id of state.upgrades) {
@@ -154,24 +173,34 @@ export function clickPower(state: GameState): number {
     if (u.clickMultiplier) power *= u.clickMultiplier;
     if (u.clickBrothFraction) brothFraction += u.clickBrothFraction;
   }
-  power += productionPerSecond(state).brothPerSecond * brothFraction;
-  return power * globalMultiplier(state);
+  power += productionPerSecond(state, now).broth * brothFraction;
+  return power * globalMultiplier(state) * questMultiplier(state, 'click', now);
 }
 
 // --- actions ----------------------------------------------------------------
 
 /** Advance the simulation by dtSeconds (the rAF loop clamps dt to ≤1s per frame). */
-export function tick(state: GameState, dtSeconds: number): GameState {
+export function tick(state: GameState, dtSeconds: number, now = Date.now()): GameState {
   if (dtSeconds <= 0) return state;
+  expireBuffs(state, now);
+  advanceResearch(state, dtSeconds);
   const dt = dtSeconds;
-  const rates = productionPerSecond(state);
-  const brothGain = rates.brothPerSecond * dt;
-  const computeGain = rates.computePerSecond * dt;
-  state.broth += brothGain;
-  state.compute += computeGain;
-  state.totalBrothEarned += brothGain;
-  state.totalComputeEarned += computeGain;
-  state.totalComputeThisRun += computeGain;
+  const rates = productionPerSecond(state, now);
+  const gains = {
+    broth: rates.broth * dt,
+    compute: rates.compute * dt,
+    peat: rates.peat * dt,
+    evidence: rates.evidence * dt,
+  };
+  state.broth += gains.broth;
+  state.compute += gains.compute;
+  state.peat += gains.peat;
+  state.evidence += gains.evidence;
+  state.totalBrothEarned += gains.broth;
+  state.totalComputeEarned += gains.compute;
+  state.totalPeatEarned += gains.peat;
+  state.totalEvidenceEarned += gains.evidence;
+  state.totalComputeThisRun += gains.compute;
   return state;
 }
 
@@ -218,11 +247,14 @@ export function revealBuildings(state: GameState): string[] {
     if (!def.unlock || state.revealed.includes(def.id)) continue;
     const brothReady =
       def.unlock.brothPerSecond === undefined ||
-      rates.brothPerSecond >= def.unlock.brothPerSecond;
+      rates.broth >= def.unlock.brothPerSecond;
     const computeReady =
       def.unlock.computePerSecond === undefined ||
-      rates.computePerSecond >= def.unlock.computePerSecond;
-    if (brothReady && computeReady) {
+      rates.compute >= def.unlock.computePerSecond;
+    const peatReady =
+      def.unlock.peatPerSecond === undefined ||
+      rates.peat >= def.unlock.peatPerSecond;
+    if (brothReady && computeReady && peatReady) {
       state.revealed.push(def.id);
       newlyRevealed.push(def.id);
     }
@@ -241,11 +273,60 @@ export function buyUpgrade(state: GameState, id: string): boolean {
 
 export function buyResearch(state: GameState, id: string): boolean {
   const def = RESEARCH_BY_ID[id];
-  if (!def || state.research.includes(id)) return false;
+  if (!def || state.research.includes(id) ||
+    state.researchQueue.some((entry) => entry.id === id) ||
+    state.researchQueue.length >= MAX_RESEARCH_QUEUE) return false;
   if (!canAfford(state, def.cost)) return false;
   payCost(state, def.cost);
-  state.research.push(id);
+  state.researchQueue.push({ id, remaining: def.durationSec });
   return true;
+}
+
+/** Cancel queued research and refund its full cost. */
+export function cancelResearch(state: GameState, id: string): boolean {
+  const index = state.researchQueue.findIndex((entry) => entry.id === id);
+  if (index < 0) return false;
+  state.researchQueue.splice(index, 1);
+  const def = RESEARCH_BY_ID[id];
+  if (def) {
+    for (const resource of SPENDABLE_RESOURCES) {
+      if (def.cost[resource] !== undefined) state[resource] += def.cost[resource]!;
+    }
+  }
+  return true;
+}
+
+/** Return queued research progress, or null for research not in the queue. */
+export function researchProgress(
+  state: GameState,
+  id: string,
+): { fraction: number; remaining: number } | null {
+  const entry = state.researchQueue.find((item) => item.id === id);
+  if (!entry) return null;
+  const duration = RESEARCH_BY_ID[id]?.durationSec ?? entry.remaining;
+  return {
+    fraction: Math.max(0, Math.min(1, 1 - entry.remaining / duration)),
+    remaining: entry.remaining,
+  };
+}
+
+/** Advance queued research in order and return ids completed during the advance. */
+export function advanceResearch(state: GameState, seconds: number): string[] {
+  let remaining = Math.max(0, seconds);
+  const completed: string[] = [];
+  while (remaining > 0 && state.researchQueue.length > 0) {
+    const head = state.researchQueue[0];
+    if (head.remaining > remaining) {
+      head.remaining -= remaining;
+      remaining = 0;
+      break;
+    }
+    remaining -= head.remaining;
+    state.researchQueue.shift();
+    if (!state.research.includes(head.id)) state.research.push(head.id);
+    completed.push(head.id);
+  }
+  return completed;
 }
 
 // --- prestige ---------------------------------------------------------------
@@ -267,11 +348,18 @@ export function prestige(state: GameState): number {
   state.bogCores += gain;
   state.broth = 0;
   state.compute = 0;
+  state.peat = 0;
+  state.evidence = 0;
   state.totalComputeThisRun = 0;
   state.buildings = {};
   state.revealed = [];
   state.upgrades = [];
   state.research = [];
+  state.researchQueue = [];
+  state.quests.claimed = state.quests.claimed.filter((id) =>
+    QUESTS.find((quest) => quest.id === id)?.persistsThroughPrestige === true,
+  );
+  state.quests.buffs = [];
   return gain;
 }
 

@@ -9,8 +9,10 @@ import {
   checkAchievements,
   click,
   clickPower,
+  canAfford,
   maxAffordable,
   prestige,
+  payCost,
   prestigeGain,
   productionPerSecond,
   revealBuildings,
@@ -81,6 +83,16 @@ describe('tick', () => {
     expect(state.broth).toBeCloseTo(10);
     expect(state.totalBrothEarned).toBeCloseTo(10);
   });
+  it('accrues peat and evidence alongside broth and compute', () => {
+    const state = createInitialState();
+    state.buildings.cutter = 10;
+    state.buildings.clerk = 5;
+    tick(state, 2);
+    expect(state.peat).toBeCloseTo(6);
+    expect(state.totalPeatEarned).toBeCloseTo(6);
+    expect(state.evidence).toBeCloseTo(2);
+    expect(state.totalEvidenceEarned).toBeCloseTo(2);
+  });
   it('ignores non-positive dt', () => {
     const state = createInitialState();
     state.buildings['harvester'] = 10;
@@ -98,10 +110,10 @@ describe('thermal throttle', () => {
     expect(totalHeat(state)).toBeCloseTo(80);
     expect(totalCooling(state)).toBeCloseTo(40);
     expect(thermalFactor(state)).toBeCloseTo(0.5);
-    expect(productionPerSecond(state).computePerSecond).toBeCloseTo(10);
+    expect(productionPerSecond(state).compute).toBeCloseTo(10);
     state.buildings['chiller'] = 8; // 80 cooling
     expect(thermalFactor(state)).toBeCloseTo(1);
-    expect(productionPerSecond(state).computePerSecond).toBeCloseTo(20);
+    expect(productionPerSecond(state).compute).toBeCloseTo(20);
   });
   it('no heat means factor 1', () => {
     const state = createInitialState();
@@ -110,6 +122,16 @@ describe('thermal throttle', () => {
 });
 
 describe('economy', () => {
+  it('handles peat and evidence costs generically', () => {
+    const state = createInitialState();
+    state.peat = 20;
+    state.evidence = 4;
+    expect(canAfford(state, { peat: 20, evidence: 4 })).toBe(true);
+    payCost(state, { peat: 3, evidence: 2 });
+    expect(state.peat).toBe(17);
+    expect(state.evidence).toBe(2);
+    expect(canAfford(state, { peat: 18 })).toBe(false);
+  });
   it('buyBuilding spends broth and adds units', () => {
     const state = createInitialState();
     state.broth = 100;
@@ -136,7 +158,7 @@ describe('economy', () => {
     state.buildings.harvester = 5;
     state.upgrades.push('boost-harvester', 'boost-harvester-50');
     expect(buildingMultiplier(state, 'harvester')).toBe(4);
-    expect(productionPerSecond(state).brothPerSecond).toBeCloseTo(10);
+    expect(productionPerSecond(state).broth).toBeCloseTo(10);
   });
 });
 
@@ -213,18 +235,50 @@ describe('save', () => {
     expect(loaded?.broth).toBe(12);
     expect(loaded?.revealed).toEqual([]);
   });
+  it('loads a version 2 save with new resources and queues defaulted', () => {
+    const raw = JSON.stringify({
+      version: 2,
+      broth: 12,
+      compute: 3,
+      bogCores: 0,
+      totalBrothEarned: 12,
+      totalComputeEarned: 3,
+      totalComputeThisRun: 3,
+      totalClicks: 2,
+      buildings: { harvester: 1 },
+      revealed: [],
+      upgrades: [],
+      research: [],
+      achievements: [],
+      lastSaveTime: 123,
+    });
+    const loaded = deserialize(raw)!;
+    expect(loaded.version).toBe(2);
+    expect(loaded.peat).toBe(0);
+    expect(loaded.evidence).toBe(0);
+    expect(loaded.researchQueue).toEqual([]);
+    expect(loaded.quests).toEqual({ claimed: [], buffs: [] });
+  });
   it('roundtrips a real state', () => {
     const state = createInitialState();
     state.broth = 123.5;
     state.buildings['harvester'] = 7;
     state.upgrades.push('spade');
     state.achievements.push('click-1');
+    state.peat = 4;
+    state.evidence = 5;
+    state.researchQueue.push({ id: 'thermal-modelling', remaining: 12 });
+    state.quests.claimed.push('q-clause');
     const back = deserialize(serialize(state));
     expect(back).not.toBeNull();
     expect(back!.broth).toBeCloseTo(123.5);
     expect(back!.buildings['harvester']).toBe(7);
     expect(back!.upgrades).toEqual(['spade']);
     expect(back!.achievements).toEqual(['click-1']);
+    expect(back!.peat).toBe(4);
+    expect(back!.evidence).toBe(5);
+    expect(back!.researchQueue).toEqual([{ id: 'thermal-modelling', remaining: 12 }]);
+    expect(back!.quests.claimed).toEqual(['q-clause']);
   });
 });
 
@@ -296,8 +350,8 @@ describe('Sector 4 research and upgrades', () => {
     const before = productionPerSecond(state);
     state.research.push('nordic-verdict');
     const after = productionPerSecond(state);
-    expect(after.brothPerSecond).toBeCloseTo(before.brothPerSecond * 1.5);
-    expect(after.computePerSecond).toBeCloseTo(before.computePerSecond * 1.5);
+    expect(after.broth).toBeCloseTo(before.broth * 1.5);
+    expect(after.compute).toBeCloseTo(before.compute * 1.5);
   });
 
   it('triples click power with hot fries', () => {

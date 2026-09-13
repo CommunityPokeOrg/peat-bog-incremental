@@ -1,9 +1,7 @@
 import {
   ACHIEVEMENTS,
-  ACHIEVEMENT_BY_ID,
   BUILDING_BY_ID,
   BUILDINGS,
-  DOCKET,
   RESEARCH,
   UPGRADES,
   UPGRADE_BY_ID,
@@ -27,6 +25,7 @@ import {
 } from '../game/engine';
 import { formatCost, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
+import { QUESTS, questProgress } from '../game/quests';
 import { pluralize } from './text';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
@@ -215,18 +214,25 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function currentDocket(state: GameState) {
-    const id = DOCKET.find((itemId) => !state.achievements.includes(itemId));
-    return id ? ACHIEVEMENT_BY_ID[id] : undefined;
+    const quest = QUESTS.find((item) => !state.quests.claimed.includes(item.id));
+    return quest ? {
+      name: quest.name,
+      progress: questProgress(state, quest),
+    } : undefined;
   }
 
   function renderCounters(state: GameState): void {
     const rates = productionPerSecond(state);
     resourcesEl.innerHTML = `
-      <span class="res"><span class="res-emoji" aria-hidden="true">🫧</span> <strong>${formatNumber(state.broth)}</strong> fp16 compute broth <em>+${formatNumber(rates.brothPerSecond)}/s</em></span>
-      <span class="res"><span class="res-emoji" aria-hidden="true">⚡</span> <strong>${formatNumber(state.compute)}</strong> compute <em>+${formatNumber(rates.computePerSecond)}/s</em></span>
+      <span class="res"><span class="res-emoji" aria-hidden="true">🫧</span> <strong>${formatNumber(state.broth)}</strong> fp16 compute broth <em>+${formatNumber(rates.broth)}/s</em></span>
+      <span class="res"><span class="res-emoji" aria-hidden="true">🟫</span> <strong>${formatNumber(state.peat)}</strong> raw peat <em>+${formatNumber(rates.peat)}/s</em></span>
+      <span class="res"><span class="res-emoji" aria-hidden="true">⚡</span> <strong>${formatNumber(state.compute)}</strong> compute <em>+${formatNumber(rates.compute)}/s</em></span>
+      <span class="res"><span class="res-emoji" aria-hidden="true">📁</span> <strong>${formatNumber(state.evidence)}</strong> case evidence <em>+${formatNumber(rates.evidence)}/s</em></span>
       <span class="res"><span class="res-emoji" aria-hidden="true">💠</span> <strong>${formatNumber(state.bogCores)}</strong> bog cores</span>`;
     const next = currentDocket(state);
-    nextHint.textContent = next ? `Next up: ${next.name}` : 'Docket complete — the peat bog trial is settled.';
+    nextHint.textContent = next
+      ? `Next up: ${next.name} (${formatNumber(next.progress.current)}/${formatNumber(next.progress.target)})`
+      : 'Settlement docket complete — the peat bog trial is settled.';
     clickPowerEl.textContent = formatNumber(clickPower(state));
     renderThermal(state);
     renderPrestige(state);
@@ -381,9 +387,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   function renderBuildings(state: GameState): void {
     const entries: RowEntry[] = [];
-    const categories = ['broth', 'cooling', 'compute'] as const;
+    const categories = ['broth', 'peat', 'cooling', 'compute', 'evidence'] as const;
     for (const category of categories) {
-      const categoryBuildings = BUILDINGS.filter((def) => def.category === category);
+      const categoryBuildings = BUILDINGS.filter((def) => def.generates === category);
       const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
       const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
       if (visible.length > 0 || nextLocked) {
@@ -398,6 +404,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const perUnit: string[] = [];
           if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
           if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
+          if (def.peatPerSecond) perUnit.push(`+${formatNumber(def.peatPerSecond)} peat/s`);
+          if (def.evidencePerSecond) perUnit.push(`+${formatNumber(def.evidencePerSecond)} evidence/s`);
           if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
           if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
           return `${def.description} ${perUnit.join(', ')}.`;
@@ -435,7 +443,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       if (nextLocked) {
         const threshold = nextLocked.unlock?.brothPerSecond !== undefined
           ? `${formatNumber(nextLocked.unlock.brothPerSecond)} broth/s`
-          : `${formatNumber(nextLocked.unlock?.computePerSecond ?? 0)} compute/s`;
+          : nextLocked.unlock?.peatPerSecond !== undefined
+            ? `${formatNumber(nextLocked.unlock.peatPerSecond)} peat/s`
+            : `${formatNumber(nextLocked.unlock?.computePerSecond ?? 0)} compute/s`;
         entries.push({
           key: `locked-${nextLocked.id}`,
           create: () =>
@@ -453,25 +463,26 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderDocket(state: GameState): void {
-    const currentId = DOCKET.find((id) => !state.achievements.includes(id));
-    const entries: RowEntry[] = DOCKET.map((id) => {
-      const achievement = ACHIEVEMENT_BY_ID[id];
+    const currentId = QUESTS.find((quest) => !state.quests.claimed.includes(quest.id))?.id;
+    const entries: RowEntry[] = QUESTS.map((quest) => {
       return {
-        key: id,
+        key: quest.id,
         create: () =>
-          createRow(id, {
-            emoji: achievement.emoji,
-            name: achievement.name,
-            desc: achievement.description,
+          createRow(quest.id, {
+            emoji: quest.emoji,
+            name: quest.name,
+            desc: quest.brief,
             className: 'docket-row',
             trailingClass: 'docket-badge',
           }),
         update: (row) => {
-          const done = state.achievements.includes(id);
-          const status = done ? 'done' : id === currentId ? 'current' : 'upcoming';
+          const done = state.quests.claimed.includes(quest.id);
+          const progress = questProgress(state, quest);
+          const status = done ? 'done' : quest.id === currentId ? 'current' : 'upcoming';
           updateRow(row, {
             status,
-            badge: done ? 'Filed ✓' : status === 'current' ? 'In progress' : 'Pending',
+            badge: done ? 'Claimed' : status === 'current' ? 'In progress' : 'Pending',
+            desc: `${quest.brief} ${formatNumber(progress.current)}/${formatNumber(progress.target)}`,
           });
         },
       };

@@ -1,7 +1,24 @@
-export interface ResourceCost {
-  broth?: number;
-  compute?: number;
+/** Resource identifiers used by wallets, rates, and costs. */
+export type ResourceId = 'broth' | 'compute' | 'peat' | 'evidence' | 'bogCores';
+/** Resources that can be spent; Bog Cores are prestige currency. */
+export type SpendableResource = Exclude<ResourceId, 'bogCores'>;
+
+export interface ResourceDef {
+  id: ResourceId;
+  name: string;
+  emoji: string;
 }
+
+/** Resource metadata shown by resource counters and controls. */
+export const RESOURCES: ResourceDef[] = [
+  { id: 'broth', name: 'fp16 compute broth', emoji: '🫧' },
+  { id: 'peat', name: 'raw peat', emoji: '🟫' },
+  { id: 'compute', name: 'compute', emoji: '⚡' },
+  { id: 'evidence', name: 'case evidence', emoji: '📁' },
+  { id: 'bogCores', name: 'bog cores', emoji: '💠' },
+];
+
+export type ResourceCost = Partial<Record<SpendableResource, number>>;
 
 export interface BuildingDef {
   id: string;
@@ -9,13 +26,16 @@ export interface BuildingDef {
   emoji: string;
   description: string;
   baseCost: ResourceCost;
-  category: 'broth' | 'cooling' | 'compute';
+  generates: 'broth' | 'peat' | 'cooling' | 'compute' | 'evidence';
   unlock?: {
     brothPerSecond?: number;
     computePerSecond?: number;
+    peatPerSecond?: number;
   };
   brothPerSecond?: number;
   computePerSecond?: number;
+  peatPerSecond?: number;
+  evidencePerSecond?: number;
   cooling?: number;
   heat?: number;
 }
@@ -23,25 +43,31 @@ export interface BuildingDef {
 export const COST_SCALE = 1.15;
 
 export const BUILDINGS: BuildingDef[] = [
-  { id: 'harvester', name: 'Peat Harvester', emoji: '🪵', description: 'A hardy cutter dragging rich peat from the bog.', baseCost: { broth: 15 }, category: 'broth', brothPerSecond: 0.5 },
-  { id: 'vat', name: 'Fermentation Vat', emoji: '🧪', description: 'Slow-brews Sector 4 peat into 40 L batches of fp16 compute broth.', baseCost: { broth: 100 }, category: 'broth', brothPerSecond: 4 },
-  { id: 'pump', name: 'Bog Pump', emoji: '⛽', description: 'Industrial pump on a Taylor C602 pulley, slurping broth from the water table.', baseCost: { broth: 1100 }, category: 'broth', brothPerSecond: 25 },
-  { id: 'dredger', name: 'Bog Dredger', emoji: '🚜', description: 'A tracked dredger widening the broth channels.', baseCost: { broth: 12_000 }, category: 'broth', brothPerSecond: 120, unlock: { brothPerSecond: 50 } },
-  { id: 'refinery', name: 'Broth Refinery', emoji: '🏗️', description: 'Polishes raw peat into a dependable compute broth stream.', baseCost: { broth: 130_000 }, category: 'broth', brothPerSecond: 700, unlock: { brothPerSecond: 500 } },
-  { id: 'still', name: 'Geothermal Still', emoji: '♨️', description: 'Draws subterranean warmth through a continuous broth still.', baseCost: { broth: 1_400_000 }, category: 'broth', brothPerSecond: 4_000, unlock: { brothPerSecond: 3_000 } },
-  { id: 'biome', name: 'Sealed Biome Vat', emoji: '🫙', description: 'A sealed ecosystem that brews the bog at industrial scale.', baseCost: { broth: 20_000_000 }, category: 'broth', brothPerSecond: 25_000, unlock: { brothPerSecond: 20_000 } },
-  { id: 'fryer', name: '120 kg Fryer Line', emoji: '🍟', description: 'Fries 120 kg of hot fries an hour; the runoff is surprisingly good broth.', baseCost: { broth: 300_000_000 }, category: 'broth', brothPerSecond: 150_000, unlock: { brothPerSecond: 150_000 } },
-  { id: 'chiller', name: 'Chiller', emoji: '❄️', description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.', baseCost: { broth: 600 }, category: 'cooling', cooling: 10 },
-  { id: 'tower', name: 'Cooling Tower', emoji: '🏭', description: 'Evaporative tower venting steam over the moss.', baseCost: { broth: 12_000 }, category: 'cooling', cooling: 120 },
-  { id: 'glycol', name: 'Glycol Loop', emoji: '🧊', description: 'A closed loop of glycol carrying heat into the moss.', baseCost: { broth: 150_000 }, category: 'cooling', cooling: 1_400, unlock: { computePerSecond: 20 } },
-  { id: 'exchanger', name: 'Bog Heat Exchanger', emoji: '🔁', description: 'Trades bog water for rack heat at exceptional efficiency.', baseCost: { broth: 2_000_000 }, category: 'cooling', cooling: 15_000, unlock: { computePerSecond: 300 } },
-  { id: 'cryo', name: 'Cryo Plant', emoji: '🌬️', description: 'A cryogenic plant freezing the bog around the racks.', baseCost: { broth: 30_000_000 }, category: 'cooling', cooling: 180_000, unlock: { computePerSecond: 5_000 } },
-  { id: 'rack', name: 'Server Rack', emoji: '🖥️', description: 'A humming rack steeped in the bog.', baseCost: { broth: 2_500 }, category: 'compute', computePerSecond: 2, heat: 8 },
-  { id: 'pod', name: 'Compute Pod', emoji: '📦', description: 'A sealed pod of racks half-sunk in the mire.', baseCost: { broth: 50_000 }, category: 'compute', computePerSecond: 20, heat: 60, unlock: { computePerSecond: 1 } },
-  { id: 'hall', name: 'Data Hall', emoji: '🏢', description: 'A whole hall of servers drinking the bog dry.', baseCost: { broth: 1_000_000 }, category: 'compute', computePerSecond: 250, heat: 500, unlock: { computePerSecond: 50 } },
-  { id: 'cluster', name: 'fp16 Cluster', emoji: '🧮', description: 'A cluster of fp16 racks tuned for the peat bog.', baseCost: { broth: 8_000_000 }, category: 'compute', computePerSecond: 2_000, heat: 3_500, unlock: { computePerSecond: 500 } },
-  { id: 'hyperscaler', name: 'Bog Hyperscaler', emoji: '🌐', description: 'A continent-scale facility anointed in broth.', baseCost: { broth: 120_000_000, compute: 500_000 }, category: 'compute', computePerSecond: 30_000, heat: 30_000, unlock: { computePerSecond: 5_000 } },
-  { id: 'courthouse', name: "Magistrate Reino's Courthouse Datacenter", emoji: '⚖️', description: 'Where McFly & Chronicler LLP v Burger King Nordic is finally heard — on 40 L of fp16 broth per rack.', baseCost: { broth: 2_000_000_000, compute: 5_000_000 }, category: 'compute', computePerSecond: 250_000, heat: 200_000, unlock: { computePerSecond: 50_000 } },
+  { id: 'harvester', name: 'Peat Harvester', emoji: '🪵', description: 'A hardy cutter dragging rich peat from the bog.', baseCost: { broth: 15 }, generates: 'broth', brothPerSecond: 0.5 },
+  { id: 'vat', name: 'Fermentation Vat', emoji: '🧪', description: 'Slow-brews Sector 4 peat into 40 L batches of fp16 compute broth.', baseCost: { broth: 100 }, generates: 'broth', brothPerSecond: 4 },
+  { id: 'pump', name: 'Bog Pump', emoji: '⛽', description: 'Industrial pump on a Taylor C602 pulley, slurping broth from the water table.', baseCost: { broth: 1100 }, generates: 'broth', brothPerSecond: 25 },
+  { id: 'dredger', name: 'Bog Dredger', emoji: '🚜', description: 'A tracked dredger widening the broth channels.', baseCost: { broth: 12_000 }, generates: 'broth', brothPerSecond: 120, unlock: { brothPerSecond: 50 } },
+  { id: 'refinery', name: 'Broth Refinery', emoji: '🏗️', description: 'Polishes raw peat into a dependable compute broth stream.', baseCost: { broth: 130_000 }, generates: 'broth', brothPerSecond: 700, unlock: { brothPerSecond: 500 } },
+  { id: 'still', name: 'Geothermal Still', emoji: '♨️', description: 'Draws subterranean warmth through a continuous broth still.', baseCost: { broth: 1_400_000 }, generates: 'broth', brothPerSecond: 4_000, unlock: { brothPerSecond: 3_000 } },
+  { id: 'biome', name: 'Sealed Biome Vat', emoji: '🫙', description: 'A sealed ecosystem that brews the bog at industrial scale.', baseCost: { broth: 20_000_000 }, generates: 'broth', brothPerSecond: 25_000, unlock: { brothPerSecond: 20_000 } },
+  { id: 'fryer', name: '120 kg Fryer Line', emoji: '🍟', description: 'Fries 120 kg of hot fries an hour; the runoff is surprisingly good broth.', baseCost: { broth: 300_000_000 }, generates: 'broth', brothPerSecond: 150_000, unlock: { brothPerSecond: 150_000 } },
+  { id: 'cutter', name: 'Peat Cutter', emoji: '🔪', description: 'Cuts raw peat from the upper bog.', baseCost: { broth: 40 }, generates: 'peat', peatPerSecond: 0.3 },
+  { id: 'excavator', name: 'Trench Excavator', emoji: '⛏️', description: 'Digs deep channels through the peat.', baseCost: { broth: 2_500, peat: 150 }, generates: 'peat', peatPerSecond: 6, unlock: { peatPerSecond: 2 } },
+  { id: 'bogwalker', name: 'Bog Walker Rig', emoji: '🦿', description: 'Strides across the bog on industrial legs.', baseCost: { broth: 400_000, peat: 20_000 }, generates: 'peat', peatPerSecond: 150, unlock: { peatPerSecond: 40 } },
+  { id: 'chiller', name: 'Chiller', emoji: '❄️', description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.', baseCost: { broth: 600 }, generates: 'cooling', cooling: 10 },
+  { id: 'mossbed', name: 'Moss Cooling Bed', emoji: '🌿', description: 'A bed of living moss that draws heat from the racks.', baseCost: { broth: 3_000, peat: 200 }, generates: 'cooling', cooling: 40 },
+  { id: 'tower', name: 'Cooling Tower', emoji: '🏭', description: 'Evaporative tower venting steam over the moss.', baseCost: { broth: 12_000 }, generates: 'cooling', cooling: 120 },
+  { id: 'glycol', name: 'Glycol Loop', emoji: '🧊', description: 'A closed loop of glycol carrying heat into the moss.', baseCost: { broth: 150_000 }, generates: 'cooling', cooling: 1_400, unlock: { computePerSecond: 20 } },
+  { id: 'exchanger', name: 'Bog Heat Exchanger', emoji: '🔁', description: 'Trades bog water for rack heat at exceptional efficiency.', baseCost: { broth: 2_000_000 }, generates: 'cooling', cooling: 15_000, unlock: { computePerSecond: 300 } },
+  { id: 'cryo', name: 'Cryo Plant', emoji: '🌬️', description: 'A cryogenic plant freezing the bog around the racks.', baseCost: { broth: 30_000_000, peat: 500_000 }, generates: 'cooling', cooling: 180_000, unlock: { computePerSecond: 5_000 } },
+  { id: 'rack', name: 'Server Rack', emoji: '🖥️', description: 'A humming rack steeped in the bog.', baseCost: { broth: 2_500 }, generates: 'compute', computePerSecond: 2, heat: 8 },
+  { id: 'pod', name: 'Compute Pod', emoji: '📦', description: 'A sealed pod of racks half-sunk in the mire.', baseCost: { broth: 50_000 }, generates: 'compute', computePerSecond: 20, heat: 60, unlock: { computePerSecond: 1 } },
+  { id: 'hall', name: 'Data Hall', emoji: '🏢', description: 'A whole hall of servers drinking the bog dry.', baseCost: { broth: 1_000_000 }, generates: 'compute', computePerSecond: 250, heat: 500, unlock: { computePerSecond: 50 } },
+  { id: 'cluster', name: 'fp16 Cluster', emoji: '🧮', description: 'A cluster of fp16 racks tuned for the peat bog.', baseCost: { broth: 8_000_000 }, generates: 'compute', computePerSecond: 2_000, heat: 3_500, unlock: { computePerSecond: 500 } },
+  { id: 'hyperscaler', name: 'Bog Hyperscaler', emoji: '🌐', description: 'A continent-scale facility anointed in broth.', baseCost: { broth: 120_000_000, compute: 500_000 }, generates: 'compute', computePerSecond: 30_000, heat: 30_000, unlock: { computePerSecond: 5_000 } },
+  { id: 'clerk', name: "Chronicler's Clerk Desk", emoji: '🖋️', description: 'A clerk desk that turns events into evidence.', baseCost: { broth: 20_000, compute: 200 }, generates: 'evidence', evidencePerSecond: 0.2, unlock: { computePerSecond: 5 } },
+  { id: 'archive', name: 'Evidence Archive', emoji: '🗄️', description: 'Archives every filing from the peat bog trial.', baseCost: { broth: 2_000_000, compute: 50_000 }, generates: 'evidence', evidencePerSecond: 4, unlock: { computePerSecond: 500 } },
+  { id: 'courthouse', name: "Magistrate Reino's Courthouse Datacenter", emoji: '⚖️', description: 'Where McFly & Chronicler LLP v Burger King Nordic is finally heard — on 40 L of fp16 broth per rack.', baseCost: { broth: 2_000_000_000, compute: 5_000_000 }, generates: 'evidence', computePerSecond: 250_000, evidencePerSecond: 60, heat: 200_000, unlock: { computePerSecond: 50_000 } },
 ];
 
 export const BUILDING_BY_ID: Record<string, BuildingDef> = Object.fromEntries(
@@ -67,8 +93,9 @@ export interface UpgradeDef {
 
 function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
   const out: ResourceCost = {};
-  if (cost.broth !== undefined) out.broth = cost.broth * factor;
-  if (cost.compute !== undefined) out.compute = cost.compute * factor;
+  for (const [resource, amount] of Object.entries(cost) as [SpendableResource, number][]) {
+    out[resource] = amount * factor;
+  }
   return out;
 }
 
@@ -205,6 +232,7 @@ export interface ResearchDef {
   emoji: string;
   description: string;
   cost: ResourceCost;
+  durationSec: number;
 }
 
 export const RESEARCH: ResearchDef[] = [
@@ -214,13 +242,15 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '📈',
     description: 'Cooling effectiveness +25%.',
     cost: { compute: 500 },
+    durationSec: 60,
   },
   {
     id: 'lubrication-clause',
     name: 'Strike the 5:00 AM Lubrication Clause',
     emoji: '📜',
     description: 'No more dawn greasing of the racks. All heat −15%.',
-    cost: { compute: 2_000 },
+    cost: { compute: 2_000, evidence: 50 },
+    durationSec: 180,
   },
   {
     id: 'liquid-immersion',
@@ -228,6 +258,7 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '🛢️',
     description: 'All heat output −20%.',
     cost: { compute: 5000 },
+    durationSec: 240,
   },
   {
     id: 'broth-distillation',
@@ -235,6 +266,7 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '⚗️',
     description: 'Broth production ×1.5.',
     cost: { compute: 20_000 },
+    durationSec: 300,
   },
   {
     id: 'broth-standard',
@@ -242,6 +274,7 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '🧴',
     description: 'Standardise every batch at 40 L fp16. Broth production ×1.25.',
     cost: { compute: 50_000 },
+    durationSec: 420,
   },
   {
     id: 'edge-caching',
@@ -249,13 +282,15 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '🗄️',
     description: 'Compute production ×1.5.',
     cost: { compute: 100_000 },
+    durationSec: 600,
   },
   {
     id: 'nordic-verdict',
     name: 'McFly & Chronicler LLP v Burger King Nordic',
     emoji: '⚖️',
     description: 'Win the case before Magistrate Reino. All production ×1.5.',
-    cost: { compute: 250_000 },
+    cost: { compute: 250_000, evidence: 2_000 },
+    durationSec: 1_200,
   },
   {
     id: 'quantum-peat',
@@ -263,6 +298,7 @@ export const RESEARCH: ResearchDef[] = [
     emoji: '♾️',
     description: 'All production ×2.',
     cost: { compute: 1_000_000 },
+    durationSec: 1_800,
   },
 ];
 
@@ -304,19 +340,3 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 export const ACHIEVEMENT_BY_ID: Record<string, AchievementDef> = Object.fromEntries(
   ACHIEVEMENTS.map((a) => [a.id, a]),
 );
-
-export const DOCKET: string[] = [
-  'click-1',
-  'debt-free',
-  'broth-1k',
-  'first-rack',
-  'first-compute',
-  'full-cool',
-  'hot-fries',
-  'clause-struck',
-  'pulley-equity',
-  'reino-verdict',
-  'compute-1m',
-  'prestige-1',
-  'hyperscaler',
-];

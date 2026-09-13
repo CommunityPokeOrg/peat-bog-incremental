@@ -16,6 +16,8 @@ import {
   SAVE_KEY,
   save as saveLocal,
 } from './game/save';
+import { advanceResearch } from './game/engine';
+import { expireBuffs } from './game/quests';
 import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from './game/db';
 import { createInitialState } from './game/state';
 import { formatDuration, formatNumber } from './game/format';
@@ -188,11 +190,17 @@ async function init(): Promise<void> {
     const earned = computeOfflineEarnings(state, offlineSeconds);
     state.broth += earned.broth;
     state.compute += earned.compute;
+    state.peat += earned.peat;
+    state.evidence += earned.evidence;
     state.totalBrothEarned += earned.broth;
     state.totalComputeEarned += earned.compute;
+    state.totalPeatEarned += earned.peat;
+    state.totalEvidenceEarned += earned.evidence;
+    expireBuffs(state);
+    advanceResearch(state, earned.seconds);
     ui.showModal({
       title: 'Welcome back to the bog',
-      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.compute)} compute.`,
+      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.peat)} peat, +${formatNumber(earned.compute)} compute, +${formatNumber(earned.evidence)} evidence.`,
       actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
     });
   }
