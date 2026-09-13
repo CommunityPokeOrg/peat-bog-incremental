@@ -18,11 +18,18 @@ export function formatNumber(n: number): string {
   return sign + scaled.toFixed(digits) + SUFFIXES[tier - 1];
 }
 
-export function formatCost(cost: { broth?: number; compute?: number }): string {
+export function formatCost(cost: {
+  broth?: number;
+  compute?: number;
+  peat?: number;
+  evidence?: number;
+}): string {
   const parts: string[] = [];
   if (cost.broth !== undefined) parts.push(`${formatNumber(cost.broth)} broth`);
   if (cost.compute !== undefined) parts.push(`${formatNumber(cost.compute)} compute`);
-  return parts.join(' + ');
+  if (cost.peat !== undefined) parts.push(`${formatNumber(cost.peat)} peat`);
+  if (cost.evidence !== undefined) parts.push(`${formatNumber(cost.evidence)} evidence`);
+  return parts.join(' · ');
 }
 
 export function formatDuration(seconds: number): string {

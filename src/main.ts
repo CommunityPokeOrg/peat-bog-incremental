@@ -1,7 +1,9 @@
 import './style.css';
-import { ACHIEVEMENT_BY_ID, BUILDING_BY_ID } from './game/data';
+import { ACHIEVEMENT_BY_ID, BUILDING_BY_ID, RESEARCH } from './game/data';
 import {
   canPrestige,
+  buyResearch,
+  cancelResearch,
   checkAchievements,
   click,
   prestige,
@@ -17,7 +19,8 @@ import {
   save as saveLocal,
 } from './game/save';
 import { advanceResearch } from './game/engine';
-import { expireBuffs } from './game/quests';
+import { claimQuest, expireBuffs } from './game/quests';
+import { calibrate, cutPeat } from './game/minigames';
 import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from './game/db';
 import { createInitialState } from './game/state';
 import { formatDuration, formatNumber } from './game/format';
@@ -161,6 +164,36 @@ async function init(): Promise<void> {
         ],
       });
     },
+    onCutPeat: (charge) => {
+      const gained = cutPeat(state, charge);
+      ui.spawnFloat(gained, 'peat');
+      void doSave(false);
+      return gained;
+    },
+    onCalibrate: (t) => {
+      const result = calibrate(state, t);
+      if (result.hit) {
+        ui.spawnFloat(result.compute, 'compute');
+        ui.toast(`Calibration hit: +${formatNumber(result.compute)} compute`);
+      }
+      void doSave(false);
+      return result.hit;
+    },
+    onClaimQuest: (id) => {
+      const reward = claimQuest(state, id);
+      if (reward) void doSave();
+      return reward;
+    },
+    onCancelResearch: (id) => {
+      const cancelled = cancelResearch(state, id);
+      if (cancelled) void doSave();
+      return cancelled;
+    },
+    onQueueResearch: (id) => {
+      const queued = buyResearch(state, id);
+      if (queued) void doSave();
+      return queued;
+    },
   });
 
   const fireSave = (): void => {
@@ -197,10 +230,15 @@ async function init(): Promise<void> {
     state.totalPeatEarned += earned.peat;
     state.totalEvidenceEarned += earned.evidence;
     expireBuffs(state);
-    advanceResearch(state, earned.seconds);
+    const completedResearch = advanceResearch(state, earned.seconds);
+    const researchText = completedResearch.length > 0
+      ? ` Research finished while away: ${completedResearch
+        .map((id) => RESEARCH.find((research) => research.id === id)?.name ?? id)
+        .join(', ')}.`
+      : '';
     ui.showModal({
       title: 'Welcome back to the bog',
-      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.peat)} peat, +${formatNumber(earned.compute)} compute, +${formatNumber(earned.evidence)} evidence.`,
+      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.peat)} peat, +${formatNumber(earned.compute)} compute, +${formatNumber(earned.evidence)} evidence.${researchText}`,
       actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
     });
   }
@@ -211,11 +249,12 @@ async function init(): Promise<void> {
     const dt = Math.min((now - last) / 1000, 1);
     last = now;
     if (dt > 0) {
-      tick(state, dt);
+      tick(state, dt, Date.now());
       checkAchievementsNow();
       revealBuildingsNow();
     }
     ui.renderCounters(state);
+    ui.renderFieldwork(state, now);
     if (now - lastListRender > 250) {
       lastListRender = now;
       ui.renderLists(state);

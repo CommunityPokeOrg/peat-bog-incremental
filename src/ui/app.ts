@@ -2,6 +2,7 @@ import {
   ACHIEVEMENTS,
   BUILDING_BY_ID,
   BUILDINGS,
+  RESOURCES,
   RESEARCH,
   UPGRADES,
   UPGRADE_BY_ID,
@@ -16,17 +17,20 @@ import {
   canPrestige,
   clickPower,
   maxAffordable,
+  MAX_RESEARCH_QUEUE,
   prestigeGain,
   productionPerSecond,
+  researchProgress,
   thermalFactor,
   totalCooling,
   totalHeat,
   upgradeVisible,
 } from '../game/engine';
-import { formatCost, formatNumber } from '../game/format';
+import { formatCost, formatDuration, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
-import { QUESTS, questProgress } from '../game/quests';
-import { pluralize } from './text';
+import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
+import { formatQuestReward, pluralize } from './text';
+import { calibrationNeedle, peatCutCharge } from '../game/minigames';
 
 type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
 type Qty = number | 'max';
@@ -40,6 +44,11 @@ export interface UiHooks {
   onExport(): string;
   onImport(encoded: string): boolean;
   onHardReset(): void;
+  onCutPeat?(charge: number): number | void;
+  onCalibrate?(t: number): boolean | void;
+  onClaimQuest?(id: string): QuestReward | null | void;
+  onCancelResearch?(id: string): boolean | void;
+  onQueueResearch?(id: string): boolean | void;
 }
 
 export interface Ui {
@@ -51,7 +60,8 @@ export interface Ui {
   renderPrestige(state: GameState): void;
   toast(message: string): void;
   /** Floating "+N" at the harvest button. */
-  spawnFloat(amount: number): void;
+  spawnFloat(amount: number, resource?: string): void;
+  renderFieldwork(state: GameState, now?: number): void;
   showModal(opts: { title: string; body: string; actions: { label: string; danger?: boolean; onClick(): void }[] }): void;
   closeModal(): void;
   setSavedIndicator(text: string): void;
@@ -85,6 +95,25 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <div class="float-layer" id="float-layer" aria-hidden="true"></div>
         </div>
         <p class="click-power">Click power: <strong id="click-power">1</strong> broth <kbd>H</kbd></p>
+        <div class="card fieldwork-card">
+          <h2>Fieldwork</h2>
+          <div class="fieldwork-row">
+            <button class="fieldwork-btn" id="cut-btn" aria-label="Cut peat — hold, release when full">
+              <span>Cut peat</span>
+              <span class="fieldwork-copy">Hold, release when full</span>
+              <span class="charge" aria-hidden="true"><span class="charge-fill"></span></span>
+            </button>
+            <div class="fieldwork-live" id="cut-live" aria-live="polite"></div>
+          </div>
+          <div class="fieldwork-row" id="calibration-row">
+            <div class="needle-track" id="needle-track" aria-hidden="true">
+              <span class="needle-zone"></span>
+              <span class="needle"></span>
+            </div>
+            <button class="fieldwork-btn" id="calibrate-btn" aria-label="Calibrate the racks">Calibrate</button>
+            <div class="fieldwork-live" id="calibrate-live" aria-live="polite"></div>
+          </div>
+        </div>
         <div class="card prestige-card" id="prestige-card">
           <h2>Drain the Bog</h2>
           <p id="prestige-info"></p>
@@ -94,20 +123,22 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       <section class="panel">
         <nav class="tabs" role="tablist" aria-label="Game panels">
           <button role="tab" data-tab="docket">Docket</button>
-          <button role="tab" data-tab="buildings">Buildings</button>
+          <button role="tab" data-tab="buildings">Production</button>
           <button role="tab" data-tab="upgrades">Upgrades</button>
-          <button role="tab" data-tab="research">Research &amp; Litigation</button>
+          <button role="tab" data-tab="research">Research</button>
           <button role="tab" data-tab="achievements">Achievements</button>
           <button role="tab" data-tab="settings">Settings</button>
         </nav>
-        <div class="qty-selector" id="qty-selector" role="group" aria-label="Buy quantity">
-          <span>Buy:</span>
-          <button data-qty="1" aria-pressed="true">1</button>
-          <button data-qty="10" aria-pressed="false">10</button>
-          <button data-qty="100" aria-pressed="false">100</button>
-          <button data-qty="max" aria-pressed="false">Max</button>
-        </div>
         <div class="tab-content" id="tab-content" role="tabpanel"></div>
+        <div class="panel-dock" id="panel-dock">
+          <div class="qty-selector" id="qty-selector" role="group" aria-label="Buy quantity">
+            <span>Buy:</span>
+            <button data-qty="1" aria-pressed="true">1</button>
+            <button data-qty="10" aria-pressed="false">10</button>
+            <button data-qty="100" aria-pressed="false">100</button>
+            <button data-qty="max" aria-pressed="false">Max</button>
+          </div>
+        </div>
       </section>
     </main>
     <footer class="site-footer">
@@ -122,10 +153,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   let activeTab: TabId = hooks.initialTab ?? 'buildings';
   let buyQty: Qty = 1;
+  let productionFilter: 'all' | 'broth' | 'peat' | 'cooling' | 'compute' | 'evidence' = 'all';
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
   const resourcesEl = $('#resources');
+  const buffsEl = document.createElement('div');
+  buffsEl.className = 'buffs';
+  buffsEl.id = 'buffs';
+  resourcesEl.insertAdjacentElement('afterend', buffsEl);
   const nextHint = $('#next-hint');
   const thermalText = $('#thermal-text');
   const thermalPct = $('#thermal-pct');
@@ -142,8 +178,18 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const modalBackdrop = $('#modal-backdrop');
   const modal = $('#modal');
   const saveIndicator = $('#save-indicator');
-  const qtySelector = $('#qty-selector');
-  qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
+  const panelDock = $('#panel-dock');
+  panelDock.hidden = activeTab !== 'buildings';
+  const cutBtn = $('#cut-btn') as HTMLButtonElement;
+  const chargeFill = $('.charge-fill');
+  const cutLive = $('#cut-live');
+  const calibrateBtn = $('#calibrate-btn') as HTMLButtonElement;
+  const needle = $('.needle');
+  const needleTrack = $('#needle-track');
+  const calibrateLive = $('#calibrate-live');
+  let cutStartedAt: number | null = null;
+  let calibrateCooldownUntil = 0;
+  let lastReducedNeedleFrame = 0;
 
   harvestBtn.addEventListener('click', () => hooks.onHarvest());
 
@@ -155,7 +201,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       tab.setAttribute('aria-selected', String(selected));
       tab.tabIndex = selected ? 0 : -1;
     });
-    qtySelector.style.display = activeTab === 'buildings' ? '' : 'none';
+    panelDock.hidden = activeTab !== 'buildings';
     forceRebuild = true;
     if (focus) btn.focus();
     if (currentState) renderLists(currentState);
@@ -193,14 +239,101 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   prestigeBtn.addEventListener('click', () => hooks.onPrestige());
 
+  const finishCut = (now = performance.now()): void => {
+    if (cutStartedAt === null) return;
+    const charge = peatCutCharge(now - cutStartedAt);
+    cutStartedAt = null;
+    chargeFill.style.width = `${charge * 100}%`;
+    const gained = hooks.onCutPeat?.(charge);
+    chargeFill.style.width = '0%';
+    if (typeof gained === 'number') {
+      cutLive.textContent = `+${formatNumber(gained)} peat`;
+    }
+  };
+  const startCut = (): void => {
+    if (cutStartedAt !== null) return;
+    cutStartedAt = performance.now();
+  };
+  cutBtn.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    cutBtn.setPointerCapture?.(event.pointerId);
+    startCut();
+  });
+  cutBtn.addEventListener('pointerup', () => finishCut());
+  cutBtn.addEventListener('pointercancel', () => finishCut());
+  cutBtn.addEventListener('keydown', (event) => {
+    if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) {
+      event.preventDefault();
+      startCut();
+    }
+  });
+  cutBtn.addEventListener('keyup', (event) => {
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      finishCut();
+    }
+  });
+  calibrateBtn.addEventListener('click', () => {
+    if (calibrateBtn.disabled) return;
+    calibrateCooldownUntil = performance.now() + 2500;
+    calibrateBtn.disabled = true;
+    calibrateBtn.textContent = 'Cooling down…';
+    const hit = hooks.onCalibrate?.(performance.now());
+    calibrateLive.textContent = hit === false ? 'Miss — try again.' : 'Calibration filed.';
+    if (hit === false) {
+      needleTrack.classList.remove('is-shaking');
+      void needleTrack.offsetWidth;
+      needleTrack.classList.add('is-shaking');
+    }
+  });
+
   let currentState: GameState | null = null;
   let forceRebuild = true;
   let renderedRows = new Map<string, HTMLElement>();
+  const resourceChips = new Map<string, HTMLElement>();
+  for (const resource of RESOURCES) {
+    const chip = document.createElement('span');
+    chip.className = 'res';
+    chip.dataset.resource = resource.id;
+    chip.innerHTML = `
+      <span class="res-emoji" aria-hidden="true">${resource.emoji}</span>
+      <strong></strong>
+      <span class="res-name">${resource.name}</span>
+      <em></em>`;
+    resourcesEl.appendChild(chip);
+    resourceChips.set(resource.id, chip);
+  }
 
-  function spawnFloat(amount: number): void {
+  function resourceAmount(state: GameState, id: string): number {
+    return id === 'bogCores' ? state.bogCores : state[id as 'broth' | 'compute' | 'peat' | 'evidence'];
+  }
+
+  function formatBuffTarget(target: string): string {
+    return target === 'click' ? 'clicks' : target;
+  }
+
+  function renderBuffs(state: GameState): void {
+    const now = Date.now();
+    buffsEl.replaceChildren();
+    for (const buff of state.quests.buffs) {
+      const remaining = Math.max(0, Math.ceil((buff.expiresAt - now) / 1000));
+      if (remaining <= 0) continue;
+      const chip = document.createElement('span');
+      chip.className = 'buff-chip';
+      chip.textContent = `⚡ ×${formatNumber(buff.factor)} ${formatBuffTarget(buff.target)} · ${formatClock(remaining)}`;
+      buffsEl.appendChild(chip);
+    }
+  }
+
+  function formatClock(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function spawnFloat(amount: number, resource = 'broth'): void {
     const el = document.createElement('span');
     el.className = 'float-num';
-    el.textContent = `+${formatNumber(amount)}`;
+    el.textContent = `+${formatNumber(amount)} ${resource}`;
     el.style.left = `${30 + Math.random() * 40}%`;
     floatLayer.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
@@ -223,12 +356,29 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   function renderCounters(state: GameState): void {
     const rates = productionPerSecond(state);
-    resourcesEl.innerHTML = `
-      <span class="res"><span class="res-emoji" aria-hidden="true">🫧</span> <strong>${formatNumber(state.broth)}</strong> fp16 compute broth <em>+${formatNumber(rates.broth)}/s</em></span>
-      <span class="res"><span class="res-emoji" aria-hidden="true">🟫</span> <strong>${formatNumber(state.peat)}</strong> raw peat <em>+${formatNumber(rates.peat)}/s</em></span>
-      <span class="res"><span class="res-emoji" aria-hidden="true">⚡</span> <strong>${formatNumber(state.compute)}</strong> compute <em>+${formatNumber(rates.compute)}/s</em></span>
-      <span class="res"><span class="res-emoji" aria-hidden="true">📁</span> <strong>${formatNumber(state.evidence)}</strong> case evidence <em>+${formatNumber(rates.evidence)}/s</em></span>
-      <span class="res"><span class="res-emoji" aria-hidden="true">💠</span> <strong>${formatNumber(state.bogCores)}</strong> bog cores</span>`;
+    for (const resource of RESOURCES) {
+      const chip = resourceChips.get(resource.id)!;
+      const amount = resourceAmount(state, resource.id);
+      const rate = resource.id === 'bogCores'
+        ? undefined
+        : rates[resource.id as 'broth' | 'compute' | 'peat' | 'evidence'];
+      const strong = chip.querySelector('strong')!;
+      const em = chip.querySelector('em')!;
+      strong.textContent = formatNumber(amount);
+      em.textContent = rate === undefined ? '' : `+${formatNumber(rate)}/s`;
+      const lifetimeEarned = resource.id === 'peat'
+        ? state.totalPeatEarned
+        : resource.id === 'evidence'
+          ? state.totalEvidenceEarned
+          : amount;
+      const shouldShow = resource.id === 'broth' || resource.id === 'compute' || resource.id === 'bogCores' ||
+        lifetimeEarned > 0 || BUILDINGS.some((def) =>
+          (def.generates === resource.id || (resource.id === 'compute' && def.generates === 'compute')) &&
+          buildingVisible(state, def) && (state.buildings[def.id] ?? 0) > 0,
+        );
+      chip.hidden = !shouldShow;
+    }
+    renderBuffs(state);
     const next = currentDocket(state);
     nextHint.textContent = next
       ? `Next up: ${next.name} (${formatNumber(next.progress.current)}/${formatNumber(next.progress.target)})`
@@ -236,6 +386,29 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     clickPowerEl.textContent = formatNumber(clickPower(state));
     renderThermal(state);
     renderPrestige(state);
+  }
+
+  function renderFieldwork(state: GameState, now = performance.now()): void {
+    const charge = cutStartedAt === null ? 0 : peatCutCharge(now - cutStartedAt);
+    if (cutStartedAt !== null) chargeFill.style.width = `${charge * 100}%`;
+    const reduced = typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduced || now - lastReducedNeedleFrame >= 250) {
+      needle.style.left = `${calibrationNeedle(now) * 100}%`;
+      lastReducedNeedleFrame = now;
+    }
+    const hasRack = (state.buildings.rack ?? 0) >= 1;
+    calibrateBtn.disabled = !hasRack || now < calibrateCooldownUntil;
+    calibrateBtn.textContent = !hasRack
+      ? 'Calibration unlocks with your first Server Rack'
+      : now < calibrateCooldownUntil
+        ? 'Cooling down…'
+        : 'Calibrate';
+    calibrateBtn.setAttribute('aria-label', calibrateBtn.textContent);
+    needleTrack.hidden = !hasRack;
+    if (!hasRack) {
+      calibrateLive.textContent = 'Calibration unlocks with your first Server Rack.';
+    }
   }
 
   function renderThermal(state: GameState): void {
@@ -339,7 +512,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const owned = row.querySelector<HTMLElement>('.owned');
     const ownedText = update.owned ?? '';
     if (owned && owned.textContent !== ownedText) owned.textContent = ownedText;
-    const action = row.querySelector<HTMLElement>('.item-action, .docket-badge');
+    const action = row.querySelector<HTMLElement>('.item-action, .docket-badge, .quest-action');
     const actionText = update.action ?? update.badge ?? '';
     if (action && action.textContent !== actionText) action.textContent = actionText;
     if (update.status !== undefined && row.dataset.status !== update.status) {
@@ -366,6 +539,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       renderedRows = new Map<string, HTMLElement>();
       for (const entry of entries) {
         const row = entry.create();
+        row.dataset.key = entry.key;
         entry.update(row);
         renderedRows.set(entry.key, row);
         frag.appendChild(row);
@@ -388,11 +562,59 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderBuildings(state: GameState): void {
     const entries: RowEntry[] = [];
     const categories = ['broth', 'peat', 'cooling', 'compute', 'evidence'] as const;
+    entries.push({
+      key: 'production-filters',
+      create: () => {
+        const wrap = document.createElement('div');
+        wrap.className = 'filter-tabs';
+        wrap.setAttribute('role', 'tablist');
+        wrap.setAttribute('aria-label', 'Filter by output');
+        const pill = document.createElement('span');
+        pill.className = 'filter-pill';
+        pill.setAttribute('aria-hidden', 'true');
+        wrap.appendChild(pill);
+        for (const filter of ['all', ...categories] as const) {
+          const button = document.createElement('button');
+          button.className = 'filter-tab';
+          button.dataset.filter = filter;
+          button.setAttribute('role', 'tab');
+          button.addEventListener('click', () => {
+            productionFilter = filter;
+            forceRebuild = true;
+            if (currentState) renderLists(currentState);
+          });
+          wrap.appendChild(button);
+        }
+        return wrap;
+      },
+      update: (row) => {
+        const visibleCategories = new Set(
+          categories.filter((category) =>
+            BUILDINGS.some((def) => def.generates === category && buildingVisible(state, def)),
+          ),
+        );
+        row.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
+          const filter = button.dataset.filter as typeof productionFilter;
+          const visible = filter === 'all' || filter === 'broth' || visibleCategories.has(filter);
+          button.hidden = !visible;
+          button.textContent = filter[0].toUpperCase() + filter.slice(1);
+          button.setAttribute('aria-selected', String(productionFilter === filter));
+          button.tabIndex = productionFilter === filter ? 0 : -1;
+        });
+        const pill = row.querySelector<HTMLElement>('.filter-pill');
+        const active = row.querySelector<HTMLElement>(`[data-filter="${productionFilter}"]`);
+        if (pill && active) {
+          pill.style.transform = `translateX(${active.offsetLeft}px)`;
+          pill.style.width = `${active.offsetWidth}px`;
+        }
+      },
+    });
     for (const category of categories) {
+      if (productionFilter !== 'all' && productionFilter !== category) continue;
       const categoryBuildings = BUILDINGS.filter((def) => def.generates === category);
       const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
       const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
-      if (visible.length > 0 || nextLocked) {
+      if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
         entries.push({
           key: `heading-${category}`,
           create: () => createSectionHeading(category[0].toUpperCase() + category.slice(1)),
@@ -462,31 +684,95 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     reconcileRows(entries);
   }
 
+  function createQuestRow(questId: string): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'item quest-row';
+    row.dataset.key = questId;
+    row.innerHTML = `
+      <span class="item-emoji" aria-hidden="true"></span>
+      <span class="item-body">
+        <span class="item-name"><span class="item-name-label"></span></span>
+        <span class="item-desc"></span>
+        <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
+        <span class="quest-progress"></span>
+        <span class="quest-reward"></span>
+      </span>
+      <span class="quest-action item-action"></span>`;
+    return row;
+  }
+
   function renderDocket(state: GameState): void {
-    const currentId = QUESTS.find((quest) => !state.quests.claimed.includes(quest.id))?.id;
-    const entries: RowEntry[] = QUESTS.map((quest) => {
-      return {
-        key: quest.id,
-        create: () =>
-          createRow(quest.id, {
-            emoji: quest.emoji,
-            name: quest.name,
-            desc: quest.brief,
-            className: 'docket-row',
-            trailingClass: 'docket-badge',
-          }),
+    const chapters = ['discovery', 'litigation', 'verdict'] as const;
+    const entries: RowEntry[] = [];
+    for (const chapter of chapters) {
+      const quests = QUESTS.filter((quest) => quest.chapter === chapter);
+      const claimed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
+      entries.push({
+        key: `chapter-${chapter}`,
+        create: () => createSectionHeading(`${chapter[0].toUpperCase() + chapter.slice(1)} · ${claimed}/${quests.length} claimed`),
         update: (row) => {
-          const done = state.quests.claimed.includes(quest.id);
-          const progress = questProgress(state, quest);
-          const status = done ? 'done' : quest.id === currentId ? 'current' : 'upcoming';
-          updateRow(row, {
-            status,
-            badge: done ? 'Claimed' : status === 'current' ? 'In progress' : 'Pending',
-            desc: `${quest.brief} ${formatNumber(progress.current)}/${formatNumber(progress.target)}`,
-          });
+          row.textContent = `${chapter[0].toUpperCase() + chapter.slice(1)} · ${claimed}/${quests.length} claimed`;
         },
-      };
-    });
+      });
+      for (const quest of quests) {
+        entries.push({
+          key: quest.id,
+          create: () => createQuestRow(quest.id),
+          update: (row) => {
+            const done = state.quests.claimed.includes(quest.id);
+            const progress = questProgress(state, quest);
+            const ready = !done && questReady(state, quest);
+            row.classList.toggle('ready', ready);
+            row.classList.toggle('claimed', done);
+            row.querySelector<HTMLElement>('.item-emoji')!.textContent = quest.emoji;
+            row.querySelector<HTMLElement>('.item-name-label')!.textContent = quest.name;
+            row.querySelector<HTMLElement>('.item-desc')!.textContent = quest.brief;
+            const bar = row.querySelector<HTMLElement>('.progress')!;
+            bar.setAttribute('aria-valuenow', String(Math.round(progress.fraction * 100)));
+            bar.setAttribute('aria-label', `${quest.name} progress`);
+            const fill = bar.querySelector<HTMLElement>('.progress-fill') ??
+              (() => {
+                const element = document.createElement('span');
+                element.className = 'progress-fill';
+                bar.appendChild(element);
+                return element;
+              })();
+            fill.style.width = `${progress.fraction * 100}%`;
+            row.querySelector<HTMLElement>('.quest-progress')!.textContent =
+              `${formatNumber(progress.current)} / ${formatNumber(progress.target)}`;
+            row.querySelector<HTMLElement>('.quest-reward')!.textContent =
+              `Reward: ${formatQuestReward(quest.reward)}`;
+            const action = row.querySelector<HTMLElement>('.quest-action')!;
+            action.replaceChildren();
+            if (done) {
+              action.textContent = 'Claimed ✓';
+              action.classList.add('claimed-badge', 't-success-check');
+              action.dataset.state = 'in';
+            } else if (ready) {
+              action.classList.remove('claimed-badge');
+              const button = document.createElement('button');
+              button.className = 'btn quest-claim';
+              button.textContent = 'Claim';
+              button.setAttribute('aria-label', `Claim ${quest.name}`);
+              button.addEventListener('click', () => {
+                const latest = currentState;
+                if (!latest) return;
+                const reward = hooks.onClaimQuest?.(quest.id) ??
+                  claimQuest(latest, quest.id);
+                if (!reward) return;
+                toast(`Filed: ${quest.name} — ${formatQuestReward(reward)}`);
+                renderCounters(latest);
+                renderLists(latest);
+              });
+              action.appendChild(button);
+            } else {
+              action.classList.remove('claimed-badge');
+              action.textContent = ' ';
+            }
+          },
+        });
+      }
+    }
     reconcileRows(entries);
   }
 
@@ -655,31 +941,131 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderResearch(state: GameState): void {
-    const entries: RowEntry[] = RESEARCH.map((r) => ({
-      key: r.id,
-      create: () =>
-        createRow(r.id, {
-          emoji: r.emoji,
-          name: r.name,
-          desc: r.description,
+    const queued = state.researchQueue;
+    const entries: RowEntry[] = [];
+    entries.push({
+      key: 'research-progress-heading',
+      create: () => createSectionHeading(`In progress · ${queued.length} / ${MAX_RESEARCH_QUEUE} slots`),
+      update: (row) => {
+        row.textContent = `In progress · ${state.researchQueue.length} / ${MAX_RESEARCH_QUEUE} slots`;
+      },
+    });
+    for (const entry of queued) {
+      const research = RESEARCH.find((item) => item.id === entry.id);
+      if (!research) continue;
+      entries.push({
+        key: `queue-${entry.id}`,
+        create: () => {
+          const row = createResearchRow(entry.id, true);
+          row.querySelector<HTMLButtonElement>('.research-cancel')?.addEventListener('click', () => {
+            if (currentState && hooks.onCancelResearch?.(entry.id) !== false) renderLists(currentState);
+          });
+          return row;
+        },
+        update: (row) => updateResearchRow(row, research, state, true),
+      });
+    }
+    const available = RESEARCH.filter((research) =>
+      !state.research.includes(research.id) &&
+      !state.researchQueue.some((entry) => entry.id === research.id),
+    );
+    if (available.length > 0) {
+      entries.push({
+        key: 'research-available-heading',
+        create: () => createSectionHeading('Available'),
+        update: () => {},
+      });
+    }
+    for (const research of available) {
+      entries.push({
+        key: research.id,
+        create: () => createRow(research.id, {
+          emoji: research.emoji,
+          name: research.name,
+          desc: research.description,
           onClick: () => {
             const latest = currentState;
-            if (latest && buyResearch(latest, r.id)) renderLists(latest);
+            if (latest && hooks.onQueueResearch?.(research.id) !== false) {
+              if (!hooks.onQueueResearch) buyResearch(latest, research.id);
+              renderLists(latest);
+            }
           },
         }),
-      update: (row) => {
-        const latest = currentState ?? state;
-        const owned = latest.research.includes(r.id);
-        updateRow(row, {
-          cost: formatCost(r.cost),
-          owned: owned ? '✓ done' : '',
-          action: owned ? '' : 'Research',
-          disabled: owned || !canAfford(latest, r.cost),
-          label: owned ? `${r.name} (researched)` : `Research ${r.name} for ${formatCost(r.cost)}`,
-        });
-      },
-    }));
+        update: (row) => {
+          const full = state.researchQueue.length >= MAX_RESEARCH_QUEUE;
+          const affordable = canAfford(state, research.cost);
+          updateRow(row, {
+            cost: `${formatCost(research.cost)} · ⏱ ${formatDuration(research.durationSec)}`,
+            action: full ? 'Queue full' : 'Queue',
+            disabled: full || !affordable,
+            label: `Queue ${research.name}`,
+          });
+        },
+      });
+    }
+    const completed = RESEARCH.filter((research) => state.research.includes(research.id));
+    if (completed.length > 0) {
+      entries.push({
+        key: 'completed-research',
+        create: () => {
+          const drawer = document.createElement('details');
+          drawer.className = 'owned-drawer completed-drawer';
+          drawer.innerHTML = '<summary></summary><div class="owned-grid"></div>';
+          return drawer;
+        },
+        update: (row) => {
+          row.querySelector('summary')!.textContent = `Completed research · ${completed.length}`;
+          const grid = row.querySelector<HTMLElement>('.owned-grid')!;
+          for (const research of completed) {
+            if (grid.querySelector(`[data-research-id="${research.id}"]`)) continue;
+            const tile = document.createElement('span');
+            tile.className = 'owned-tile';
+            tile.dataset.researchId = research.id;
+            tile.setAttribute('role', 'img');
+            tile.setAttribute('aria-label', `${research.name}: ${research.description}`);
+            tile.title = `${research.name} — ${research.description}`;
+            tile.textContent = research.emoji;
+            grid.appendChild(tile);
+          }
+        },
+      });
+    }
     reconcileRows(entries);
+  }
+
+  function createResearchRow(id: string, queued: boolean): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'item research-row';
+    row.dataset.key = queued ? `queue-${id}` : id;
+    row.innerHTML = `
+      <span class="item-emoji" aria-hidden="true"></span>
+      <span class="item-body">
+        <span class="item-name"><span class="item-name-label"></span></span>
+        <span class="item-desc"></span>
+        <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
+      </span>
+      <span class="research-meta"><span class="research-remaining"></span><button class="btn research-cancel">Cancel</button></span>`;
+    return row;
+  }
+
+  function updateResearchRow(
+    row: HTMLElement,
+    research: (typeof RESEARCH)[number],
+    state: GameState,
+    queued: boolean,
+  ): void {
+    row.querySelector<HTMLElement>('.item-emoji')!.textContent = research.emoji;
+    row.querySelector<HTMLElement>('.item-name-label')!.textContent = research.name;
+    row.querySelector<HTMLElement>('.item-desc')!.textContent = research.description;
+    const bar = row.querySelector<HTMLElement>('.progress')!;
+    const progress = researchProgress(state, research.id);
+    const fraction = progress?.fraction ?? 0;
+    bar.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
+    bar.setAttribute('aria-label', `${research.name} progress`);
+    bar.querySelector<HTMLElement>('.progress-fill')!.style.width = `${fraction * 100}%`;
+    const remaining = row.querySelector<HTMLElement>('.research-remaining')!;
+    remaining.textContent = progress ? formatDuration(progress.remaining) : '';
+    row.querySelector<HTMLButtonElement>('.research-cancel')!.hidden = !queued;
   }
 
   function renderAchievements(state: GameState): void {
@@ -804,5 +1190,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       saveIndicator.classList.add('flash');
     },
     spawnFloat,
+    renderFieldwork,
   };
 }
