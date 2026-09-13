@@ -326,7 +326,7 @@ describe('save', () => {
     state.methane = 7;
     state.totalSphagnumEarned = 8;
     state.totalMethaneEarned = 9;
-    state.charter.push('roots-1');
+    state.charter.push('seal', 'roots-1');
     state.calibrationStreak = 7;
     state.calibrationTarget = 0.3;
     state.researchQueue.push({ id: 'thermal-modelling', remaining: 12 });
@@ -343,7 +343,7 @@ describe('save', () => {
     expect(back!.methane).toBe(7);
     expect(back!.totalSphagnumEarned).toBe(8);
     expect(back!.totalMethaneEarned).toBe(9);
-    expect(back!.charter).toEqual(['roots-1']);
+    expect(back!.charter).toEqual(['seal', 'roots-1']);
     expect(back!.calibrationStreak).toBe(7);
     expect(back!.calibrationTarget).toBe(0.3);
     expect(back!.researchQueue).toEqual([{ id: 'thermal-modelling', remaining: 12 }]);

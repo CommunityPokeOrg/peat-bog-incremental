@@ -21,7 +21,9 @@ describe('Drainage Charter', () => {
 
   it('spends cores and blocks a double purchase', () => {
     const state = createInitialState();
-    state.bogCores = 1;
+    state.bogCores = 2;
+    expect(buyCharter(state, 'roots-1')).toBe(false);
+    expect(buyCharter(state, 'seal')).toBe(true);
     expect(buyCharter(state, 'roots-1')).toBe(true);
     expect(state.bogCores).toBe(0);
     expect(buyCharter(state, 'roots-1')).toBe(false);
@@ -86,12 +88,20 @@ describe('Drainage Charter', () => {
 
   it('round-trips Charter terms', () => {
     const state = createInitialState();
-    state.charter = ['roots-1'];
+    state.charter = ['seal', 'roots-1'];
     state.nightWatch = 7;
     state.calibrationTarget = 0.3;
     const roundTrip = deserialize(JSON.stringify(state));
-    expect(roundTrip?.charter).toEqual(['roots-1']);
+    expect(roundTrip?.charter).toEqual(['seal', 'roots-1']);
     expect(roundTrip?.nightWatch).toBe(7);
+  });
+
+  it('grants the Seal to older saves that already hold Charter terms', () => {
+    const state = createInitialState();
+    state.charter = ['roots-1'];
+    expect(deserialize(JSON.stringify(state))?.charter).toEqual(['seal', 'roots-1']);
+    state.charter = [];
+    expect(deserialize(JSON.stringify(state))?.charter).toEqual([]);
   });
 
   it('clamps a valid oversized Night Watch level on load', () => {

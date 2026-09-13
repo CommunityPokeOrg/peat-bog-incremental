@@ -781,13 +781,237 @@ button.item:hover:not(:disabled) .item-action {
   font-size: var(--fs-sm);
 }
 
-[data-key^="charter-"].unlocked .item-action {
-  border-color: var(--core);
-  color: var(--core);
+/* Charter tree: scrollable canvas, SVG branch lines, absolutely placed node buttons. */
+.charter-canvas {
+  flex: 1 1 auto;
+  min-height: 320px;
+  max-height: 60vh;
+  margin: 0 .7rem;
+  overflow: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(circle at center, rgba(196, 140, 255, .08), transparent 60%),
+    var(--bog-1);
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  scrollbar-width: thin;
 }
 
-[data-key^="charter-"].locked .item-action {
+.charter-canvas.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.charter-sheet {
+  position: relative;
+}
+
+.charter-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.charter-edges line {
+  stroke: var(--rule-strong);
+  stroke-width: 2;
+  stroke-dasharray: 4 6;
+  transition: stroke var(--t-duration-md) var(--t-ease);
+}
+
+.charter-edges line[data-state="purchasable"],
+.charter-edges line[data-state="unaffordable"] {
+  stroke: var(--core);
+  stroke-dasharray: 4 4;
+  opacity: .6;
+}
+
+.charter-edges line[data-state="signed"] {
+  stroke: var(--core);
+  stroke-dasharray: none;
+  opacity: 1;
+}
+
+.charter-node {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 96px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transform: translate(-50%, -26px);
+}
+
+.charter-node-glyph {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 2px solid var(--rule-strong);
+  border-radius: 50%;
+  background: var(--bog-2);
+  font-size: 1.4rem;
+  transition:
+    border-color var(--t-duration-md) var(--t-ease),
+    background var(--t-duration-md) var(--t-ease),
+    transform var(--t-duration-sm) var(--t-ease);
+}
+
+.charter-node-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.charter-node[data-state="locked"] .charter-node-glyph {
+  filter: grayscale(1);
+  opacity: .5;
+  border-style: dashed;
+}
+
+.charter-node[data-state="locked"] {
+  color: var(--ink-faint);
+}
+
+.charter-node[data-state="unaffordable"] .charter-node-glyph {
+  border-color: var(--core);
+  border-style: dashed;
+  opacity: .8;
+}
+
+.charter-node[data-state="purchasable"] .charter-node-glyph {
+  border-color: var(--core);
+  background: rgba(196, 140, 255, .14);
+  box-shadow: 0 0 0 4px rgba(196, 140, 255, .18);
+}
+
+.charter-node[data-state="purchasable"] {
+  color: var(--ink);
+}
+
+.charter-node[data-state="signed"] .charter-node-glyph {
+  border-color: var(--core);
+  background: var(--core);
+  color: var(--bog-0);
+}
+
+.charter-node[data-state="signed"] {
+  color: var(--ink);
+}
+
+.charter-node[aria-pressed="true"] .charter-node-glyph {
+  outline: 2px solid var(--coolant);
+  outline-offset: 3px;
+}
+
+.charter-node:hover .charter-node-glyph {
+  transform: scale(1.06);
+}
+
+.charter-node:focus-visible {
+  outline: none;
+}
+
+.charter-node:focus-visible .charter-node-glyph {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.charter-detail {
+  flex-shrink: 0;
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-3) .7rem;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--bog-2);
+  font-size: var(--fs-sm);
+}
+
+.charter-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.charter-detail-glyph {
+  font-size: 1.6rem;
+}
+
+.charter-detail-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+}
+
+.charter-detail-branch {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.charter-detail-desc {
+  margin: 0;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.charter-detail-effects {
+  margin: 0;
+  color: var(--core);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.charter-detail-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.charter-detail-cost {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.charter-sign {
+  min-width: 7rem;
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--core);
+  border-radius: var(--r-sm);
+  background: rgba(196, 140, 255, .14);
+  color: var(--core);
+  font: inherit;
+  cursor: pointer;
+}
+
+.charter-sign:disabled {
+  border-style: dashed;
   border-color: var(--rule);
+  background: none;
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .charter-node:hover .charter-node-glyph {
+    transform: none;
+  }
 }
 
 .fieldwork-card h2 {

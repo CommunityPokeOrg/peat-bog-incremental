@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CHARTER } from '../src/game/charter';
 import { RESEARCH } from '../src/game/data';
 import { calibrate } from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
@@ -207,19 +208,32 @@ describe('UI overhaul', () => {
     expect(result?.hit).toBe(false);
   });
 
-  it('renders the three Charter branches and signs a term', () => {
+  it('renders the Charter as a node graph with matching states and signs from the detail panel', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     state.bogCores = 1;
     const ui = makeUi(root, { initialTab: 'charter' });
     ui.renderLists(state);
-    expect(root.textContent).toContain('Roots · 0/4');
-    expect(root.textContent).toContain('Kindling · 0/4');
-    expect(root.textContent).toContain('Filing · 0/5');
-    const row = root.querySelector<HTMLElement>('[data-key="charter-roots-1"]')!;
-    expect(row.textContent).toContain('Sign');
-    row.click();
-    expect(root.textContent).toContain('Signed ✓');
+    const node = (id: string): HTMLButtonElement =>
+      root.querySelector<HTMLButtonElement>(`.charter-node[data-node="${id}"]`)!;
+    expect(root.querySelectorAll('.charter-node')).toHaveLength(CHARTER.length);
+    expect(root.querySelectorAll('.charter-edges line')).toHaveLength(CHARTER.length - 1);
+    expect(node('seal').dataset.state).toBe('purchasable');
+    expect(node('roots-1').dataset.state).toBe('locked');
+    expect(node('roots-1').getAttribute('aria-label')).toContain('Locked');
+
+    const sign = root.querySelector<HTMLButtonElement>('.charter-sign')!;
+    expect(node('seal').getAttribute('aria-pressed')).toBe('true');
+    expect(sign.disabled).toBe(false);
+    sign.click();
+    expect(state.charter).toEqual(['seal']);
+    expect(node('seal').dataset.state).toBe('signed');
+    expect(node('roots-1').dataset.state).toBe('unaffordable');
+
+    node('roots-1').click();
+    expect(root.querySelector('.charter-detail-name')!.textContent).toBe('Deep Roots');
+    expect(root.querySelector('.charter-sign')!.textContent).toBe('Sign');
+    expect(root.querySelector<HTMLButtonElement>('.charter-sign')!.disabled).toBe(true);
   });
 
   it('shows the sphagnum Production filter when its nursery is owned', () => {

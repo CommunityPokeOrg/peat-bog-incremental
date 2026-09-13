@@ -6,7 +6,7 @@ import {
   type ResearchQueueEntry,
 } from './state';
 import { productionPerSecond } from './engine';
-import { charterSum } from './charter';
+import { CHARTER_ROOT_ID, charterSum } from './charter';
 import type { QuestBuff } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
@@ -110,6 +110,9 @@ export function deserialize(raw: string | null): GameState | null {
     ? Math.min(NIGHT_WATCH_MAX_LEVEL, Math.floor(p.nightWatch))
     : 0;
   state.charter = isStrArr(p.charter) ? [...p.charter] : [];
+  if (state.charter.length > 0 && !state.charter.includes(CHARTER_ROOT_ID)) {
+    state.charter.unshift(CHARTER_ROOT_ID);
+  }
   state.buildings = { ...p.buildings };
   state.revealed = isStrArr(p.revealed) ? [...p.revealed] : [];
   state.upgrades = [...p.upgrades];

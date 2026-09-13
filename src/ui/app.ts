@@ -33,8 +33,9 @@ import { formatCost, formatDuration, formatNumber } from '../game/format';
 import { offlineRateBreakdown } from '../game/save';
 import type { GameState } from '../game/state';
 import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
-import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
-import { formatMultiplier, formatQuestReward, pluralize } from './text';
+import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, CHARTER_ROOT_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
+import { layoutCharter } from './charterLayout';
+import { formatCharterEffect, formatMultiplier, formatQuestReward, pluralize } from './text';
 import {
   calibrationNeedle,
   calibrationZone,
@@ -1220,66 +1221,201 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return node.description;
   }
 
-  function renderCharter(state: GameState): void {
-    const entries: RowEntry[] = [];
-    for (const branch of Object.keys(CHARTER_BRANCHES) as (keyof typeof CHARTER_BRANCHES)[]) {
-      const nodes = CHARTER.filter((node) => node.branch === branch);
-      const signed = nodes.filter((node) => state.charter.includes(node.id)).length;
-      entries.push({
-        key: `charter-heading-${branch}`,
-        create: () => createSectionHeading(`${CHARTER_BRANCHES[branch].name} · ${signed}/${nodes.length}`),
-        update: (row) => {
-          row.textContent = `${CHARTER_BRANCHES[branch].name} · ${signed}/${nodes.length}`;
-          row.title = CHARTER_BRANCHES[branch].blurb;
-        },
-      });
-      for (const node of nodes) {
-        entries.push({
-          key: `charter-${node.id}`,
-          create: () => createRow(`charter-${node.id}`, {
-            emoji: node.emoji,
-            name: node.name,
-            desc: charterNodeDescription(state, node),
-            onClick: () => {
-              const latest = currentState;
-              if (!latest || latest.charter.includes(node.id) || !charterAvailable(latest, node)) return;
-              const bought = hooks.onBuyCharter
-                ? hooks.onBuyCharter(node.id)
-                : buyCharter(latest, node.id);
-              if (bought) {
-                toast(`Charter signed: ${node.name}`);
-                renderCounters(latest);
-                renderLists(latest);
-              }
-            },
-          }),
-          update: (row) => {
-            const owned = state.charter.includes(node.id);
-            const available = charterAvailable(state, node);
-            const locked = Boolean(node.requires && !state.charter.includes(node.requires));
-            updateRow(row, {
-              cost: `${node.cost} 💠`,
-              action: owned ? 'Signed ✓' : locked ? '' : 'Sign',
-              disabled: owned || locked || !available,
-              label: owned ? `${node.name} (signed)` : `Sign ${node.name}`,
-              desc: charterNodeDescription(state, node),
-              status: owned ? 'unlocked' : locked ? 'locked' : 'unlocked',
-            });
-          },
-        });
-      }
-    }
-    entries.unshift({
-      key: 'charter-intro',
-      create: () => {
-        const intro = document.createElement('p');
-        intro.className = 'charter-intro';
-        return intro;
-      },
-      update: (row) => {
-        row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${state.bogCores} 💠`;
-      },
+  type CharterNodeState = 'locked' | 'purchasable' | 'unaffordable' | 'signed';
+  function charterNodeState(state: GameState, node: CharterNodeDef): CharterNodeState {
+    if (state.charter.includes(node.id)) return 'signed';
+    if (node.requires && !state.charter.includes(node.requires)) return 'locked';
+    return charterAvailable(state, node) ? 'purchasable' : 'unaffordable';
+  }
+
+  const CHARTER_STATE_LABEL: Record<CharterNodeState, string> = {
+    locked: 'Locked',
+    purchasable: 'Ready to sign',
+    unaffordable: 'Not enough cores',
+    signed: 'Signed',
+  };
+
+  let charterSelected: string = CHARTER_ROOT_ID;
+
+  /** Keeps the Seal in view whenever the canvas is (re)sized, until the player pans. */
+  function centreOnRoot(canvas: HTMLElement, root: { x: number; y: number }): void {
+    let panned = false;
+    canvas.addEventListener('pointerdown', (event) => {
+      if (!(event.target as HTMLElement).closest('.charter-node')) panned = true;
     });
+    canvas.addEventListener('wheel', () => { panned = true; }, { once: true, passive: true });
+    const centre = (): void => {
+      if (panned || canvas.clientWidth === 0) return;
+      canvas.scrollLeft = root.x - canvas.clientWidth / 2;
+      canvas.scrollTop = root.y - canvas.clientHeight / 2;
+    };
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(centre).observe(canvas);
+    } else {
+      requestAnimationFrame(centre);
+    }
+  }
+
+  function signCharter(node: CharterNodeDef): void {
+    const latest = currentState;
+    if (!latest || charterNodeState(latest, node) !== 'purchasable') return;
+    const bought = hooks.onBuyCharter ? hooks.onBuyCharter(node.id) : buyCharter(latest, node.id);
+    if (!bought) return;
+    toast(`Charter signed: ${node.name}`);
+    renderCounters(latest);
+    renderLists(latest);
+  }
+
+  /** Drag-to-pan on a scroll container; wheel/touch/keyboard scrolling keep working natively. */
+  function enablePan(canvas: HTMLElement): void {
+    let drag: { x: number; y: number; left: number; top: number } | null = null;
+    canvas.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || (event.target as HTMLElement).closest('.charter-node')) return;
+      drag = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
+      canvas.classList.add('is-panning');
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      canvas.scrollLeft = drag.left - (event.clientX - drag.x);
+      canvas.scrollTop = drag.top - (event.clientY - drag.y);
+    });
+    const stop = (): void => {
+      drag = null;
+      canvas.classList.remove('is-panning');
+    };
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointercancel', stop);
+  }
+
+  function renderCharter(state: GameState): void {
+    const layout = layoutCharter();
+
+    const entries: RowEntry[] = [
+      {
+        key: 'charter-intro',
+        create: () => {
+          const intro = document.createElement('p');
+          intro.className = 'charter-intro';
+          return intro;
+        },
+        update: (row) => {
+          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${state.bogCores} 💠`;
+        },
+      },
+      {
+        key: 'charter-graph',
+        create: () => {
+          const canvas = document.createElement('div');
+          canvas.className = 'charter-canvas';
+          canvas.setAttribute('role', 'group');
+          canvas.setAttribute('aria-label', 'Drainage Charter tree. Drag or scroll to explore.');
+          const sheet = document.createElement('div');
+          sheet.className = 'charter-sheet';
+          sheet.style.width = `${layout.width}px`;
+          sheet.style.height = `${layout.height}px`;
+
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('class', 'charter-edges');
+          svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+          svg.setAttribute('aria-hidden', 'true');
+          for (const edge of layout.edges) {
+            const a = layout.points[edge.from];
+            const b = layout.points[edge.to];
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', String(a.x));
+            line.setAttribute('y1', String(a.y));
+            line.setAttribute('x2', String(b.x));
+            line.setAttribute('y2', String(b.y));
+            svg.appendChild(line);
+          }
+          sheet.appendChild(svg);
+
+          for (const node of CHARTER) {
+            const point = layout.points[node.id];
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'charter-node';
+            button.dataset.node = node.id;
+            button.dataset.branch = node.branch;
+            button.style.left = `${point.x}px`;
+            button.style.top = `${point.y}px`;
+            button.innerHTML = `<span class="charter-node-glyph" aria-hidden="true">${node.emoji}</span><span class="charter-node-name">${node.name}</span>`;
+            button.addEventListener('click', () => {
+              charterSelected = node.id;
+              const latest = currentState;
+              if (latest) renderCharter(latest);
+            });
+            sheet.appendChild(button);
+          }
+          canvas.appendChild(sheet);
+          enablePan(canvas);
+          centreOnRoot(canvas, layout.points[CHARTER_ROOT_ID]);
+          return canvas;
+        },
+        update: (row) => {
+          const buttons = row.querySelectorAll<HTMLButtonElement>('.charter-node');
+          for (const button of buttons) {
+            const node = CHARTER_BY_ID[button.dataset.node ?? ''];
+            if (!node) continue;
+            const nodeState = charterNodeState(state, node);
+            button.dataset.state = nodeState;
+            button.setAttribute('aria-pressed', String(node.id === charterSelected));
+            button.setAttribute('aria-label', `${node.name}, ${CHARTER_STATE_LABEL[nodeState]}, ${node.cost} cores`);
+            button.title = `${node.name} · ${CHARTER_STATE_LABEL[nodeState]}`;
+          }
+          const lines = row.querySelectorAll<SVGLineElement>('.charter-edges line');
+          layout.edges.forEach((edge, index) => {
+            const line = lines[index];
+            if (!line) return;
+            const child = CHARTER_BY_ID[edge.to];
+            line.dataset.state = child ? charterNodeState(state, child) : 'locked';
+          });
+        },
+      },
+      {
+        key: 'charter-detail',
+        create: () => {
+          const detail = document.createElement('div');
+          detail.className = 'charter-detail';
+          detail.setAttribute('aria-live', 'polite');
+          detail.innerHTML = `
+            <div class="charter-detail-head">
+              <span class="charter-detail-glyph" aria-hidden="true"></span>
+              <div>
+                <h3 class="charter-detail-name"></h3>
+                <p class="charter-detail-branch"></p>
+              </div>
+            </div>
+            <p class="charter-detail-desc"></p>
+            <p class="charter-detail-effects"></p>
+            <div class="charter-detail-foot">
+              <span class="charter-detail-cost"></span>
+              <button type="button" class="charter-sign"></button>
+            </div>`;
+          detail.querySelector<HTMLButtonElement>('.charter-sign')?.addEventListener('click', () => {
+            const node = CHARTER_BY_ID[charterSelected];
+            if (node) signCharter(node);
+          });
+          return detail;
+        },
+        update: (row) => {
+          const node = CHARTER_BY_ID[charterSelected] ?? CHARTER[0];
+          const nodeState = charterNodeState(state, node);
+          row.dataset.state = nodeState;
+          row.querySelector('.charter-detail-glyph')!.textContent = node.emoji;
+          row.querySelector('.charter-detail-name')!.textContent = node.name;
+          row.querySelector('.charter-detail-branch')!.textContent =
+            `${CHARTER_BRANCHES[node.branch].name} · ${CHARTER_STATE_LABEL[nodeState]}`;
+          row.querySelector('.charter-detail-desc')!.textContent = charterNodeDescription(state, node);
+          row.querySelector('.charter-detail-effects')!.textContent = node.effects.map(formatCharterEffect).join(' · ');
+          row.querySelector('.charter-detail-cost')!.textContent = `${node.cost} 💠`;
+          const sign = row.querySelector<HTMLButtonElement>('.charter-sign')!;
+          sign.textContent = nodeState === 'signed' ? 'Signed ✓' : nodeState === 'locked' ? 'Locked' : 'Sign';
+          sign.disabled = nodeState !== 'purchasable';
+        },
+      },
+    ];
     reconcileRows(entries);
   }
 
