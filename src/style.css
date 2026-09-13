@@ -171,6 +171,7 @@ textarea:focus-visible,
     "emoji name"
     "emoji value"
     "emoji rate";
+  flex: 0 0 auto;
   min-width: 9rem;
   padding-left: var(--sp-2);
   border-left: 2px solid var(--rule-strong);
@@ -183,7 +184,7 @@ textarea:focus-visible,
 .res[data-resource="evidence"] { border-color: var(--evidence); }
 .res[data-resource="bogCores"] { border-color: var(--core); }
 .res-emoji { grid-area: emoji; align-self: center; margin-right: var(--sp-2); font-size: 1.15rem; }
-.res-name { grid-area: name; color: var(--ink-dim); font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; }
+.res-name { grid-area: name; color: var(--ink-dim); font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .res strong { grid-area: value; color: var(--ink); font: 1.05rem var(--font-mono); }
 .res em { grid-area: rate; color: var(--ink-dim); font: var(--fs-xs) var(--font-mono); font-style: normal; }
 
@@ -594,6 +595,12 @@ button.item {
   font-weight: 650;
   text-align: center;
   white-space: nowrap;
+}
+
+.quest-action {
+  min-width: 0;
+  padding: 0;
+  border: 0;
 }
 
 .item-action:empty,
@@ -1138,6 +1145,12 @@ button.item:hover:not(:disabled) .item-action {
     z-index: 5;
     margin: 0 calc(var(--sp-3) * -1);
     padding: var(--sp-2) var(--sp-3);
+  }
+
+  .toasts {
+    right: var(--sp-3);
+    bottom: 4.5rem;
+    left: var(--sp-3);
   }
 
   .site-footer {
