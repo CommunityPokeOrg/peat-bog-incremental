@@ -84,4 +84,25 @@ describe('settlement quests', () => {
     state.upgrades.push(UPGRADE_BY_ID['hot-fries'].id);
     expect(questReady(state, quest('q-hot-fries'))).toBe(true);
   });
+
+  it('counts claimed Keeper quests and gates Poke on all nine others', () => {
+    const state = createInitialState();
+    const keeperIds = ['k-pierre', 'k-mia', 'k-shrome', 'k-samkals', 'k-spaced', 'k-vwh', 'k-hermano', 'k-tassie', 'k-kreatix'];
+    state.quests.claimed = keeperIds.slice(0, 8);
+    expect(questProgress(state, quest('k-poke'))).toMatchObject({ current: 8, target: 9 });
+    expect(questReady(state, quest('k-poke'))).toBe(false);
+    state.quests.claimed.push(keeperIds[8]);
+    expect(questReady(state, quest('k-poke'))).toBe(true);
+    expect(claimQuest(state, 'k-poke')?.kind).toBe('multiplier');
+  });
+
+  it('keeps the Kreatix reward through prestige', () => {
+    const state = createInitialState();
+    state.buildings.rack = 50;
+    expect(claimQuest(state, 'k-kreatix')?.kind).toBe('multiplier');
+    expect(questMultiplier(state, 'broth')).toBeCloseTo(1.1);
+    state.totalComputeThisRun = 1_000_000;
+    expect(prestige(state)).toBe(1);
+    expect(state.quests.claimed).toContain('k-kreatix');
+  });
 });

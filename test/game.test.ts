@@ -189,6 +189,12 @@ describe('economy', () => {
     expect(rates.peat).toBeCloseTo(4.5);
     expect(rates.sphagnum).toBeCloseTo(4);
   });
+  it('applies the Pierre relic to peat production', () => {
+    const state = createInitialState();
+    state.buildings.cutter = 10;
+    state.upgrades.push('pierre-spade');
+    expect(productionPerSecond(state).peat).toBeCloseTo(3.6);
+  });
 
   it('multiplies a building for each owned overclock tier', () => {
     const state = createInitialState();
@@ -434,5 +440,12 @@ describe('new docket achievements', () => {
     const state = createInitialState();
     state.research.push('nordic-verdict');
     expect(checkAchievements(state)).toContain('reino-verdict');
+  });
+
+  it('unlocks Keeper and relic achievements', () => {
+    const state = createInitialState();
+    state.quests.claimed = ['k-pierre', 'k-mia', 'k-shrome', 'k-samkals', 'k-spaced', 'k-vwh', 'k-hermano', 'k-tassie', 'k-kreatix', 'k-poke'];
+    state.upgrades.push('pierre-spade', 'shrome-lantern', 'samkals-ledger', 'kreatix-gauge');
+    expect(checkAchievements(state)).toEqual(expect.arrayContaining(['keepers-all', 'relics-4']));
   });
 });

@@ -8,6 +8,7 @@ export type QuestRequirement =
   | { kind: 'rate'; resource: EarnedResource; perSecond: number }
   | { kind: 'research'; id: string }
   | { kind: 'upgrade'; id: string }
+  | { kind: 'quests'; ids: string[] }
   | { kind: 'cooled'; minHeat: number };
 
 /** Targets that quest multipliers can affect. */
@@ -27,7 +28,7 @@ export interface QuestDef {
   name: string;
   emoji: string;
   brief: string;
-  chapter: 'discovery' | 'litigation' | 'verdict';
+  chapter: 'discovery' | 'litigation' | 'verdict' | 'keepers';
   requirement: QuestRequirement;
   reward: QuestReward;
   persistsThroughPrestige?: true;
@@ -60,6 +61,16 @@ export const QUESTS: QuestDef[] = [
   { id: 'q-verdict', name: 'Magistrate Reino Rules', emoji: '⚖️', brief: 'Complete the Nordic verdict research.', chapter: 'verdict', requirement: { kind: 'research', id: 'nordic-verdict' }, reward: { kind: 'cores', amount: 1 }, persistsThroughPrestige: true },
   { id: 'q-hyperscale', name: 'Hyperscale the Bog', emoji: '🌐', brief: 'Own a Bog Hyperscaler.', chapter: 'verdict', requirement: { kind: 'owned', buildingId: 'hyperscaler', count: 1 }, reward: { kind: 'multiplier', target: 'all', factor: 1.25 }, persistsThroughPrestige: true },
   { id: 'q-drained', name: 'Bog Reborn', emoji: '♻️', brief: 'Bank one Bog Core.', chapter: 'verdict', requirement: { kind: 'stat', stat: 'bogCores', target: 1 }, reward: { kind: 'multiplier', target: 'all', factor: 2, durationSec: 900 }, persistsThroughPrestige: true },
+  { id: 'k-pierre', name: 'Pierre of the Peat', emoji: '🪦', brief: 'Earn 100,000 total peat. Somewhere in the deep cut lies a cutter the bog kept whole; the moss calls him Pierre.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'totalPeatEarned', target: 100_000 }, reward: { kind: 'multiplier', target: 'peat', factor: 1.25 } },
+  { id: 'k-mia', name: 'Mia the Patchstep', emoji: '🐾', brief: 'Land 100 calibration hits or full cuts. Mia knows which tussocks hold; every safe path across the mire follows her footprints.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'minigameHits', target: 100 }, reward: { kind: 'multiplier', target: 'click', factor: 1.5 } },
+  { id: 'k-shrome', name: 'Shrome, Keeper of the Mycelium', emoji: '🍄', brief: 'Earn 25,000 total sphagnum. Under every green bed runs a single fungal thread, and Shrome tends it.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'totalSphagnumEarned', target: 25_000 }, reward: { kind: 'multiplier', target: 'sphagnum', factor: 1.25 } },
+  { id: 'k-samkals', name: 'Samkals, the Sunken Archive', emoji: '🏺', brief: 'Earn 10,000 total evidence. A drowned stone ledger at the bog floor; whatever the peat is told, Samkals remembers.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'totalEvidenceEarned', target: 10_000 }, reward: { kind: 'multiplier', target: 'evidence', factor: 1.25 } },
+  { id: 'k-spaced', name: 'Spaced, the Marsh Light', emoji: '🌌', brief: 'Earn 100,000 total methane. The wisp that drifts above the gas pools, always looking up at something the rest of us cannot see.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'totalMethaneEarned', target: 100_000 }, reward: { kind: 'multiplier', target: 'methane', factor: 1.25 } },
+  { id: 'k-vwh', name: 'vwh, the Quiet Sluice', emoji: '🚰', brief: 'Bank 3 Bog Cores. Three letters cut into the oldest drainage sill. The gate opens without a sound, and the bog is lower by morning.', chapter: 'keepers', requirement: { kind: 'stat', stat: 'bogCores', target: 3 }, reward: { kind: 'cores', amount: 1 }, persistsThroughPrestige: true },
+  { id: 'k-hermano', name: 'Hermano of the Far Bank', emoji: '🤝', brief: 'Reach 1,000,000 broth per second. The cutter across the water who shares his kettle with anyone who wades over.', chapter: 'keepers', requirement: { kind: 'rate', resource: 'broth', perSecond: 1_000_000 }, reward: { kind: 'production', resource: 'broth', seconds: 900, floor: 1_000_000 } },
+  { id: 'k-tassie', name: 'Tassie, Devil of the Deep Bog', emoji: '😈', brief: 'Cool at least 50,000 heat. Something burrows under the southern peat and the racks run hot wherever it passes.', chapter: 'keepers', requirement: { kind: 'cooled', minHeat: 50_000 }, reward: { kind: 'multiplier', target: 'compute', factor: 1.25 } },
+  { id: 'k-kreatix', name: 'Kreatix, the Bog Wright', emoji: '🔧', brief: 'Own 50 Server Racks. The wright who first hung a rack from a pulley and taught the bog to compute.', chapter: 'keepers', requirement: { kind: 'owned', buildingId: 'rack', count: 50 }, reward: { kind: 'multiplier', target: 'all', factor: 1.1 }, persistsThroughPrestige: true },
+  { id: 'k-poke', name: 'Poke, Oracle of the Bog', emoji: '🔮', brief: 'Meet the other nine Keepers. The spirit the bog itself answers to; it speaks in bubbles and every Keeper listens.', chapter: 'keepers', requirement: { kind: 'quests', ids: ['k-pierre','k-mia','k-shrome','k-samkals','k-spaced','k-vwh','k-hermano','k-tassie','k-kreatix'] }, reward: { kind: 'multiplier', target: 'all', factor: 1.2 }, persistsThroughPrestige: true },
 ];
 
 function requirementValue(state: GameState, requirement: QuestRequirement): number {
@@ -74,6 +85,8 @@ function requirementValue(state: GameState, requirement: QuestRequirement): numb
       return state.research.includes(requirement.id) ? 1 : 0;
     case 'upgrade':
       return state.upgrades.includes(requirement.id) ? 1 : 0;
+    case 'quests':
+      return requirement.ids.filter((id) => state.quests.claimed.includes(id)).length;
     case 'cooled': {
       const heat = totalHeat(state);
       if (heat >= requirement.minHeat && thermalFactor(state) >= 1) return requirement.minHeat;
@@ -90,6 +103,7 @@ function requirementTarget(requirement: QuestRequirement): number {
     case 'rate': return requirement.perSecond;
     case 'research':
     case 'upgrade': return 1;
+    case 'quests': return requirement.ids.length;
     case 'cooled': return requirement.minHeat;
   }
 }

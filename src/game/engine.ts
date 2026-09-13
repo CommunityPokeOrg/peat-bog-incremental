@@ -444,6 +444,10 @@ export function checkAchievements(state: GameState): string[] {
     'methane-1k': state.totalMethaneEarned >= 1_000,
     'charter-1': state.charter.length >= 1,
     'charter-all': CHARTER.every((node) => state.charter.includes(node.id)),
+    'keepers-all': QUESTS.filter((quest) => quest.chapter === 'keepers')
+      .every((quest) => state.quests.claimed.includes(quest.id)),
+    'relics-4': ['pierre-spade', 'shrome-lantern', 'samkals-ledger', 'kreatix-gauge']
+      .every((id) => state.upgrades.includes(id)),
   };
   const newly: string[] = [];
   for (const a of ACHIEVEMENTS) {

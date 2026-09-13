@@ -781,16 +781,22 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderDocket(state: GameState): void {
-    const chapters = ['discovery', 'litigation', 'verdict'] as const;
+    const chapters = ['discovery', 'litigation', 'verdict', 'keepers'] as const;
+    const chapterLabels: Record<(typeof chapters)[number], string> = {
+      discovery: 'Discovery',
+      litigation: 'Litigation',
+      verdict: 'Verdict',
+      keepers: 'Keepers of the Bog',
+    };
     const entries: RowEntry[] = [];
     for (const chapter of chapters) {
       const quests = QUESTS.filter((quest) => quest.chapter === chapter);
       const claimed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
       entries.push({
         key: `chapter-${chapter}`,
-        create: () => createSectionHeading(`${chapter[0].toUpperCase() + chapter.slice(1)} · ${claimed}/${quests.length} claimed`),
+        create: () => createSectionHeading(`${chapterLabels[chapter]} · ${claimed}/${quests.length} claimed`),
         update: (row) => {
-          row.textContent = `${chapter[0].toUpperCase() + chapter.slice(1)} · ${claimed}/${quests.length} claimed`;
+          row.textContent = `${chapterLabels[chapter]} · ${claimed}/${quests.length} claimed`;
         },
       });
       for (const quest of quests) {

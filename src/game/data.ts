@@ -234,6 +234,10 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'wetland-charter', name: 'Wetland Charter', emoji: '📗', description: 'Magistrate Reino grants the moss protected status. Sphagnum production ×2.', cost: { evidence: 5_000, sphagnum: 100_000 }, kind: 'resource', resourceMultiplier: { resource: 'sphagnum', factor: 2 }, requires: [{ buildingId: 'loom', count: 5 }] },
   { id: 'flare-recovery', name: 'Flare Recovery Loop', emoji: '♻️', description: 'Nothing burns off unmetered. Methane production ×2.', cost: { methane: 1_000_000 }, kind: 'resource', resourceMultiplier: { resource: 'methane', factor: 2 }, requires: [{ buildingId: 'flare', count: 5 }] },
   { id: 'stenographer', name: 'Deposition Stenographer', emoji: '⌨️', description: 'Every scoop is entered into the record. Click power ×4.', cost: { evidence: 2_000 }, kind: 'click', clickMultiplier: 4, requires: [{ buildingId: 'deposition', count: 5 }] },
+  { id: 'pierre-spade', name: "Pierre's Cutting Spade", emoji: '⛏️', description: 'A bog-oak spade found beside the old cutter, edge still keen. Peat production ×1.2.', cost: { peat: 20_000 }, kind: 'resource', requires: [{ buildingId: 'harvester', count: 25 }], resourceMultiplier: { resource: 'peat', factor: 1.2 } },
+  { id: 'shrome-lantern', name: "Shrome's Spore Lantern", emoji: '🏮', description: 'A lantern that glows with living spores; the moss grows toward it. Sphagnum production ×1.2.', cost: { sphagnum: 5_000, broth: 500_000 }, kind: 'resource', requires: [{ buildingId: 'nursery', count: 10 }], resourceMultiplier: { resource: 'sphagnum', factor: 1.2 } },
+  { id: 'samkals-ledger', name: "Samkals' Stone Ledger", emoji: '🪨', description: 'A rubbing taken from the sunken archive; the clerks copy its columns. Evidence production ×1.2.', cost: { evidence: 2_000, compute: 100_000 }, kind: 'resource', requires: [{ buildingId: 'clerk', count: 10 }], resourceMultiplier: { resource: 'evidence', factor: 1.2 } },
+  { id: 'kreatix-gauge', name: "Kreatix's Pulley Gauge", emoji: '🧰', description: "The wright's own brass gauge; racks trued against it run cooler. Heat −10%.", cost: { compute: 200_000 }, kind: 'thermal', requires: [{ buildingId: 'rack', count: 25 }], heatMultiplier: 0.9 },
   ...BUILDINGS.flatMap((building) =>
     BOOST_TIERS.map(({ count, factor, roman }, index): UpgradeDef => ({
       id: index === 0 ? `boost-${building.id}` : `boost-${building.id}-${count}`,
@@ -365,6 +369,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'methane-1k', name: 'Marsh Light', emoji: '💨', description: 'Earn 1,000 total methane.' },
   { id: 'charter-1', name: 'First Term Signed', emoji: '📗', description: 'Sign a Charter term.' },
   { id: 'charter-all', name: 'Full Charter', emoji: '📜', description: 'Sign every Charter term.' },
+  { id: 'keepers-all', name: 'Council of the Bog', emoji: '🕯️', description: 'Meet every Keeper of the Bog.' },
+  { id: 'relics-4', name: 'Relic Cutter', emoji: '🏺', description: 'Recover all four Keeper relics.' },
 ];
 
 export const ACHIEVEMENT_BY_ID: Record<string, AchievementDef> = Object.fromEntries(
@@ -386,4 +392,14 @@ export const FIELD_NOTES: string[] = [
   'Field note 12: the courthouse datacenter accepts broth by the litre.',
   'Field note 13: the bog gas is renewable, provided nobody asks where it came from.',
   'Field note 14: all objections are logged, dried, and returned to the peat.',
+  'Field note 15: the cutters leave a sod uncut on the deep bank. Pierre is under it, and he prefers the quiet.',
+  "Field note 16: follow Mia's prints across the mire. Step where she did not, and the bog files a claim on your boots.",
+  'Field note 17: Shrome does not speak; the moss just grows a little greener where he has been.',
+  'Field note 18: Samkals was dredged, read, and put back. The ledger objected to being dry.',
+  'Field note 19: the marsh light called Spaced rose over the digesters again. It was looking at the stars, not at us.',
+  'Field note 20: nobody has seen vwh open the sluice. The water is simply gone by morning.',
+  "Field note 21: Hermano's kettle is never empty. The far bank is a long wade, and worth it.",
+  'Field note 22: Tassie passed under the racks at 3:00 AM. The thermal gauge has not stopped sulking.',
+  "Field note 23: every pulley in the bog carries the wright's mark. Kreatix hung the first rack; the rest followed.",
+  'Field note 24: Poke spoke in the vat again. Three bubbles, then silence. The Keepers took it as a yes.',
 ];

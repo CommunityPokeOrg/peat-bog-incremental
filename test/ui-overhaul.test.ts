@@ -72,6 +72,16 @@ describe('UI overhaul', () => {
     expect(root.textContent).toContain('Claimed ✓');
   });
 
+  it('renders the Keepers of the Bog docket chapter', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    const ui = makeUi(root, { initialTab: 'docket' });
+    ui.renderLists(state);
+    expect(root.textContent).toContain('Keepers of the Bog · 0/10 claimed');
+    expect(root.textContent).toContain('Pierre of the Peat');
+    expect(root.textContent).toContain('Poke, Oracle of the Bog');
+  });
+
   it('clamps docket progress text and formats multiplier rewards precisely', () => {
     const root = document.createElement('div');
     const state = createInitialState();
