@@ -16,6 +16,21 @@ describe('content wave', () => {
     const names = [...BUILDINGS, ...UPGRADES, ...RESEARCH].map((item) => item.name);
     expect(new Set(ids).size).toBe(ids.length);
     expect(new Set(names).size).toBe(names.length);
+    const boostNames = BUILDINGS.flatMap((building) => building.boostNames);
+    expect(boostNames).toHaveLength(BUILDINGS.length * 4);
+    expect(new Set(boostNames).size).toBe(boostNames.length);
+    const boostSuffixes = new Map<string, number>();
+    for (const boostName of boostNames) {
+      const words = boostName.split(/\s+/);
+      const suffix = words[words.length - 1] ?? '';
+      boostSuffixes.set(suffix, (boostSuffixes.get(suffix) ?? 0) + 1);
+    }
+    expect(Math.max(...boostSuffixes.values())).toBeLessThan(3);
+    for (const building of BUILDINGS) {
+      for (const boostName of building.boostNames) {
+        expect(boostName.toLowerCase()).not.toContain(building.name.toLowerCase());
+      }
+    }
     expect(BUILDINGS.length).toBeGreaterThanOrEqual(62);
     expect(UPGRADES.length).toBeGreaterThanOrEqual(300);
     expect(RESEARCH.length).toBeGreaterThanOrEqual(40);
