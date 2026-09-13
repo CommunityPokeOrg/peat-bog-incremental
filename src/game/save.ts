@@ -1,5 +1,6 @@
 import { createInitialState, SAVE_VERSION, type GameState, type ResearchQueueEntry } from './state';
 import { productionPerSecond } from './engine';
+import { charterSum } from './charter';
 import type { QuestBuff } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
@@ -60,12 +61,17 @@ export function deserialize(raw: string | null): GameState | null {
   }
   if (
     (p.peat !== undefined && !isNum(p.peat)) ||
+    (p.sphagnum !== undefined && !isNum(p.sphagnum)) ||
+    (p.methane !== undefined && !isNum(p.methane)) ||
     (p.evidence !== undefined && !isNum(p.evidence)) ||
     (p.totalPeatEarned !== undefined && !isNum(p.totalPeatEarned)) ||
+    (p.totalSphagnumEarned !== undefined && !isNum(p.totalSphagnumEarned)) ||
+    (p.totalMethaneEarned !== undefined && !isNum(p.totalMethaneEarned)) ||
     (p.totalEvidenceEarned !== undefined && !isNum(p.totalEvidenceEarned)) ||
     (p.minigameHits !== undefined && !isNum(p.minigameHits)) ||
     (p.calibrationStreak !== undefined && !isNum(p.calibrationStreak)) ||
     (p.calibrationTarget !== undefined && !isNum(p.calibrationTarget)) ||
+    (p.charter !== undefined && !isStrArr(p.charter)) ||
     (p.researchQueue !== undefined && !isResearchQueue(p.researchQueue)) ||
     (p.quests !== undefined && !isQuestState(p.quests))
   ) {
@@ -76,17 +82,22 @@ export function deserialize(raw: string | null): GameState | null {
   state.broth = p.broth;
   state.compute = p.compute;
   state.peat = isNum(p.peat) ? p.peat : 0;
+  state.sphagnum = isNum(p.sphagnum) ? p.sphagnum : 0;
+  state.methane = isNum(p.methane) ? p.methane : 0;
   state.evidence = isNum(p.evidence) ? p.evidence : 0;
   state.bogCores = p.bogCores;
   state.totalBrothEarned = p.totalBrothEarned;
   state.totalComputeEarned = p.totalComputeEarned;
   state.totalPeatEarned = isNum(p.totalPeatEarned) ? p.totalPeatEarned : 0;
+  state.totalSphagnumEarned = isNum(p.totalSphagnumEarned) ? p.totalSphagnumEarned : 0;
+  state.totalMethaneEarned = isNum(p.totalMethaneEarned) ? p.totalMethaneEarned : 0;
   state.totalEvidenceEarned = isNum(p.totalEvidenceEarned) ? p.totalEvidenceEarned : 0;
   state.totalComputeThisRun = p.totalComputeThisRun;
   state.totalClicks = p.totalClicks;
   state.minigameHits = isNum(p.minigameHits) ? p.minigameHits : 0;
   state.calibrationStreak = isNum(p.calibrationStreak) ? p.calibrationStreak : 0;
   state.calibrationTarget = isNum(p.calibrationTarget) ? p.calibrationTarget : 0.5;
+  state.charter = isStrArr(p.charter) ? [...p.charter] : [];
   state.buildings = { ...p.buildings };
   state.revealed = isStrArr(p.revealed) ? [...p.revealed] : [];
   state.upgrades = [...p.upgrades];
@@ -118,19 +129,24 @@ export interface OfflineEarnings {
   broth: number;
   compute: number;
   peat: number;
+  sphagnum: number;
+  methane: number;
   evidence: number;
 }
 
-/** Offline progress: 50% rate, capped at 8 hours. */
+/** Offline progress: base 50% rate plus Charter bonuses, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
   const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
   const rates = productionPerSecond(state);
+  const offlineRate = Math.min(1, OFFLINE_RATE + charterSum(state, 'offlineRate'));
   return {
     seconds,
-    broth: rates.broth * seconds * OFFLINE_RATE,
-    compute: rates.compute * seconds * OFFLINE_RATE,
-    peat: rates.peat * seconds * OFFLINE_RATE,
-    evidence: rates.evidence * seconds * OFFLINE_RATE,
+    broth: rates.broth * seconds * offlineRate,
+    compute: rates.compute * seconds * offlineRate,
+    peat: rates.peat * seconds * offlineRate,
+    sphagnum: rates.sphagnum * seconds * offlineRate,
+    methane: rates.methane * seconds * offlineRate,
+    evidence: rates.evidence * seconds * offlineRate,
   };
 }
 

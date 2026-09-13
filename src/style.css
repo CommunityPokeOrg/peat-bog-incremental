@@ -181,6 +181,8 @@ textarea:focus-visible,
 .res[data-resource="broth"] { border-color: var(--broth); }
 .res[data-resource="compute"] { border-color: var(--coolant); }
 .res[data-resource="peat"] { border-color: var(--peat); }
+.res[data-resource="sphagnum"] { border-color: var(--moss); }
+.res[data-resource="methane"] { border-color: var(--danger); }
 .res[data-resource="evidence"] { border-color: var(--evidence); }
 .res[data-resource="bogCores"] { border-color: var(--core); }
 .res-emoji { grid-area: emoji; align-self: center; margin-right: var(--sp-2); font-size: 1.15rem; }
@@ -758,6 +760,25 @@ button.item:hover:not(:disabled) .item-action {
   font-size: var(--fs-lg);
   font-style: italic;
   text-align: center;
+}
+
+.charter-intro {
+  flex-shrink: 0;
+  margin: var(--sp-3) .7rem;
+  padding: var(--sp-3);
+  border-left: 2px solid var(--core);
+  background: rgba(196, 140, 255, .06);
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+}
+
+[data-key^="charter-"].unlocked .item-action {
+  border-color: var(--core);
+  color: var(--core);
+}
+
+[data-key^="charter-"].locked .item-action {
+  border-color: var(--rule);
 }
 
 .fieldwork-card h2 {

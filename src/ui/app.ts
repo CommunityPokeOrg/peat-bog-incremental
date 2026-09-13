@@ -4,6 +4,7 @@ import {
   BUILDINGS,
   RESOURCES,
   RESEARCH,
+  FIELD_NOTES,
   UPGRADES,
   UPGRADE_BY_ID,
 } from '../game/data';
@@ -29,6 +30,7 @@ import {
 import { formatCost, formatDuration, formatNumber } from '../game/format';
 import type { GameState } from '../game/state';
 import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
+import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
 import { formatMultiplier, formatQuestReward, pluralize } from './text';
 import {
   calibrationNeedle,
@@ -40,7 +42,7 @@ import {
   type NeedleFrame,
 } from '../game/minigames';
 
-type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'settings';
+type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'charter' | 'settings';
 type Qty = number | 'max';
 
 export interface UiHooks {
@@ -57,6 +59,7 @@ export interface UiHooks {
   onClaimQuest?(id: string): QuestReward | null | void;
   onCancelResearch?(id: string): boolean | void;
   onQueueResearch?(id: string): boolean | void;
+  onBuyCharter?(id: string): boolean;
 }
 
 export interface Ui {
@@ -162,6 +165,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <button role="tab" data-tab="upgrades">Upgrades</button>
           <button role="tab" data-tab="research">Research</button>
           <button role="tab" data-tab="achievements">Achievements</button>
+          <button role="tab" data-tab="charter">Charter</button>
           <button role="tab" data-tab="settings">Settings</button>
         </nav>
         <div class="production-filters" id="production-filters" hidden></div>
@@ -180,6 +184,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     <footer class="site-footer">
       <span id="save-indicator" aria-live="polite"></span>
       <span>Sector 4 · Peat Bog Trial · McFly &amp; Chronicler LLP v Burger King Nordic</span>
+      <span id="field-note"></span>
     </footer>
     <div class="toasts" id="toasts" aria-live="assertive"></div>
     <div class="modal-backdrop" id="modal-backdrop" hidden>
@@ -189,7 +194,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   let activeTab: TabId = hooks.initialTab ?? 'buildings';
   let buyQty: Qty = 1;
-  let productionFilter: 'all' | 'broth' | 'peat' | 'cooling' | 'compute' | 'evidence' = 'all';
+  let productionFilter: 'all' | 'broth' | 'peat' | 'sphagnum' | 'methane' | 'cooling' | 'compute' | 'evidence' = 'all';
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector(sel) as T;
 
@@ -212,6 +217,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const modalBackdrop = $('#modal-backdrop');
   const modal = $('#modal');
   const saveIndicator = $('#save-indicator');
+  const fieldNote = $('#field-note');
   const panelDock = $('#panel-dock');
   panelDock.hidden = activeTab !== 'buildings';
   const cutBtn = $('#cut-btn') as HTMLButtonElement;
@@ -340,6 +346,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   let forceRebuild = true;
   let renderedRows = new Map<string, HTMLElement>();
   const resourceChips = new Map<string, HTMLElement>();
+  let renderedFieldNote = '';
   for (const resource of RESOURCES) {
     const chip = document.createElement('span');
     chip.className = 'res';
@@ -354,7 +361,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function resourceAmount(state: GameState, id: string): number {
-    return id === 'bogCores' ? state.bogCores : state[id as 'broth' | 'compute' | 'peat' | 'evidence'];
+    if (id === 'bogCores') return state.bogCores;
+    return state[id as 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence'];
   }
 
   function formatBuffTarget(target: string): string {
@@ -408,24 +416,31 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     for (const resource of RESOURCES) {
       const chip = resourceChips.get(resource.id)!;
       const amount = resourceAmount(state, resource.id);
-      const rate = resource.id === 'bogCores'
-        ? undefined
-        : rates[resource.id as 'broth' | 'compute' | 'peat' | 'evidence'];
+      const rate = resource.id === 'bogCores' ? undefined : rates[resource.id];
       const strong = chip.querySelector('strong')!;
       const em = chip.querySelector('em')!;
       strong.textContent = formatNumber(amount);
       em.textContent = rate === undefined ? '' : `+${formatNumber(rate)}/s`;
       const lifetimeEarned = resource.id === 'peat'
         ? state.totalPeatEarned
-        : resource.id === 'evidence'
-          ? state.totalEvidenceEarned
-          : amount;
+        : resource.id === 'sphagnum'
+          ? state.totalSphagnumEarned
+          : resource.id === 'methane'
+            ? state.totalMethaneEarned
+            : resource.id === 'evidence'
+              ? state.totalEvidenceEarned
+              : amount;
       const shouldShow = resource.id === 'broth' || resource.id === 'compute' || resource.id === 'bogCores' ||
         lifetimeEarned > 0 || BUILDINGS.some((def) =>
           (def.generates === resource.id || (resource.id === 'compute' && def.generates === 'compute')) &&
           buildingVisible(state, def) && (state.buildings[def.id] ?? 0) > 0,
         );
       chip.hidden = !shouldShow;
+    }
+    const note = FIELD_NOTES[Math.floor(Date.now() / 20_000) % FIELD_NOTES.length];
+    if (note !== renderedFieldNote) {
+      fieldNote.textContent = note;
+      renderedFieldNote = note;
     }
     const boil = Math.max(1.2, Math.min(6, 6 / Math.log10(rates.broth + 10)));
     harvestBtn.style.setProperty('--boil', `${boil}s`);
@@ -499,9 +514,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderPrestige(state: GameState): void {
     const gain = prestigeGain(state);
     const ok = canPrestige(state);
+    const charterHint = state.bogCores > 0 ? ' Banked cores can be spent in the Charter tab.' : '';
     prestigeInfo.textContent = ok
-      ? `Petition Magistrate Reino to drain the bog. Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.`
-      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).`;
+      ? `Petition Magistrate Reino to drain the bog. Draining banks ${gain} Bog Core${gain === 1 ? '' : 's'} (+${gain * 5}% all production, permanent). Run resets; achievements and cores stay.${charterHint}`
+      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.totalComputeThisRun)} so far).${charterHint}`;
     prestigeBtn.disabled = !ok;
     prestigeBtn.textContent = ok ? `Drain for ${gain} 💠` : 'Drain the bog';
     prestigeBtn.setAttribute(
@@ -622,7 +638,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
   }
 
-  const productionCategories = ['broth', 'peat', 'cooling', 'compute', 'evidence'] as const;
+  const productionCategories = ['broth', 'peat', 'sphagnum', 'methane', 'cooling', 'compute', 'evidence'] as const;
   function renderProductionFilters(state: GameState): void {
     if (!productionFilters.firstElementChild) {
       const wrap = document.createElement('div');
@@ -690,6 +706,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           if (def.brothPerSecond) perUnit.push(`+${formatNumber(def.brothPerSecond)} broth/s`);
           if (def.computePerSecond) perUnit.push(`+${formatNumber(def.computePerSecond)} compute/s`);
           if (def.peatPerSecond) perUnit.push(`+${formatNumber(def.peatPerSecond)} peat/s`);
+          if (def.sphagnumPerSecond) perUnit.push(`+${formatNumber(def.sphagnumPerSecond)} sphagnum/s`);
+          if (def.methanePerSecond) perUnit.push(`+${formatNumber(def.methanePerSecond)} methane/s`);
           if (def.evidencePerSecond) perUnit.push(`+${formatNumber(def.evidencePerSecond)} evidence/s`);
           if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
           if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
@@ -726,11 +744,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         });
       }
       if (nextLocked) {
-        const threshold = nextLocked.unlock?.brothPerSecond !== undefined
-          ? `${formatNumber(nextLocked.unlock.brothPerSecond)} broth/s`
-          : nextLocked.unlock?.peatPerSecond !== undefined
-            ? `${formatNumber(nextLocked.unlock.peatPerSecond)} peat/s`
-            : `${formatNumber(nextLocked.unlock?.computePerSecond ?? 0)} compute/s`;
+        const threshold = Object.entries(nextLocked.unlock ?? {})
+          .map(([resource, amount]) => `${formatNumber(amount)} ${resource.replace('PerSecond', '')}/s`)
+          .join(' and ');
         entries.push({
           key: `locked-${nextLocked.id}`,
           create: () =>
@@ -868,11 +884,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   function unlockThresholdText(upgrade: (typeof UPGRADES)[number]): string {
     const thresholds: string[] = [];
-    if (upgrade.cost.broth !== undefined) {
-      thresholds.push(`${formatNumber(upgrade.cost.broth * 0.1)} broth`);
-    }
-    if (upgrade.cost.compute !== undefined) {
-      thresholds.push(`${formatNumber(upgrade.cost.compute * 0.1)} compute`);
+    for (const [resource, amount] of Object.entries(upgrade.cost)) {
+      if (amount !== undefined) thresholds.push(`${formatNumber(amount * 0.1)} ${resource}`);
     }
     return `Unlocks after earning ${thresholds.join(' and ')}`;
   }
@@ -1153,6 +1166,77 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     reconcileRows(entries);
   }
 
+  function charterNodeDescription(state: GameState, node: CharterNodeDef): string {
+    if (node.requires && !state.charter.includes(node.requires)) {
+      const parent = CHARTER_BY_ID[node.requires];
+      return `Requires ${parent?.name ?? node.requires}`;
+    }
+    return node.description;
+  }
+
+  function renderCharter(state: GameState): void {
+    const entries: RowEntry[] = [];
+    for (const branch of Object.keys(CHARTER_BRANCHES) as (keyof typeof CHARTER_BRANCHES)[]) {
+      const nodes = CHARTER.filter((node) => node.branch === branch);
+      const signed = nodes.filter((node) => state.charter.includes(node.id)).length;
+      entries.push({
+        key: `charter-heading-${branch}`,
+        create: () => createSectionHeading(`${CHARTER_BRANCHES[branch].name} · ${signed}/${nodes.length}`),
+        update: (row) => {
+          row.textContent = `${CHARTER_BRANCHES[branch].name} · ${signed}/${nodes.length}`;
+          row.title = CHARTER_BRANCHES[branch].blurb;
+        },
+      });
+      for (const node of nodes) {
+        entries.push({
+          key: `charter-${node.id}`,
+          create: () => createRow(`charter-${node.id}`, {
+            emoji: node.emoji,
+            name: node.name,
+            desc: charterNodeDescription(state, node),
+            onClick: () => {
+              const latest = currentState;
+              if (!latest || latest.charter.includes(node.id) || !charterAvailable(latest, node)) return;
+              const bought = hooks.onBuyCharter
+                ? hooks.onBuyCharter(node.id)
+                : buyCharter(latest, node.id);
+              if (bought) {
+                toast(`Charter signed: ${node.name}`);
+                renderCounters(latest);
+                renderLists(latest);
+              }
+            },
+          }),
+          update: (row) => {
+            const owned = state.charter.includes(node.id);
+            const available = charterAvailable(state, node);
+            const locked = Boolean(node.requires && !state.charter.includes(node.requires));
+            updateRow(row, {
+              cost: `${node.cost} 💠`,
+              action: owned ? 'Signed ✓' : locked ? '' : 'Sign',
+              disabled: owned || locked || !available,
+              label: owned ? `${node.name} (signed)` : `Sign ${node.name}`,
+              desc: charterNodeDescription(state, node),
+              status: owned ? 'unlocked' : locked ? 'locked' : 'unlocked',
+            });
+          },
+        });
+      }
+    }
+    entries.unshift({
+      key: 'charter-intro',
+      create: () => {
+        const intro = document.createElement('p');
+        intro.className = 'charter-intro';
+        return intro;
+      },
+      update: (row) => {
+        row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${state.bogCores} 💠`;
+      },
+    });
+    reconcileRows(entries);
+  }
+
   function renderSettings(): void {
     const keySignature = 'settings';
     if (
@@ -1218,6 +1302,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       case 'upgrades': renderUpgrades(state); break;
       case 'research': renderResearch(state); break;
       case 'achievements': renderAchievements(state); break;
+      case 'charter': renderCharter(state); break;
       case 'settings': renderSettings(); break;
     }
   }

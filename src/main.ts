@@ -26,6 +26,7 @@ import { createInitialState } from './game/state';
 import { formatDuration, formatNumber } from './game/format';
 import { createUi } from './ui/app';
 import { formatMultiplier } from './ui/text';
+import { buyCharter, charterFactor } from './game/charter';
 
 const root = document.getElementById('app')!;
 
@@ -197,6 +198,14 @@ async function init(): Promise<void> {
       if (queued) void doSave();
       return queued;
     },
+    onBuyCharter: (id) => {
+      const bought = buyCharter(state, id);
+      if (bought) {
+        checkAchievementsNow();
+        void doSave();
+      }
+      return bought;
+    },
   });
 
   const fireSave = (): void => {
@@ -227,21 +236,33 @@ async function init(): Promise<void> {
     state.broth += earned.broth;
     state.compute += earned.compute;
     state.peat += earned.peat;
+    state.sphagnum += earned.sphagnum;
+    state.methane += earned.methane;
     state.evidence += earned.evidence;
     state.totalBrothEarned += earned.broth;
     state.totalComputeEarned += earned.compute;
     state.totalPeatEarned += earned.peat;
+    state.totalSphagnumEarned += earned.sphagnum;
+    state.totalMethaneEarned += earned.methane;
     state.totalEvidenceEarned += earned.evidence;
     expireBuffs(state);
-    const completedResearch = advanceResearch(state, earned.seconds);
+    const completedResearch = advanceResearch(state, earned.seconds * charterFactor(state, 'researchSpeed'));
     const researchText = completedResearch.length > 0
       ? ` Research finished while away: ${completedResearch
         .map((id) => RESEARCH.find((research) => research.id === id)?.name ?? id)
         .join(', ')}.`
       : '';
+    const offlineResources = [
+      `+${formatNumber(earned.broth)} broth`,
+      `+${formatNumber(earned.compute)} compute`,
+      earned.peat > 0 ? `+${formatNumber(earned.peat)} peat` : '',
+      earned.sphagnum > 0 ? `+${formatNumber(earned.sphagnum)} sphagnum` : '',
+      earned.methane > 0 ? `+${formatNumber(earned.methane)} methane` : '',
+      earned.evidence > 0 ? `+${formatNumber(earned.evidence)} evidence` : '',
+    ].filter(Boolean).join(', ');
     ui.showModal({
       title: 'Welcome back to the bog',
-      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: +${formatNumber(earned.broth)} broth, +${formatNumber(earned.peat)} peat, +${formatNumber(earned.compute)} compute, +${formatNumber(earned.evidence)} evidence.${researchText}`,
+      body: `You were away ${formatDuration(earned.seconds)}. Your bog kept simmering at half rate: ${offlineResources}.${researchText}`,
       actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
     });
   }

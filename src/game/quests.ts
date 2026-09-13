@@ -3,21 +3,21 @@ import type { GameState } from './state';
 
 /** Requirement types used by settlement quests. */
 export type QuestRequirement =
-  | { kind: 'stat'; stat: 'totalBrothEarned' | 'totalComputeEarned' | 'totalPeatEarned' | 'totalEvidenceEarned' | 'totalClicks' | 'bogCores' | 'minigameHits'; target: number }
+  | { kind: 'stat'; stat: 'totalBrothEarned' | 'totalComputeEarned' | 'totalPeatEarned' | 'totalSphagnumEarned' | 'totalMethaneEarned' | 'totalEvidenceEarned' | 'totalClicks' | 'bogCores' | 'minigameHits'; target: number }
   | { kind: 'owned'; buildingId: string; count: number }
-  | { kind: 'rate'; resource: 'broth' | 'compute' | 'peat' | 'evidence'; perSecond: number }
+  | { kind: 'rate'; resource: EarnedResource; perSecond: number }
   | { kind: 'research'; id: string }
   | { kind: 'upgrade'; id: string }
   | { kind: 'cooled'; minHeat: number };
 
 /** Targets that quest multipliers can affect. */
-export type MultiplierTarget = 'broth' | 'compute' | 'peat' | 'evidence' | 'click' | 'all';
-type EarnedResource = 'broth' | 'compute' | 'peat' | 'evidence';
+export type MultiplierTarget = EarnedResource | 'click' | 'all';
+export type EarnedResource = 'broth' | 'compute' | 'peat' | 'sphagnum' | 'methane' | 'evidence';
 
 /** Effects granted when a settlement quest is claimed. */
 export type QuestReward =
-  | { kind: 'resource'; resource: 'broth' | 'compute' | 'peat' | 'evidence'; amount: number }
-  | { kind: 'production'; resource: 'broth' | 'compute' | 'peat' | 'evidence'; seconds: number; floor?: number }
+  | { kind: 'resource'; resource: EarnedResource; amount: number }
+  | { kind: 'production'; resource: EarnedResource; seconds: number; floor?: number }
   | { kind: 'multiplier'; target: MultiplierTarget; factor: number; durationSec?: number }
   | { kind: 'cores'; amount: number };
 
@@ -46,6 +46,7 @@ export const QUESTS: QuestDef[] = [
   { id: 'q-first-scoop', name: 'First Scoop on Record', emoji: '🫧', brief: 'Harvest 10 times.', chapter: 'discovery', requirement: { kind: 'stat', stat: 'totalClicks', target: 10 }, reward: { kind: 'resource', resource: 'broth', amount: 50 } },
   { id: 'q-sanitized-change', name: '$59 Sanitized Change', emoji: '💵', brief: 'Earn 59 total broth.', chapter: 'discovery', requirement: { kind: 'stat', stat: 'totalBrothEarned', target: 59 }, reward: { kind: 'multiplier', target: 'click', factor: 2 } },
   { id: 'q-first-cut', name: 'Cut the First Sod', emoji: '🔪', brief: 'Earn 25 total peat.', chapter: 'discovery', requirement: { kind: 'stat', stat: 'totalPeatEarned', target: 25 }, reward: { kind: 'resource', resource: 'peat', amount: 100 } },
+  { id: 'q-green-bed', name: 'Green Bed', emoji: '🌱', brief: 'Earn 50 total sphagnum.', chapter: 'discovery', requirement: { kind: 'stat', stat: 'totalSphagnumEarned', target: 50 }, reward: { kind: 'resource', resource: 'sphagnum', amount: 200 } },
   { id: 'q-serve-nordic', name: 'Serve Burger King Nordic', emoji: '🍔', brief: 'Own 5 Fermentation Vats.', chapter: 'discovery', requirement: { kind: 'owned', buildingId: 'vat', count: 5 }, reward: { kind: 'production', resource: 'broth', seconds: 120, floor: 500 } },
   { id: 'q-boot-racks', name: 'Boot the Racks', emoji: '🖥️', brief: 'Own 3 Server Racks.', chapter: 'discovery', requirement: { kind: 'owned', buildingId: 'rack', count: 3 }, reward: { kind: 'production', resource: 'compute', seconds: 300, floor: 200 } },
   { id: 'q-cool-heads', name: 'Cool Heads', emoji: '❄️', brief: 'Cool at least 100 heat.', chapter: 'discovery', requirement: { kind: 'cooled', minHeat: 100 }, reward: { kind: 'multiplier', target: 'compute', factor: 1.15 } },
@@ -53,6 +54,7 @@ export const QUESTS: QuestDef[] = [
   { id: 'q-hot-fries', name: '120 kg Hot Fries', emoji: '🍟', brief: 'Buy the Hot Fries upgrade.', chapter: 'litigation', requirement: { kind: 'upgrade', id: 'hot-fries' }, reward: { kind: 'resource', resource: 'peat', amount: 5_000 } },
   { id: 'q-pulley', name: '15% Pulley Equity', emoji: '🔩', brief: 'Buy Pulley Equity.', chapter: 'litigation', requirement: { kind: 'upgrade', id: 'pulley-equity' }, reward: { kind: 'multiplier', target: 'broth', factor: 1.15 } },
   { id: 'q-paper-trail', name: 'Paper Trail', emoji: '📁', brief: 'Earn 500 total evidence.', chapter: 'litigation', requirement: { kind: 'stat', stat: 'totalEvidenceEarned', target: 500 }, reward: { kind: 'multiplier', target: 'evidence', factor: 1.5 } },
+  { id: 'q-bog-gas', name: 'Bottled Bog Gas', emoji: '💨', brief: 'Earn 1,000 total methane.', chapter: 'litigation', requirement: { kind: 'stat', stat: 'totalMethaneEarned', target: 1_000 }, reward: { kind: 'multiplier', target: 'methane', factor: 1.25 } },
   { id: 'q-clause', name: 'Strike the 5:00 AM Clause', emoji: '📜', brief: 'Complete the lubrication clause research.', chapter: 'litigation', requirement: { kind: 'research', id: 'lubrication-clause' }, reward: { kind: 'multiplier', target: 'all', factor: 1.1 }, persistsThroughPrestige: true },
   { id: 'q-rate-1k', name: 'Ten Thousand a Second', emoji: '📈', brief: 'Reach 10,000 broth per second.', chapter: 'litigation', requirement: { kind: 'rate', resource: 'broth', perSecond: 10_000 }, reward: { kind: 'production', resource: 'broth', seconds: 600 } },
   { id: 'q-verdict', name: 'Magistrate Reino Rules', emoji: '⚖️', brief: 'Complete the Nordic verdict research.', chapter: 'verdict', requirement: { kind: 'research', id: 'nordic-verdict' }, reward: { kind: 'cores', amount: 1 }, persistsThroughPrestige: true },
@@ -115,6 +117,8 @@ function addResource(state: GameState, resource: EarnedResource, amount: number)
     state.totalComputeThisRun += amount;
   }
   if (resource === 'peat') state.totalPeatEarned += amount;
+  if (resource === 'sphagnum') state.totalSphagnumEarned += amount;
+  if (resource === 'methane') state.totalMethaneEarned += amount;
   if (resource === 'evidence') state.totalEvidenceEarned += amount;
 }
 

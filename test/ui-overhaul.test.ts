@@ -184,6 +184,30 @@ describe('UI overhaul', () => {
     expect(result?.hit).toBe(false);
   });
 
+  it('renders the three Charter branches and signs a term', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.bogCores = 1;
+    const ui = makeUi(root, { initialTab: 'charter' });
+    ui.renderLists(state);
+    expect(root.textContent).toContain('Roots · 0/4');
+    expect(root.textContent).toContain('Kindling · 0/4');
+    expect(root.textContent).toContain('Filing · 0/4');
+    const row = root.querySelector<HTMLElement>('[data-key="charter-roots-1"]')!;
+    expect(row.textContent).toContain('Sign');
+    row.click();
+    expect(root.textContent).toContain('Signed ✓');
+  });
+
+  it('shows the sphagnum Production filter when its nursery is owned', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.buildings.nursery = 1;
+    const ui = makeUi(root);
+    ui.renderLists(state);
+    expect(root.querySelector('[data-filter="sphagnum"]')).not.toBeNull();
+  });
+
   it('cools down for 5 s only after a miss', () => {
     const root = document.createElement('div');
     const state = createInitialState();

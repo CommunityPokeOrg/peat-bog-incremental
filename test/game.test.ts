@@ -22,7 +22,7 @@ import {
   totalHeat,
   upgradeVisible,
 } from '../src/game/engine';
-import { formatNumber } from '../src/game/format';
+import { formatCost, formatNumber } from '../src/game/format';
 import {
   computeOfflineEarnings,
   deserialize,
@@ -93,6 +93,16 @@ describe('tick', () => {
     expect(state.evidence).toBeCloseTo(2);
     expect(state.totalEvidenceEarned).toBeCloseTo(2);
   });
+  it('produces sphagnum and methane from the new buildings', () => {
+    const state = createInitialState();
+    state.buildings.nursery = 2;
+    state.buildings.digester = 4;
+    tick(state, 5);
+    expect(state.sphagnum).toBeCloseTo(4);
+    expect(state.methane).toBeCloseTo(10);
+    expect(state.totalSphagnumEarned).toBeCloseTo(4);
+    expect(state.totalMethaneEarned).toBeCloseTo(10);
+  });
   it('ignores non-positive dt', () => {
     const state = createInitialState();
     state.buildings['harvester'] = 10;
@@ -132,6 +142,24 @@ describe('economy', () => {
     expect(state.evidence).toBe(2);
     expect(canAfford(state, { peat: 18 })).toBe(false);
   });
+  it('formats the expanded resource cost order', () => {
+    expect(formatCost({ broth: 1, peat: 2, sphagnum: 3, methane: 4, compute: 5, evidence: 6 }))
+      .toBe('1 broth · 2 peat · 3 sphagnum · 4 methane · 5 compute · 6 evidence');
+  });
+  it('pays sphagnum building costs', () => {
+    const state = createInitialState();
+    state.revealed.push('deposition');
+    state.broth = 200_000;
+    state.compute = 5_000;
+    state.sphagnum = 500;
+    expect(buyBuilding(state, 'deposition', 1)).toBe(true);
+    expect(state.sphagnum).toBe(0);
+  });
+  it('reveals the Moss Terrace at 3 sphagnum per second', () => {
+    const state = createInitialState();
+    state.buildings.nursery = 8;
+    expect(revealBuildings(state)).toContain('terrace');
+  });
   it('buyBuilding spends broth and adds units', () => {
     const state = createInitialState();
     state.broth = 100;
@@ -151,6 +179,15 @@ describe('economy', () => {
     const state = createInitialState();
     state.upgrades.push('spade', 'gloves');
     expect(clickPower(state)).toBeCloseTo(4);
+  });
+  it('resource upgrades multiply only their target rate', () => {
+    const state = createInitialState();
+    state.buildings.cutter = 10;
+    state.buildings.nursery = 10;
+    state.upgrades.push('moss-mulch');
+    const rates = productionPerSecond(state);
+    expect(rates.peat).toBeCloseTo(4.5);
+    expect(rates.sphagnum).toBeCloseTo(4);
   });
 
   it('multiplies a building for each owned overclock tier', () => {
@@ -256,6 +293,11 @@ describe('save', () => {
     expect(loaded.version).toBe(2);
     expect(loaded.peat).toBe(0);
     expect(loaded.evidence).toBe(0);
+    expect(loaded.sphagnum).toBe(0);
+    expect(loaded.methane).toBe(0);
+    expect(loaded.totalSphagnumEarned).toBe(0);
+    expect(loaded.totalMethaneEarned).toBe(0);
+    expect(loaded.charter).toEqual([]);
     expect(loaded.calibrationStreak).toBe(0);
     expect(loaded.calibrationTarget).toBe(0.5);
     expect(loaded.researchQueue).toEqual([]);
@@ -269,6 +311,11 @@ describe('save', () => {
     state.achievements.push('click-1');
     state.peat = 4;
     state.evidence = 5;
+    state.sphagnum = 6;
+    state.methane = 7;
+    state.totalSphagnumEarned = 8;
+    state.totalMethaneEarned = 9;
+    state.charter.push('roots-1');
     state.calibrationStreak = 7;
     state.calibrationTarget = 0.3;
     state.researchQueue.push({ id: 'thermal-modelling', remaining: 12 });
@@ -281,6 +328,11 @@ describe('save', () => {
     expect(back!.achievements).toEqual(['click-1']);
     expect(back!.peat).toBe(4);
     expect(back!.evidence).toBe(5);
+    expect(back!.sphagnum).toBe(6);
+    expect(back!.methane).toBe(7);
+    expect(back!.totalSphagnumEarned).toBe(8);
+    expect(back!.totalMethaneEarned).toBe(9);
+    expect(back!.charter).toEqual(['roots-1']);
     expect(back!.calibrationStreak).toBe(7);
     expect(back!.calibrationTarget).toBe(0.3);
     expect(back!.researchQueue).toEqual([{ id: 'thermal-modelling', remaining: 12 }]);

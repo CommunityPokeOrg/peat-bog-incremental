@@ -13,17 +13,22 @@ export interface GameState {
   broth: number;
   compute: number;
   peat: number;
+  sphagnum: number;
+  methane: number;
   evidence: number;
   bogCores: number;
   totalBrothEarned: number;
   totalComputeEarned: number;
   totalPeatEarned: number;
+  totalSphagnumEarned: number;
+  totalMethaneEarned: number;
   totalEvidenceEarned: number;
   totalComputeThisRun: number;
   totalClicks: number;
   minigameHits: number;
   calibrationStreak: number;
   calibrationTarget: number;
+  charter: string[];
   buildings: Record<string, number>;
   revealed: string[];
   upgrades: string[];
@@ -43,17 +48,22 @@ export function createInitialState(): GameState {
     broth: 0,
     compute: 0,
     peat: 0,
+    sphagnum: 0,
+    methane: 0,
     evidence: 0,
     bogCores: 0,
     totalBrothEarned: 0,
     totalComputeEarned: 0,
     totalPeatEarned: 0,
+    totalSphagnumEarned: 0,
+    totalMethaneEarned: 0,
     totalEvidenceEarned: 0,
     totalComputeThisRun: 0,
     totalClicks: 0,
     minigameHits: 0,
     calibrationStreak: 0,
     calibrationTarget: 0.5,
+    charter: [],
     buildings: {},
     revealed: [],
     upgrades: [],

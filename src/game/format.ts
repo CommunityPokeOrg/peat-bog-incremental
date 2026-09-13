@@ -20,14 +20,18 @@ export function formatNumber(n: number): string {
 
 export function formatCost(cost: {
   broth?: number;
-  compute?: number;
   peat?: number;
+  sphagnum?: number;
+  methane?: number;
+  compute?: number;
   evidence?: number;
 }): string {
   const parts: string[] = [];
   if (cost.broth !== undefined) parts.push(`${formatNumber(cost.broth)} broth`);
-  if (cost.compute !== undefined) parts.push(`${formatNumber(cost.compute)} compute`);
   if (cost.peat !== undefined) parts.push(`${formatNumber(cost.peat)} peat`);
+  if (cost.sphagnum !== undefined) parts.push(`${formatNumber(cost.sphagnum)} sphagnum`);
+  if (cost.methane !== undefined) parts.push(`${formatNumber(cost.methane)} methane`);
+  if (cost.compute !== undefined) parts.push(`${formatNumber(cost.compute)} compute`);
   if (cost.evidence !== undefined) parts.push(`${formatNumber(cost.evidence)} evidence`);
   return parts.join(' · ');
 }

@@ -1,5 +1,5 @@
 /** Resource identifiers used by wallets, rates, and costs. */
-export type ResourceId = 'broth' | 'compute' | 'peat' | 'evidence' | 'bogCores';
+export type ResourceId = 'broth' | 'peat' | 'sphagnum' | 'methane' | 'compute' | 'evidence' | 'bogCores';
 /** Resources that can be spent; Bog Cores are prestige currency. */
 export type SpendableResource = Exclude<ResourceId, 'bogCores'>;
 
@@ -13,6 +13,8 @@ export interface ResourceDef {
 export const RESOURCES: ResourceDef[] = [
   { id: 'broth', name: 'fp16 compute broth', emoji: '🫧' },
   { id: 'peat', name: 'raw peat', emoji: '🟫' },
+  { id: 'sphagnum', name: 'sphagnum moss', emoji: '🌱' },
+  { id: 'methane', name: 'bog methane', emoji: '💨' },
   { id: 'compute', name: 'compute', emoji: '⚡' },
   { id: 'evidence', name: 'case evidence', emoji: '📁' },
   { id: 'bogCores', name: 'bog cores', emoji: '💠' },
@@ -26,15 +28,19 @@ export interface BuildingDef {
   emoji: string;
   description: string;
   baseCost: ResourceCost;
-  generates: 'broth' | 'peat' | 'cooling' | 'compute' | 'evidence';
+  generates: 'broth' | 'peat' | 'sphagnum' | 'methane' | 'cooling' | 'compute' | 'evidence';
   unlock?: {
     brothPerSecond?: number;
     computePerSecond?: number;
     peatPerSecond?: number;
+    sphagnumPerSecond?: number;
+    methanePerSecond?: number;
   };
   brothPerSecond?: number;
   computePerSecond?: number;
   peatPerSecond?: number;
+  sphagnumPerSecond?: number;
+  methanePerSecond?: number;
   evidencePerSecond?: number;
   cooling?: number;
   heat?: number;
@@ -51,13 +57,22 @@ export const BUILDINGS: BuildingDef[] = [
   { id: 'still', name: 'Geothermal Still', emoji: '♨️', description: 'Draws subterranean warmth through a continuous broth still.', baseCost: { broth: 1_400_000 }, generates: 'broth', brothPerSecond: 4_000, unlock: { brothPerSecond: 3_000 } },
   { id: 'biome', name: 'Sealed Biome Vat', emoji: '🫙', description: 'A sealed ecosystem that brews the bog at industrial scale.', baseCost: { broth: 20_000_000 }, generates: 'broth', brothPerSecond: 25_000, unlock: { brothPerSecond: 20_000 } },
   { id: 'fryer', name: '120 kg Fryer Line', emoji: '🍟', description: 'Fries 120 kg of hot fries an hour; the runoff is surprisingly good broth.', baseCost: { broth: 300_000_000 }, generates: 'broth', brothPerSecond: 150_000, unlock: { brothPerSecond: 150_000 } },
+  { id: 'kettle', name: 'Methane-Fired Kettle', emoji: '🫕', description: 'Boils broth on bog gas. Filed under "renewable" by the Chronicler.', baseCost: { broth: 4_000_000_000, methane: 2_000_000 }, generates: 'broth', brothPerSecond: 1_200_000, unlock: { brothPerSecond: 1_000_000 } },
   { id: 'cutter', name: 'Peat Cutter', emoji: '🔪', description: 'Cuts raw peat from the upper bog.', baseCost: { broth: 40 }, generates: 'peat', peatPerSecond: 0.3 },
   { id: 'excavator', name: 'Trench Excavator', emoji: '⛏️', description: 'Digs deep channels through the peat.', baseCost: { broth: 2_500, peat: 150 }, generates: 'peat', peatPerSecond: 6, unlock: { peatPerSecond: 2 } },
   { id: 'bogwalker', name: 'Bog Walker Rig', emoji: '🦿', description: 'Strides across the bog on industrial legs.', baseCost: { broth: 400_000, peat: 20_000 }, generates: 'peat', peatPerSecond: 150, unlock: { peatPerSecond: 40 } },
+  { id: 'barge', name: 'Peat Barge', emoji: '🛶', description: 'A flat barge hauling cut peat down the flooded channels.', baseCost: { broth: 30_000_000, methane: 20_000 }, generates: 'peat', peatPerSecond: 3_000, unlock: { peatPerSecond: 800 } },
+  { id: 'nursery', name: 'Sphagnum Nursery', emoji: '🌱', description: 'Trays of living moss raised on warm broth runoff.', baseCost: { broth: 800, peat: 60 }, generates: 'sphagnum', sphagnumPerSecond: 0.4 },
+  { id: 'terrace', name: 'Moss Terrace', emoji: '🪴', description: 'Stepped terraces where the moss grows thick enough to walk on. Almost.', baseCost: { broth: 60_000, peat: 4_000 }, generates: 'sphagnum', sphagnumPerSecond: 8, unlock: { sphagnumPerSecond: 3 } },
+  { id: 'loom', name: 'Bog Moss Loom', emoji: '🧵', description: 'Weaves sphagnum into insulating mats the racks are wrapped in.', baseCost: { broth: 5_000_000, sphagnum: 50_000 }, generates: 'sphagnum', sphagnumPerSecond: 200, unlock: { sphagnumPerSecond: 60 } },
+  { id: 'digester', name: 'Anaerobic Digester', emoji: '🧫', description: 'Sealed peat rots in the dark and burps usable gas.', baseCost: { broth: 15_000, peat: 800 }, generates: 'methane', methanePerSecond: 0.5 },
+  { id: 'gasdome', name: 'Methane Capture Dome', emoji: '⛺', description: 'A tarp dome over the wettest acre, catching what the bog exhales.', baseCost: { broth: 800_000, sphagnum: 5_000 }, generates: 'methane', methanePerSecond: 12, unlock: { methanePerSecond: 3 } },
+  { id: 'flare', name: 'Flare Stack Turbine', emoji: '🔥', description: 'Burns off the surplus and spins a turbine while it does.', baseCost: { broth: 40_000_000, methane: 200_000 }, generates: 'methane', methanePerSecond: 300, unlock: { methanePerSecond: 100 } },
   { id: 'chiller', name: 'Chiller', emoji: '❄️', description: 'Keeps a rack-sized pocket of the bog frosty. Paid for in sanitized change.', baseCost: { broth: 600 }, generates: 'cooling', cooling: 10 },
   { id: 'mossbed', name: 'Moss Cooling Bed', emoji: '🌿', description: 'A bed of living moss that draws heat from the racks.', baseCost: { broth: 3_000, peat: 200 }, generates: 'cooling', cooling: 40 },
   { id: 'tower', name: 'Cooling Tower', emoji: '🏭', description: 'Evaporative tower venting steam over the moss.', baseCost: { broth: 12_000 }, generates: 'cooling', cooling: 120 },
   { id: 'glycol', name: 'Glycol Loop', emoji: '🧊', description: 'A closed loop of glycol carrying heat into the moss.', baseCost: { broth: 150_000 }, generates: 'cooling', cooling: 1_400, unlock: { computePerSecond: 20 } },
+  { id: 'jacket', name: 'Sphagnum Jacket', emoji: '🧣', description: 'Wet moss wrapped around every rack. Cheap, damp, effective.', baseCost: { broth: 500_000, sphagnum: 3_000 }, generates: 'cooling', cooling: 5_000, unlock: { computePerSecond: 100 } },
   { id: 'exchanger', name: 'Bog Heat Exchanger', emoji: '🔁', description: 'Trades bog water for rack heat at exceptional efficiency.', baseCost: { broth: 2_000_000 }, generates: 'cooling', cooling: 15_000, unlock: { computePerSecond: 300 } },
   { id: 'cryo', name: 'Cryo Plant', emoji: '🌬️', description: 'A cryogenic plant freezing the bog around the racks.', baseCost: { broth: 30_000_000, peat: 500_000 }, generates: 'cooling', cooling: 180_000, unlock: { computePerSecond: 5_000 } },
   { id: 'rack', name: 'Server Rack', emoji: '🖥️', description: 'A humming rack steeped in the bog.', baseCost: { broth: 2_500 }, generates: 'compute', computePerSecond: 2, heat: 8 },
@@ -65,8 +80,10 @@ export const BUILDINGS: BuildingDef[] = [
   { id: 'hall', name: 'Data Hall', emoji: '🏢', description: 'A whole hall of servers drinking the bog dry.', baseCost: { broth: 1_000_000 }, generates: 'compute', computePerSecond: 250, heat: 500, unlock: { computePerSecond: 50 } },
   { id: 'cluster', name: 'fp16 Cluster', emoji: '🧮', description: 'A cluster of fp16 racks tuned for the peat bog.', baseCost: { broth: 8_000_000 }, generates: 'compute', computePerSecond: 2_000, heat: 3_500, unlock: { computePerSecond: 500 } },
   { id: 'hyperscaler', name: 'Bog Hyperscaler', emoji: '🌐', description: 'A continent-scale facility anointed in broth.', baseCost: { broth: 120_000_000, compute: 500_000 }, generates: 'compute', computePerSecond: 30_000, heat: 30_000, unlock: { computePerSecond: 5_000 } },
+  { id: 'turbinehall', name: 'Gas Turbine Hall', emoji: '🏭', description: 'Racks powered by bog methane; the exhaust warms the courthouse.', baseCost: { broth: 1_500_000_000, methane: 300_000 }, generates: 'compute', computePerSecond: 300_000, heat: 250_000, unlock: { computePerSecond: 100_000 } },
   { id: 'clerk', name: "Chronicler's Clerk Desk", emoji: '🖋️', description: 'A clerk desk that turns events into evidence.', baseCost: { broth: 20_000, compute: 200 }, generates: 'evidence', evidencePerSecond: 0.2, unlock: { computePerSecond: 5 } },
   { id: 'archive', name: 'Evidence Archive', emoji: '🗄️', description: 'Archives every filing from the peat bog trial.', baseCost: { broth: 2_000_000, compute: 50_000 }, generates: 'evidence', evidencePerSecond: 4, unlock: { computePerSecond: 500 } },
+  { id: 'deposition', name: 'Deposition Booth', emoji: '🎙️', description: 'Witnesses depose on tape; the moss soaks up the echo.', baseCost: { broth: 200_000, compute: 5_000, sphagnum: 500 }, generates: 'evidence', evidencePerSecond: 1, unlock: { computePerSecond: 50 } },
   { id: 'courthouse', name: "Magistrate Reino's Courthouse Datacenter", emoji: '⚖️', description: 'Where McFly & Chronicler LLP v Burger King Nordic is finally heard — on 40 L of fp16 broth per rack.', baseCost: { broth: 2_000_000_000, compute: 5_000_000 }, generates: 'evidence', computePerSecond: 250_000, evidencePerSecond: 60, heat: 200_000, unlock: { computePerSecond: 50_000 } },
 ];
 
@@ -74,7 +91,7 @@ export const BUILDING_BY_ID: Record<string, BuildingDef> = Object.fromEntries(
   BUILDINGS.map((b) => [b.id, b]),
 );
 
-export type UpgradeKind = 'click' | 'building' | 'thermal';
+export type UpgradeKind = 'click' | 'building' | 'thermal' | 'resource';
 
 export interface UpgradeDef {
   id: string;
@@ -89,6 +106,7 @@ export interface UpgradeDef {
   clickBrothFraction?: number;
   coolingMultiplier?: number;
   heatMultiplier?: number;
+  resourceMultiplier?: { resource: Exclude<SpendableResource, 'bogCores'>; factor: number };
 }
 
 function scaleCost(cost: ResourceCost, factor: number): ResourceCost {
@@ -208,6 +226,14 @@ export const UPGRADES: UpgradeDef[] = [
     heatMultiplier: 0.9,
     requires: [{ buildingId: 'rack', count: 50 }],
   },
+  { id: 'moss-mulch', name: 'Sphagnum Mulch', emoji: '🌱', description: 'Spent moss mulched back into the cuttings. Peat production ×1.5.', cost: { sphagnum: 500 }, kind: 'resource', resourceMultiplier: { resource: 'peat', factor: 1.5 }, requires: [{ buildingId: 'nursery', count: 10 }] },
+  { id: 'pilot-light', name: 'Methane Pilot Light', emoji: '🕯️', description: 'Every vat gets a bog-gas flame underneath. Broth production ×1.25.', cost: { methane: 2_000 }, kind: 'resource', resourceMultiplier: { resource: 'broth', factor: 1.25 }, requires: [{ buildingId: 'digester', count: 10 }] },
+  { id: 'evidence-press', name: 'Gas-Fired Evidence Press', emoji: '🗞️', description: 'Exhibits pressed flat and hot. Evidence production ×1.5.', cost: { methane: 20_000, evidence: 200 }, kind: 'resource', resourceMultiplier: { resource: 'evidence', factor: 1.5 }, requires: [{ buildingId: 'archive', count: 5 }] },
+  { id: 'gas-scrubber', name: 'Bog Gas Scrubber', emoji: '🧯', description: 'Scrubbed exhaust runs colder. Cooling +20%.', cost: { methane: 50_000 }, kind: 'thermal', coolingMultiplier: 1.2, requires: [{ buildingId: 'gasdome', count: 10 }] },
+  { id: 'moss-membrane', name: 'Moss Filter Membrane', emoji: '🧻', description: 'A living membrane between rack and bog. All heat −10%.', cost: { sphagnum: 20_000 }, kind: 'thermal', heatMultiplier: 0.9, requires: [{ buildingId: 'terrace', count: 10 }] },
+  { id: 'wetland-charter', name: 'Wetland Charter', emoji: '📗', description: 'Magistrate Reino grants the moss protected status. Sphagnum production ×2.', cost: { evidence: 5_000, sphagnum: 100_000 }, kind: 'resource', resourceMultiplier: { resource: 'sphagnum', factor: 2 }, requires: [{ buildingId: 'loom', count: 5 }] },
+  { id: 'flare-recovery', name: 'Flare Recovery Loop', emoji: '♻️', description: 'Nothing burns off unmetered. Methane production ×2.', cost: { methane: 1_000_000 }, kind: 'resource', resourceMultiplier: { resource: 'methane', factor: 2 }, requires: [{ buildingId: 'flare', count: 5 }] },
+  { id: 'stenographer', name: 'Deposition Stenographer', emoji: '⌨️', description: 'Every scoop is entered into the record. Click power ×4.', cost: { evidence: 2_000 }, kind: 'click', clickMultiplier: 4, requires: [{ buildingId: 'deposition', count: 5 }] },
   ...BUILDINGS.flatMap((building) =>
     BOOST_TIERS.map(({ count, factor, roman }, index): UpgradeDef => ({
       id: index === 0 ? `boost-${building.id}` : `boost-${building.id}-${count}`,
@@ -335,8 +361,29 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'pulley-equity', name: 'Pulley Shareholder', emoji: '🔩', description: 'Hold 15% Taylor C602 pulley equity.' },
   { id: 'clause-struck', name: 'Clause Struck', emoji: '📜', description: 'Remove the 5:00 AM lubrication clause.' },
   { id: 'reino-verdict', name: 'Magistrate Reino Rules', emoji: '⚖️', description: 'Win McFly & Chronicler LLP v Burger King Nordic.' },
+  { id: 'moss-1k', name: 'Soft Ground', emoji: '🌱', description: 'Earn 1,000 total sphagnum.' },
+  { id: 'methane-1k', name: 'Marsh Light', emoji: '💨', description: 'Earn 1,000 total methane.' },
+  { id: 'charter-1', name: 'First Term Signed', emoji: '📗', description: 'Sign a Charter term.' },
+  { id: 'charter-all', name: 'Full Charter', emoji: '📜', description: 'Sign every Charter term.' },
 ];
 
 export const ACHIEVEMENT_BY_ID: Record<string, AchievementDef> = Object.fromEntries(
   ACHIEVEMENTS.map((a) => [a.id, a]),
 );
+
+export const FIELD_NOTES: string[] = [
+  'Field note 01: the bog has entered a plea of damp.',
+  'Field note 02: the first cut was clean. The second was personal.',
+  'Field note 03: the moss is winning. Filed without objection.',
+  'Field note 04: Exhibit C is a 40 L drum, labelled fp16, warm to the touch.',
+  "Field note 05: Reino's clerk asks that the racks stop humming during recess.",
+  'Field note 06: the 5:00 AM lubrication clause has been struck; the racks are still greasy.',
+  "Field note 07: Burger King Nordic's counsel requests the fries be entered as evidence. Denied; eaten.",
+  'Field note 08: $59 in sanitized change remains in escrow, smelling of peat.',
+  'Field note 09: the Taylor C602 pulley turns 15% in our favour.',
+  'Field note 10: methane was found bubbling under the filing cabinet.',
+  'Field note 11: sphagnum has formed a committee and requested shade.',
+  'Field note 12: the courthouse datacenter accepts broth by the litre.',
+  'Field note 13: the bog gas is renewable, provided nobody asks where it came from.',
+  'Field note 14: all objections are logged, dried, and returned to the peat.',
+];
