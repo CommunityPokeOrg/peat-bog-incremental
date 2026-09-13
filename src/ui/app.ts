@@ -152,7 +152,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           <p class="case-label">Sector 4 · The Peat Bog Trial</p>
         </div>
         <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
-        <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false" aria-label="Sound off"></button>
       </div>
       <div class="ledger-subrow">
         <div class="buffs" id="buffs" aria-live="polite"></div>
@@ -249,6 +248,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       </section>
     </main>
     <footer class="site-footer">
+      <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false" aria-label="Sound off"></button>
       <span id="save-indicator" aria-live="polite"></span>
       <span>Sector 4 · Peat Bog Trial · McFly &amp; Chronicler LLP v Burger King Nordic</span>
       <span id="field-note"></span>
@@ -306,7 +306,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   if (!reducedMotion) root.appendChild(wisps);
 
   const syncSoundControls = (): void => {
-    soundToggle.innerHTML = `${sound.enabled ? EMBLEM_SPEAKER_ON : EMBLEM_SPEAKER_OFF}<span>Sound</span>`;
+    soundToggle.innerHTML = sound.enabled ? EMBLEM_SPEAKER_ON : EMBLEM_SPEAKER_OFF;
     soundToggle.setAttribute('aria-pressed', String(sound.enabled));
     soundToggle.setAttribute('aria-label', sound.enabled ? 'Sound on' : 'Sound off');
     const settingsSound = root.querySelector<HTMLInputElement>('#set-sound');

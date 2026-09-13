@@ -21,4 +21,4 @@ This document describes the implemented visual system, not proposals.
 - **Emblems:** tabs use small current-color SVG emblems (scroll, spade, gear, alembic, stone, star, and sliders) so chrome remains legible without emoji.
 - **Sound:** optional synthesized Web Audio cues are off by default, persisted at `peat-bog:sound`, and available from the header or Settings.
 - **Reduced motion:** `prefers-reduced-motion: reduce` removes wisps and bubbles, freezes scene movement, and leaves all content, controls, and focus behavior intact.
-- **Measured cost:** at 1280px over a two-second Playwright/CDP sample, Production averaged 71.421ms per rAF frame with 14 animated elements; Charter averaged 70.832ms with 18 animated elements.
+- **Measured cost:** at 1280px over a two-second Playwright/CDP sample, Production averaged 74.689ms per rAF frame with 14 animated elements; Charter averaged 78.204ms with 18 animated elements; reduced-motion Production averaged 17.090ms with 0 animated elements.

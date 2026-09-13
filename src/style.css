@@ -39,6 +39,7 @@
   --t-duration-sm: 120ms;
   --t-duration-md: 220ms;
   --t-duration-lg: 420ms;
+  --t-duration-ambient: 30s;
   --t-ease: cubic-bezier(.2,.8,.2,1);
   --shake-distance: 6px;
   --shake-overshoot: 4px;
@@ -128,7 +129,7 @@ textarea:focus-visible,
 
 .ledger-main {
   display: grid;
-  grid-template-columns: minmax(220px, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, auto) minmax(0, 1fr);
   align-items: end;
   gap: var(--sp-5);
 }
@@ -465,8 +466,9 @@ kbd {
 .panel[data-scene="still"] {
   --scene-accent: var(--coolant);
   --scene-backdrop:
-    linear-gradient(145deg, rgba(99,211,232,.15), transparent 45%),
-    linear-gradient(20deg, rgba(143,191,106,.13), transparent 55%),
+    radial-gradient(circle, rgba(99,211,232,.18) 0 1px, transparent 1.8px) 16px 24px / 130px 130px,
+    linear-gradient(145deg, rgba(99,211,232,.15), transparent 45%) 0 0 / 240% 100%,
+    linear-gradient(20deg, rgba(143,191,106,.13), transparent 55%) 0 0 / 100% 100%,
     var(--bog-1);
 }
 
@@ -481,10 +483,10 @@ kbd {
 .panel[data-scene="sky"] {
   --scene-accent: var(--core);
   --scene-backdrop:
-    radial-gradient(circle at 18% 20%, rgba(196,140,255,.18) 0 1px, transparent 2px),
-    radial-gradient(circle at 73% 34%, rgba(99,211,232,.16) 0 1px, transparent 2px),
-    linear-gradient(120deg, rgba(196,140,255,.13), transparent 42%),
-    var(--bog-0);
+    radial-gradient(circle, rgba(239,230,210,.55) 0 .7px, transparent 1.4px) 0 0 / 180px 180px,
+    radial-gradient(circle, rgba(196,140,255,.45) 0 .6px, transparent 1.3px) 40px 70px / 260px 260px,
+    linear-gradient(100deg, transparent 20%, rgba(196,140,255,.14) 45%, rgba(99,211,232,.10) 60%, transparent 80%) 0 0 / 300% 100%,
+    #07070d;
 }
 
 .panel[data-scene="office"] {
@@ -498,8 +500,6 @@ kbd {
   inset: 0;
   overflow: hidden;
   background: var(--scene-backdrop);
-  background-position: 0 0;
-  background-size: auto, auto, auto;
   pointer-events: none;
 }
 
@@ -512,10 +512,11 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-1);
-  min-width: 44px;
-  min-height: 40px;
-  padding: 0 var(--sp-2);
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r-sm);
   background: var(--bog-2);
@@ -530,8 +531,8 @@ kbd {
 }
 
 .sound-toggle svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .wisps {
@@ -551,19 +552,18 @@ kbd {
   position: absolute;
   top: var(--y);
   left: var(--x);
-  width: 5px;
-  height: 5px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--coolant);
-  box-shadow: 0 0 14px 4px rgba(99,211,232,.5);
+  background: radial-gradient(circle, var(--coolant) 0 1.5px, rgba(99,211,232,.35) 3px, transparent 8px);
   opacity: .4;
+  will-change: transform, opacity;
   animation: will-o var(--d) var(--t-ease) var(--delay) infinite;
 }
 
 .panel[data-scene="sky"] .panel-scene,
 .panel[data-scene="still"] .panel-scene {
-  background-position: 0 0, 0 0, 0 0;
-  animation: aurora var(--t-duration-lg) var(--t-ease) infinite alternate;
+  animation: aurora var(--t-duration-ambient) linear infinite alternate;
 }
 
 .panel[data-scene="still"] .still-bubble {
@@ -1473,11 +1473,20 @@ button.item:not(:disabled) .item-action {
 }
 
 .site-footer {
+  align-items: center;
   display: flex;
   justify-content: space-between;
   gap: var(--sp-3);
   color: var(--ink-faint);
   font: var(--fs-xs) var(--font-mono);
+}
+
+.site-footer > span:nth-of-type(2) {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #save-indicator.flash {
@@ -1617,7 +1626,7 @@ button.item:not(:disabled) .item-action {
 }
 
 @keyframes aurora {
-  to { background-position: 8% 4%, -5% 3%, 12% 0; }
+  to { background-position: 10% 6%, -10% -4%, 12% 0, 0 0; }
 }
 
 @keyframes ember-breathe {
