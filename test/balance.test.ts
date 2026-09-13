@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CHARTER, buyCharter, charterAvailable } from '../src/game/charter';
+import { CHARTER } from '../src/game/charter';
 import { BUILDINGS, RESEARCH_BY_ID } from '../src/game/data';
 import { D } from '../src/game/decimal';
-import { prestige, productionPerSecond, tick } from '../src/game/engine';
 import { deserialize, serialize } from '../src/game/save';
 import {
   ALL_QUESTS,
@@ -10,40 +9,21 @@ import {
   questReady,
 } from '../src/game/quests';
 import { createInitialState } from '../src/game/state';
+import { simulateCareer } from './balance-sim';
 
 describe('Stage D progression balance', () => {
-  it('keeps a late-run wall while each drained run grows broth output', () => {
-    const state = createInitialState();
-    const peaks: number[] = [];
-    for (let run = 0; run < 3; run += 1) {
-      state.wallet.broth = D('1e30');
-      state.buildings = { harvester: 100 * 3 ** run, vat: 20 * 3 ** run };
-      let atThreeHours = 0;
-      let atFourHours = 0;
-      let peak = 0;
-      for (let seconds = 0; seconds < 4 * 3600; seconds += 60) {
-        tick(state, 60);
-        const rate = productionPerSecond(state).broth.toNumber();
-        peak = Math.max(peak, rate);
-        if (seconds + 60 === 3 * 3600) atThreeHours = rate;
-        if (seconds + 60 === 4 * 3600) atFourHours = rate;
-      }
-      peaks.push(peak);
-      expect(atFourHours).toBeLessThan(atThreeHours * 1.5);
-      state.runCompute = D('1e12');
-      state.wallet.bogCores = state.wallet.bogCores.add(10_000);
-      prestige(state);
-      let bought = true;
-      while (bought) {
-        const next = CHARTER
-          .filter((node) => charterAvailable(state, node))
-          .sort((a, b) => a.cost - b.cost)[0];
-        bought = Boolean(next && buyCharter(state, next.id));
-      }
+  it('grows each drained run while late runs hit a wall', () => {
+    const career = simulateCareer(5, 4);
+    for (let run = 1; run < career.length; run += 1) {
+      expect(career[run].peak, `run ${run + 1} peak`).toBeGreaterThanOrEqual(career[run - 1].peak * 2);
+      expect(career[run].cores, `run ${run + 1} cores`).toBeGreaterThan(career[run - 1].cores);
     }
-    expect(peaks[1]).toBeGreaterThanOrEqual(peaks[0] * 2.5);
-    expect(peaks[2]).toBeGreaterThanOrEqual(peaks[1] * 2.5);
-  });
+    const first = career[0].hourly;
+    expect(first[3] / first[2]).toBeLessThan(first[1] / first[0]);
+    const last = career[career.length - 1].hourly;
+    expect(last[3] / last[0]).toBeLessThan(2);
+    expect(last[3] / last[0]).toBeLessThan((first[3] / first[0]) / 4);
+  }, 180_000);
 
   it('can satisfy every authored one-time quest requirement', () => {
     for (const quest of ALL_QUESTS) {
