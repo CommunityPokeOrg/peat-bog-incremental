@@ -33,6 +33,7 @@ const DECIMAL_FIELDS = [
   'totalComputeThisRun',
 ] as const;
 
+/** Serialized save shape with Decimal fields represented as strings. */
 export interface SavedState {
   version: number;
   broth: string;
@@ -188,6 +189,7 @@ export function offlineRateBreakdown(state: GameState): {
   return { base, nightWatch, charter, total: Math.min(1, base + nightWatch + charter) };
 }
 
+/** Convert wall-clock elapsed time to guarded elapsed seconds. */
 export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: number): number {
   const monotonic = Number.isFinite(monotonicDeltaMs) ? Math.max(0, monotonicDeltaMs) : 0;
   if (Number.isFinite(wallDeltaMs) && wallDeltaMs >= 0 && wallDeltaMs <= monotonic + 300_000) {
@@ -196,6 +198,7 @@ export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: nu
   return monotonic / 1000;
 }
 
+/** Offline progress at the current background rate, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
   const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
   const rates = productionPerSecond(state);
@@ -212,6 +215,7 @@ export function computeOfflineEarnings(state: GameState, elapsedSec: number): Of
   };
 }
 
+/** Base64 export. Save JSON contains only ASCII (numbers, ids), so btoa is safe. */
 export function exportSave(state: GameState): string {
   return btoa(serialize(state));
 }

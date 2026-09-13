@@ -16,6 +16,7 @@ import { QUESTS, expireBuffs, questMultiplier } from './quests';
 import { CHARTER, charterFactor, charterMultiplier, charterSum } from './charter';
 
 export const SPENDABLE_RESOURCES: SpendableResource[] = ['broth', 'peat', 'sphagnum', 'methane', 'compute', 'evidence'];
+/** Maximum number of research items that may be queued at once. */
 export const MAX_RESEARCH_QUEUE = 3;
 
 export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
@@ -27,6 +28,7 @@ export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
   return out;
 }
 
+/** Total cost of buying `qty` units starting at `owned`. */
 export function bulkCost(def: BuildingDef, owned: number, qty: number): ResourceCost {
   const geom = qty === 1 ? D(1) : Decimal.pow(COST_SCALE, qty).sub(1).div(COST_SCALE - 1);
   const base = buildingCost(def, owned);
@@ -37,6 +39,7 @@ export function bulkCost(def: BuildingDef, owned: number, qty: number): Resource
   return out;
 }
 
+/** Max quantity affordable with current resources. */
 export function maxAffordable(def: BuildingDef, owned: number, state: GameState): number {
   let qty: number | null = null;
   for (const resource of SPENDABLE_RESOURCES) {
@@ -59,6 +62,7 @@ export function canAfford(state: GameState, cost: ResourceCost | Partial<Record<
   );
 }
 
+/** Subtract a generic resource cost from the state wallet. */
 export function payCost(state: GameState, cost: ResourceCost | Partial<Record<SpendableResource, number>>): void {
   for (const resource of SPENDABLE_RESOURCES) {
     if (cost[resource] !== undefined) state[resource] = state[resource].sub(D(cost[resource]!));
@@ -78,6 +82,7 @@ export function buyNightWatch(state: GameState): boolean {
   return true;
 }
 
+/** +5% per Bog Core, +1% per achievement. */
 export function globalMultiplier(state: GameState): Decimal {
   return D(1).add(state.bogCores.mul(0.05)).add(state.achievements.length * 0.01);
 }
@@ -117,12 +122,14 @@ export function totalCooling(state: GameState): Decimal {
   return cooling.mul(coolMult).mul(charterFactor(state, 'cooling'));
 }
 
+/** Fraction of full speed the racks run at: min(1, cooling/heat). */
 export function thermalFactor(state: GameState): Decimal {
   const heat = totalHeat(state);
   if (heat.lte(0)) return D(1);
   return totalCooling(state).div(heat).min(1);
 }
 
+/** Current production rates for all generated resources. */
 export interface Rates {
   broth: Decimal;
   peat: Decimal;
@@ -195,6 +202,7 @@ export function clickPower(state: GameState, now = Date.now()): Decimal {
   return power.mul(globalMultiplier(state)).mul(charterMultiplier(state, 'click')).mul(questMultiplier(state, 'click', now));
 }
 
+/** Advance the simulation by dtSeconds (the rAF loop clamps dt to ≤1s per frame). */
 export function tick(state: GameState, dtSeconds: number, now = Date.now()): GameState {
   if (dtSeconds <= 0) return state;
   expireBuffs(state, now);
@@ -314,6 +322,7 @@ export function buyResearch(state: GameState, id: string): boolean {
   return true;
 }
 
+/** Cancel queued research and refund its full cost. */
 export function cancelResearch(state: GameState, id: string): boolean {
   const index = state.researchQueue.findIndex((entry) => entry.id === id);
   if (index < 0) return false;
@@ -327,6 +336,7 @@ export function cancelResearch(state: GameState, id: string): boolean {
   return true;
 }
 
+/** Return queued research progress, or null for research not in the queue. */
 export function researchProgress(
   state: GameState,
   id: string,
@@ -340,6 +350,7 @@ export function researchProgress(
   };
 }
 
+/** Advance queued research in order and return ids completed during the advance. */
 export function advanceResearch(state: GameState, seconds: number): string[] {
   let remaining = Math.max(0, seconds);
   const completed: string[] = [];
@@ -368,6 +379,7 @@ export function canPrestige(state: GameState): boolean {
   return prestigeGain(state).gt(0);
 }
 
+/** Drain the bog: bank Bog Cores, reset the run, keep achievements/cores/lifetime totals. */
 export function prestige(state: GameState): Decimal {
   const gain = prestigeGain(state);
   if (gain.lte(0)) return D(0);
@@ -394,6 +406,7 @@ export function prestige(state: GameState): Decimal {
   return gain;
 }
 
+/** Unlock any newly-earned achievements; returns the newly unlocked ids. */
 export function checkAchievements(state: GameState): string[] {
   const owned = (id: string) => state.buildings[id] ?? 0;
   const has = (id: string) => state.achievements.includes(id);
