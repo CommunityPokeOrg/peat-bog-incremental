@@ -614,6 +614,27 @@ export const RESEARCH_BY_ID: Record<string, ResearchDef> = Object.fromEntries(
   RESEARCH.map((r) => [r.id, r]),
 );
 
+/** Branches used to organize the Research tab. */
+export type ResearchBranch = 'thermal' | 'extraction' | 'distillation' | 'litigation' | 'celestial';
+
+/** Research branch labels and their short ledger descriptions. */
+export const RESEARCH_BRANCHES: Record<ResearchBranch, { name: string; blurb: string }> = {
+  thermal: { name: 'Thermal', blurb: 'Keep the racks cold enough to remain admissible.' },
+  extraction: { name: 'Extraction', blurb: 'Pull useful matter from the bog before it closes.' },
+  distillation: { name: 'Distillation', blurb: 'Run the still until the paperwork turns clear.' },
+  litigation: { name: 'Litigation', blurb: 'Give the court more work than it can postpone.' },
+  celestial: { name: 'Celestial', blurb: 'Ask the dark above the bog what remains below.' },
+};
+
+/** Return the authored branch for a Research definition. */
+export function researchBranch(id: string): ResearchBranch {
+  if (['thermal-modelling', 'lubrication-clause', 'liquid-immersion', 'thermal-docket', 'cooling-reserve', 'heat-exemption', 'cold-precedent', 'thermal-charter', 'cold-finality'].includes(id)) return 'thermal';
+  if (['extraction-ledger', 'sludge-accounting', 'peat-standard', 'press-efficiency', 'peat-scale', 'deep-extraction', 'click-research', 'moss-annex'].includes(id)) return 'extraction';
+  if (['broth-distillation', 'broth-standard', 'edge-caching', 'still-method', 'fractionation', 'distillers-clause', 'double-run', 'distillation-scale'].includes(id)) return 'distillation';
+  if (['nordic-verdict', 'litigation-slots', 'offline-brief', 'evidence-multipliers', 'research-office', 'filing-scale', 'automation-research', 'offline-research', 'final-verdict'].includes(id)) return 'litigation';
+  return 'celestial';
+}
+
 export interface AchievementDef {
   id: string;
   name: string;

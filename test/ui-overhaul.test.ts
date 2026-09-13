@@ -210,6 +210,29 @@ describe('UI overhaul', () => {
     expect(root.textContent).toContain('Queue full');
   });
 
+  it('renders all research branches and rolls a claimed bounty forward', () => {
+    const researchRoot = document.createElement('div');
+    const researchUi = makeUi(researchRoot, { initialTab: 'research' });
+    researchUi.renderLists(createInitialState());
+    for (const branch of ['Thermal', 'Extraction', 'Distillation', 'Litigation', 'Celestial']) {
+      expect(researchRoot.textContent).toContain(branch);
+    }
+
+    const docketRoot = document.createElement('div');
+    const state = createInitialState();
+    state.lifetime.peat = D(10_000);
+    const docketUi = makeUi(docketRoot, { initialTab: 'docket' });
+    docketUi.renderLists(state);
+    state.lifetime.peat = state.lifetime.peat.add(25_000);
+    docketUi.renderLists(state);
+    const claim = docketRoot.querySelector<HTMLButtonElement>(
+      '[aria-label="Claim Peat Delivery Order ×1"]',
+    );
+    expect(claim).not.toBeNull();
+    claim!.click();
+    expect(docketRoot.textContent).toContain('Peat Delivery Order ×2');
+  });
+
   it('renders fieldwork controls and resource visibility', () => {
     const root = document.createElement('div');
     const state = createInitialState();

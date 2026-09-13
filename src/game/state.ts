@@ -1,4 +1,4 @@
-import type { QuestBuff } from './quests';
+import type { QuestBuff, QuestPermanentEffect } from './quests';
 import { D, type Decimal } from './decimal';
 import type { ResourceId, SpendableResource } from './data';
 
@@ -32,6 +32,9 @@ export interface GameState {
   quests: {
     claimed: string[];
     buffs: QuestBuff[];
+    permanent: QuestPermanentEffect[];
+    bountyCount: Record<string, number>;
+    bountyBase: Record<string, string>;
   };
   lastSaveTime: number;
 }
@@ -90,7 +93,7 @@ export function createInitialState(): GameState {
     researchQueue: [],
     automationTimers: {},
     achievements: [],
-    quests: { claimed: [], buffs: [] },
+    quests: { claimed: [], buffs: [], permanent: [], bountyCount: {}, bountyBase: {} },
     lastSaveTime: Date.now(),
   };
 }

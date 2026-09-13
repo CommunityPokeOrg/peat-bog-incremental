@@ -15,7 +15,7 @@ import {
 } from './data';
 import { D, Decimal, safe } from './decimal';
 import { NIGHT_WATCH_MAX_LEVEL, type GameState } from './state';
-import { QUESTS, expireBuffs, questMultiplier } from './quests';
+import { ALL_QUESTS, QUESTS, expireBuffs, questMultiplier, questPermanentFactor } from './quests';
 import { CHARTER, charterEffects, charterFactor, charterMultiplier, charterSum } from './charter';
 
 export const SPENDABLE_RESOURCES: SpendableResource[] = RESOURCES
@@ -493,7 +493,10 @@ export function advanceResearch(state: GameState, seconds: number): string[] {
 export const PRESTIGE_THRESHOLD = 1_000_000;
 
 export function prestigeGain(state: GameState): Decimal {
-  return state.runCompute.div(PRESTIGE_THRESHOLD).sqrt().mul(charterFactor(state, 'coreGain')).floor();
+  return state.runCompute.div(PRESTIGE_THRESHOLD).sqrt()
+    .mul(charterFactor(state, 'coreGain'))
+    .mul(questPermanentFactor(state, 'coreGain'))
+    .floor();
 }
 
 export function canPrestige(state: GameState): boolean {
@@ -516,9 +519,10 @@ export function prestige(state: GameState): Decimal {
   state.researchQueue = [];
   state.automationTimers = {};
   state.quests.claimed = state.quests.claimed.filter((id) =>
-    QUESTS.find((quest) => quest.id === id)?.persistsThroughPrestige === true,
+    ALL_QUESTS.find((quest) => quest.id === id)?.persistsThroughPrestige === true,
   );
   state.quests.buffs = [];
+  state.quests.bountyBase = {};
   state.wallet.broth = D(charterSum(state, 'startingBroth'));
   for (const effect of charterEffects(state)) {
     if (effect.kind === 'starting') state.wallet[effect.resource] = state.wallet[effect.resource].add(effect.amount);

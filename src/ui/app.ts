@@ -4,10 +4,13 @@ import {
   BUILDINGS,
   RESOURCES,
   RESEARCH,
+  RESEARCH_BY_ID,
+  RESEARCH_BRANCHES,
   FIELD_NOTES,
   UPGRADES,
   UPGRADE_BY_ID,
   type ProductionLine,
+  type ResearchBranch,
 } from '../game/data';
 import {
   bulkCost,
@@ -34,10 +37,22 @@ import { formatCost, formatDuration, formatNumber } from '../game/format';
 import { offlineRateBreakdown } from '../game/save';
 import { type Decimal } from '../game/decimal';
 import type { GameState } from '../game/state';
-import { QUESTS, claimQuest, questProgress, questReady, type QuestReward } from '../game/quests';
+import {
+  ALL_QUESTS,
+  BOUNTIES,
+  acceptBounty,
+  bountyInstance,
+  bountyProgress,
+  claimBounty,
+  claimQuest,
+  questProgress,
+  questReady,
+  type QuestReward,
+} from '../game/quests';
 import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, CHARTER_ROOT_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
 import { layoutCharter } from './charterLayout';
-import { formatCharterEffect, formatMultiplier, formatQuestReward, pluralize } from './text';
+import { describeResearchEffect, formatCharterEffect, formatMultiplier, formatQuestReward, pluralize } from './text';
+import { researchBranch } from '../game/data';
 import {
   calibrationNeedle,
   calibrationZone,
@@ -532,7 +547,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function currentDocket(state: GameState) {
-    const quest = QUESTS.find((item) => !state.quests.claimed.includes(item.id));
+    const quest = ALL_QUESTS.find((item) => !state.quests.claimed.includes(item.id));
     return quest ? {
       name: quest.name,
       progress: questProgress(state, quest),
@@ -913,16 +928,18 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderDocket(state: GameState): void {
-    const chapters = ['discovery', 'litigation', 'verdict', 'keepers'] as const;
+    const chapters = ['discovery', 'litigation', 'verdict', 'keepers', 'works', 'appeals'] as const;
     const chapterLabels: Record<(typeof chapters)[number], string> = {
       discovery: 'Discovery',
       litigation: 'Litigation',
       verdict: 'Verdict',
       keepers: 'Keepers of the Bog',
+      works: 'The Works',
+      appeals: 'Appeals',
     };
     const entries: RowEntry[] = [];
     for (const chapter of chapters) {
-      const quests = QUESTS.filter((quest) => quest.chapter === chapter);
+      const quests = ALL_QUESTS.filter((quest) => quest.chapter === chapter);
       const claimed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
       entries.push({
         key: `chapter-${chapter}`,
@@ -969,7 +986,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             } else if (ready) {
               action.classList.remove('claimed-badge');
               const button = document.createElement('button');
-              button.className = 'btn quest-claim';
+              button.className = `btn ${quest.chapter === 'discovery' || quest.chapter === 'litigation' || quest.chapter === 'verdict' || quest.chapter === 'keepers' ? 'quest-claim' : 'quest-story-claim'}`;
               button.textContent = 'Claim';
               button.setAttribute('aria-label', `Claim ${quest.name}`);
               button.addEventListener('click', () => {
@@ -993,6 +1010,57 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           },
         });
       }
+    }
+    entries.push({
+      key: 'chapter-bounties',
+      create: () => createSectionHeading(`Bounties · ${BOUNTIES.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0)} completed`),
+      update: (row) => {
+        const completed = BOUNTIES.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0);
+        row.textContent = `Bounties · ${completed} completed`;
+      },
+    });
+    for (const bounty of BOUNTIES) {
+      entries.push({
+        key: bounty.id,
+        create: () => createQuestRow(bounty.id),
+        update: (row) => {
+          acceptBounty(state, bounty.id);
+          const instance = bountyInstance(state, bounty.id);
+          const progress = bountyProgress(state, bounty.id);
+          const ready = progress.current.gte(progress.target);
+          row.classList.toggle('ready', ready);
+          row.classList.remove('claimed');
+          row.querySelector<HTMLElement>('.item-emoji')!.textContent = bounty.emoji;
+          row.querySelector<HTMLElement>('.item-name-label')!.textContent = `${bounty.name} ×${instance}`;
+          row.querySelector<HTMLElement>('.item-desc')!.textContent = bounty.brief(instance);
+          const bar = row.querySelector<HTMLElement>('.progress')!;
+          bar.setAttribute('aria-valuenow', String(Math.round(progress.fraction * 100)));
+          bar.setAttribute('aria-label', `${bounty.name} progress`);
+          bar.querySelector<HTMLElement>('.progress-fill')!.style.width = `${progress.fraction * 100}%`;
+          row.querySelector<HTMLElement>('.quest-progress')!.textContent =
+            `${formatNumber(progress.current.min(progress.target))} / ${formatNumber(progress.target)}`;
+          row.querySelector<HTMLElement>('.quest-reward')!.textContent =
+            `Reward: ${formatQuestReward(bounty.reward(instance))}`;
+          const action = row.querySelector<HTMLElement>('.quest-action')!;
+          action.replaceChildren();
+          const button = document.createElement('button');
+          button.className = 'btn quest-bounty-claim';
+          button.textContent = ready ? 'Claim' : 'In progress';
+          button.disabled = !ready;
+          button.setAttribute('aria-label', `${ready ? 'Claim' : 'View'} ${bounty.name} ×${instance}`);
+          button.addEventListener('click', () => {
+            const latest = currentState;
+            if (!latest) return;
+            const reward = claimBounty(latest, bounty.id);
+            if (!reward) return;
+            sound.play('claim');
+            toast(`Filed: ${bounty.name} — ${formatQuestReward(reward)}`);
+            renderCounters(latest);
+            renderLists(latest);
+          });
+          action.appendChild(button);
+        },
+      });
     }
     reconcileRows(entries);
   }
@@ -1227,44 +1295,52 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         update: (row) => updateResearchRow(row, research, state, true),
       });
     }
-    const available = RESEARCH.filter((research) =>
-      !state.research.includes(research.id) &&
-      !state.researchQueue.some((entry) => entry.id === research.id) &&
-      (research.requires ?? []).every((required) => state.research.includes(required)),
-    );
-    if (available.length > 0) {
+    const branches: ResearchBranch[] = ['thermal', 'extraction', 'distillation', 'litigation', 'celestial'];
+    for (const branch of branches) {
+      const branchResearch = RESEARCH.filter((research) => researchBranch(research.id) === branch);
       entries.push({
-        key: 'research-available-heading',
-        create: () => createSectionHeading('Available'),
-        update: () => {},
-      });
-    }
-    for (const research of available) {
-      entries.push({
-        key: research.id,
-        create: () => createRow(research.id, {
-          emoji: research.emoji,
-          name: research.name,
-          desc: research.description,
-          onClick: () => {
-            const latest = currentState;
-            if (latest && hooks.onQueueResearch?.(research.id) !== false) {
-              if (!hooks.onQueueResearch) buyResearch(latest, research.id);
-              renderLists(latest);
-            }
-          },
-        }),
+        key: `research-branch-${branch}`,
+        create: () => {
+          const heading = document.createElement('div');
+          heading.className = 'research-branch-heading';
+          heading.innerHTML = `<strong>${RESEARCH_BRANCHES[branch].name}</strong><span>${RESEARCH_BRANCHES[branch].blurb}</span>`;
+          return heading;
+        },
         update: (row) => {
-          const full = state.researchQueue.length >= maxResearchQueue(state);
-          const affordable = canAfford(state, research.cost);
-          updateRow(row, {
-            cost: `${formatCost(research.cost)} · ⏱ ${formatDuration(research.durationSec)}`,
-            action: full ? 'Queue full' : 'Queue',
-            disabled: full || !affordable,
-            label: `Queue ${research.name}`,
-          });
+          row.querySelector('strong')!.textContent = RESEARCH_BRANCHES[branch].name;
+          row.querySelector('span')!.textContent = RESEARCH_BRANCHES[branch].blurb;
         },
       });
+      for (const research of branchResearch) {
+        entries.push({
+          key: `catalog-${research.id}`,
+          create: () => {
+            const row = createResearchRow(research.id, false);
+            row.querySelector<HTMLButtonElement>('.research-cancel')!.addEventListener('click', () => {
+              const latest = currentState;
+              if (!latest) return;
+              if (latest.researchQueue.some((entry) => entry.id === research.id)) {
+                if (hooks.onCancelResearch?.(research.id) !== false) renderLists(latest);
+                return;
+              }
+              if (!latest.research.includes(research.id) &&
+                hooks.onQueueResearch?.(research.id) !== false) {
+                if (!hooks.onQueueResearch) buyResearch(latest, research.id);
+                renderLists(latest);
+              }
+            });
+            return row;
+          },
+          update: (row) => {
+            const done = state.research.includes(research.id);
+            const queuedEntry = state.researchQueue.some((entry) => entry.id === research.id);
+            const prerequisitesMet = (research.requires ?? []).every((required) => state.research.includes(required));
+            const available = !done && !queuedEntry && prerequisitesMet;
+            const status = done ? 'done' : queuedEntry ? 'queued' : available ? 'available' : 'locked';
+            updateResearchRow(row, research, state, queuedEntry, status);
+          },
+        });
+      }
     }
     const completed = RESEARCH.filter((research) => state.research.includes(research.id));
     if (completed.length > 0) {
@@ -1307,7 +1383,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         <span class="item-desc"></span>
         <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
       </span>
-      <span class="research-meta"><span class="research-remaining"></span><button class="btn research-cancel">Cancel</button></span>`;
+      <span class="research-meta"><span class="research-state"></span><span class="research-remaining"></span><button class="btn research-cancel">Queue</button></span>`;
     return row;
   }
 
@@ -1316,10 +1392,16 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     research: (typeof RESEARCH)[number],
     state: GameState,
     queued: boolean,
+    status: 'done' | 'queued' | 'available' | 'locked' = queued ? 'queued' : 'available',
   ): void {
     row.querySelector<HTMLElement>('.item-emoji')!.textContent = research.emoji;
     row.querySelector<HTMLElement>('.item-name-label')!.textContent = research.name;
-    row.querySelector<HTMLElement>('.item-desc')!.textContent = research.description;
+    const prerequisites = (research.requires ?? [])
+      .map((id) => RESEARCH_BY_ID[id]?.name ?? id)
+      .join(', ');
+    const prerequisiteText = prerequisites ? ` Requires: ${prerequisites}.` : '';
+    row.querySelector<HTMLElement>('.item-desc')!.textContent =
+      `${research.description} ${describeResearchEffect(research.effect)}.${prerequisiteText}`;
     const bar = row.querySelector<HTMLElement>('.progress')!;
     const progress = researchProgress(state, research.id);
     const fraction = progress?.fraction ?? 0;
@@ -1328,7 +1410,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     bar.querySelector<HTMLElement>('.progress-fill')!.style.width = `${fraction * 100}%`;
     const remaining = row.querySelector<HTMLElement>('.research-remaining')!;
     remaining.textContent = progress ? formatDuration(progress.remaining) : '';
-    row.querySelector<HTMLButtonElement>('.research-cancel')!.hidden = !queued;
+    const stateLabel = row.querySelector<HTMLElement>('.research-state')!;
+    stateLabel.textContent = status;
+    row.dataset.status = status;
+    const action = row.querySelector<HTMLButtonElement>('.research-cancel')!;
+    const queueFull = status === 'available' && state.researchQueue.length >= maxResearchQueue(state);
+    action.textContent = status === 'queued' ? 'Cancel' : queueFull ? 'Queue full' : status === 'available' ? 'Queue' : status;
+    action.disabled = (status !== 'available' && status !== 'queued') || queueFull;
+    action.hidden = status === 'done';
+    action.setAttribute('aria-label', status === 'available' ? `Queue ${research.name}` : `${research.name} ${status}`);
   }
 
   function renderAchievements(state: GameState): void {

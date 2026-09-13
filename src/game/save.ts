@@ -11,7 +11,7 @@ import { settleTick, type Rates } from './engine';
 import { CHARTER_ROOT_ID, charterEffects, charterSum } from './charter';
 import { safe, toDecimalOrZero, type Decimal } from './decimal';
 import type { ResourceId, SpendableResource } from './data';
-import type { QuestBuff } from './quests';
+import type { QuestBuff, QuestPermanentEffect } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
 export const OFFLINE_CAP_SECONDS = 8 * 3600;
@@ -113,12 +113,28 @@ const isQuestBuff = (v: unknown): v is QuestBuff =>
   typeof (v as Record<string, unknown>).target === 'string' &&
   isNum((v as Record<string, unknown>).factor) &&
   isNum((v as Record<string, unknown>).expiresAt);
+const isQuestPermanent = (v: unknown): v is QuestPermanentEffect =>
+  typeof v === 'object' && v !== null &&
+  typeof (v as Record<string, unknown>).questId === 'string' &&
+  typeof (v as Record<string, unknown>).effect === 'object' &&
+  (v as Record<string, unknown>).effect !== null &&
+  typeof ((v as Record<string, unknown>).effect as Record<string, unknown>).kind === 'string';
+const isNumRecord = (v: unknown): v is Record<string, number> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) &&
+  Object.values(v).every((x) => isNum(x));
+const isStringMap = (v: unknown): v is Record<string, string> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) &&
+  Object.values(v).every((x) => typeof x === 'string');
 const isQuestState = (v: unknown): v is GameState['quests'] => {
   if (typeof v !== 'object' || v === null) return false;
   const record = v as Record<string, unknown>;
   return isStrArr(record.claimed) &&
     Array.isArray(record.buffs) &&
-    record.buffs.every(isQuestBuff);
+    record.buffs.every(isQuestBuff) &&
+    (record.permanent === undefined ||
+      (Array.isArray(record.permanent) && record.permanent.every(isQuestPermanent))) &&
+    (record.bountyCount === undefined || isNumRecord(record.bountyCount)) &&
+    (record.bountyBase === undefined || isStringMap(record.bountyBase));
 };
 
 function readRecord(
@@ -201,8 +217,14 @@ export function deserialize(raw: unknown): GameState | null {
     : {};
   state.achievements = [...p.achievements];
   state.quests = isQuestState(p.quests)
-    ? { claimed: [...p.quests.claimed], buffs: [...p.quests.buffs] }
-    : { claimed: [], buffs: [] };
+    ? {
+      claimed: [...p.quests.claimed],
+      buffs: [...p.quests.buffs],
+      permanent: p.quests.permanent ? [...p.quests.permanent] : [],
+      bountyCount: p.quests.bountyCount ? { ...p.quests.bountyCount } : {},
+      bountyBase: p.quests.bountyBase ? { ...p.quests.bountyBase } : {},
+    }
+    : { claimed: [], buffs: [], permanent: [], bountyCount: {}, bountyBase: {} };
   state.lastSaveTime = p.lastSaveTime;
   return state;
 }
@@ -234,7 +256,11 @@ export interface OfflineEarnings {
 }
 
 export function offlineRate(state: GameState): number {
-  return Math.min(1, OFFLINE_BASE_RATE + NIGHT_WATCH_STEP * state.nightWatch + charterSum(state, 'offlineRate'));
+  const permanent = state.quests.permanent.reduce(
+    (sum, entry) => sum + (entry.effect.kind === 'offlineRate' ? entry.effect.add : 0),
+    0,
+  );
+  return Math.min(1, OFFLINE_BASE_RATE + NIGHT_WATCH_STEP * state.nightWatch + charterSum(state, 'offlineRate') + permanent);
 }
 
 export function offlineRateBreakdown(state: GameState): {
@@ -245,7 +271,11 @@ export function offlineRateBreakdown(state: GameState): {
 } {
   const base = OFFLINE_BASE_RATE;
   const nightWatch = NIGHT_WATCH_STEP * state.nightWatch;
-  const charter = charterSum(state, 'offlineRate');
+  const permanent = state.quests.permanent.reduce(
+    (sum, entry) => sum + (entry.effect.kind === 'offlineRate' ? entry.effect.add : 0),
+    0,
+  );
+  const charter = charterSum(state, 'offlineRate') + permanent;
   return { base, nightWatch, charter, total: Math.min(1, base + nightWatch + charter) };
 }
 

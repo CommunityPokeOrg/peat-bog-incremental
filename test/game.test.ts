@@ -313,7 +313,13 @@ describe('save', () => {
     expect(loaded.calibrationStreak).toBe(0);
     expect(loaded.calibrationTarget).toBe(0.5);
     expect(loaded.researchQueue).toEqual([]);
-    expect(loaded.quests).toEqual({ claimed: [], buffs: [] });
+    expect(loaded.quests).toEqual({
+      claimed: [],
+      buffs: [],
+      permanent: [],
+      bountyCount: {},
+      bountyBase: {},
+    });
   });
   it('roundtrips a real state', () => {
     const state = createInitialState();
