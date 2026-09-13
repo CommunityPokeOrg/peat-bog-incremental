@@ -36,6 +36,7 @@ export interface SavedState {
   upgrades: string[];
   research: string[];
   researchQueue: ResearchQueueEntry[];
+  automationTimers: Record<string, number>;
   achievements: string[];
   quests: GameState['quests'];
   lastSaveTime: number;
@@ -84,6 +85,7 @@ export function serialize(state: GameState): string {
     upgrades: state.upgrades,
     research: state.research,
     researchQueue: state.researchQueue,
+    automationTimers: state.automationTimers,
     achievements: state.achievements,
     quests: state.quests,
     lastSaveTime: state.lastSaveTime,
@@ -194,6 +196,9 @@ export function deserialize(raw: unknown): GameState | null {
   state.upgrades = [...p.upgrades];
   state.research = [...p.research];
   state.researchQueue = isResearchQueue(p.researchQueue) ? [...p.researchQueue] : [];
+  state.automationTimers = typeof p.automationTimers === 'object' && p.automationTimers !== null
+    ? Object.fromEntries(Object.entries(p.automationTimers).filter(([, value]) => isNum(value)))
+    : {};
   state.achievements = [...p.achievements];
   state.quests = isQuestState(p.quests)
     ? { claimed: [...p.quests.claimed], buffs: [...p.quests.buffs] }

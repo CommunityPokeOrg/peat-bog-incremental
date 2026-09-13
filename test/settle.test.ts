@@ -11,6 +11,7 @@ const converter: BuildingDef = {
   emoji: '⚗️',
   description: 'test',
   line: 'briquettes',
+  boostNames: ['Test I', 'Test II', 'Test III', 'Test IV'],
   baseCost: {},
   produces: { briquettes: 1 },
   consumes: { peat: 2 },
@@ -46,5 +47,15 @@ describe('settleTick', () => {
     const offline = computeOfflineEarnings(state, 100);
     expect(offline.gained.briquettes.toNumber()).toBeCloseTo(online.gained.briquettes.toNumber() * 1);
     expect(offline.spent.peat.toNumber()).toBeCloseTo(online.spent.peat.toNumber());
+  });
+
+  it('does not multiply converter inputs by input-resource bonuses', () => {
+    BUILDINGS.push(converter);
+    const state = createInitialState();
+    state.buildings[converter.id] = 3;
+    state.wallet.peat = D(100);
+    state.upgrades.push('moss-mulch');
+    const settlement = settleTick(state, 1);
+    expect(settlement.spent.peat.toNumber()).toBeCloseTo(6);
   });
 });

@@ -27,6 +27,7 @@ export interface GameState {
   upgrades: string[];
   research: string[];
   researchQueue: ResearchQueueEntry[];
+  automationTimers: Record<string, number>;
   achievements: string[];
   quests: {
     claimed: string[];
@@ -87,6 +88,7 @@ export function createInitialState(): GameState {
     upgrades: [],
     research: [],
     researchQueue: [],
+    automationTimers: {},
     achievements: [],
     quests: { claimed: [], buffs: [] },
     lastSaveTime: Date.now(),

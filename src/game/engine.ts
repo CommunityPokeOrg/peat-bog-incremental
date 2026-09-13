@@ -7,7 +7,9 @@ import {
   RESEARCH_BY_ID,
   UPGRADE_BY_ID,
   type BuildingDef,
+  type ProductionLine,
   type ResourceCost,
+  type ResearchEffect,
   type SpendableResource,
   type UpgradeDef,
 } from './data';
@@ -27,8 +29,17 @@ function zeroRates(): Rates {
   return Object.fromEntries(SPENDABLE_RESOURCES.map((resource) => [resource, D(0)])) as Rates;
 }
 
-export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
-  const factor = Decimal.pow(def.costScale ?? COST_SCALE, owned);
+/** Return the research-adjusted cost scale for a production line. */
+export function costScaleFor(state: GameState, def: BuildingDef): number {
+  const delta = state.research.reduce((total, id) => {
+    const effect = RESEARCH_BY_ID[id]?.effect;
+    return total + (effect?.kind === 'costScale' && effect.line === def.line ? effect.delta : 0);
+  }, 0);
+  return Math.max(1.05, (def.costScale ?? COST_SCALE) + delta);
+}
+
+export function buildingCost(def: BuildingDef, owned: number, state?: GameState): ResourceCost {
+  const factor = Decimal.pow(state ? costScaleFor(state, def) : (def.costScale ?? COST_SCALE), owned);
   const out: ResourceCost = {};
   for (const resource of SPENDABLE_RESOURCES) {
     if (def.baseCost[resource] !== undefined) out[resource] = D(def.baseCost[resource]!).mul(factor);
@@ -37,8 +48,8 @@ export function buildingCost(def: BuildingDef, owned: number): ResourceCost {
 }
 
 /** Total cost of buying `qty` units starting at `owned`. */
-export function bulkCost(def: BuildingDef, owned: number, qty: number): ResourceCost {
-  const scale = def.costScale ?? COST_SCALE;
+export function bulkCost(def: BuildingDef, owned: number, qty: number, state?: GameState): ResourceCost {
+  const scale = state ? costScaleFor(state, def) : (def.costScale ?? COST_SCALE);
   const geom = qty === 1 ? D(1) : Decimal.pow(scale, qty).sub(1).div(scale - 1);
   const base = buildingCost(def, owned);
   const out: ResourceCost = {};
@@ -51,7 +62,7 @@ export function bulkCost(def: BuildingDef, owned: number, qty: number): Resource
 /** Max quantity affordable with current resources. */
 export function maxAffordable(def: BuildingDef, owned: number, state: GameState): number {
   let qty: number | null = null;
-  const scale = def.costScale ?? COST_SCALE;
+  const scale = costScaleFor(state, def);
   for (const resource of SPENDABLE_RESOURCES) {
     const base = def.baseCost[resource];
     if (base === undefined) continue;
@@ -104,10 +115,59 @@ export function buildingMultiplier(state: GameState, buildingId: string): number
   }).length;
 }
 
+/** Combine completed research effects of the requested kind. */
+export function researchFactor(
+  state: GameState,
+  kind: ResearchEffect['kind'],
+  target?: SpendableResource | 'click' | 'all',
+): number {
+  return state.research.reduce((product, id) => {
+    const effect = RESEARCH_BY_ID[id]?.effect;
+    if (!effect || effect.kind !== kind) return product;
+    if (effect.kind === 'multiplier' && target !== undefined &&
+      effect.target !== target && effect.target !== 'all') return product;
+    if (effect.kind === 'multiplier' && target === undefined) return product;
+    if ('factor' in effect) return product * effect.factor;
+    return product;
+  }, 1);
+}
+
+/** Return the multiplier applied to converter inputs on one production line. */
+export function converterEfficiency(state: GameState, line: ProductionLine): number {
+  return Math.max(0.01, state.research.reduce((product, id) => {
+    const effect = RESEARCH_BY_ID[id]?.effect;
+    return effect?.kind === 'converterEfficiency' && effect.line === line
+      ? product * effect.factor
+      : product;
+  }, 1) * UPGRADES_FOR_STATE(state)
+    .filter((upgrade) => upgrade.kind === 'converter' && upgrade.converterEfficiency?.line === line)
+    .reduce((product, upgrade) => product * (upgrade.converterEfficiency?.factor ?? 1), 1));
+}
+
+function UPGRADES_FOR_STATE(state: GameState): UpgradeDef[] {
+  return state.upgrades.map((id) => UPGRADE_BY_ID[id]).filter((upgrade): upgrade is UpgradeDef => Boolean(upgrade));
+}
+
+/** Whether a production line has been opened by research. */
+export function lineUnlocked(state: GameState, line: ProductionLine): boolean {
+  if (!['briquettes', 'refinedBroth', 'sediment', 'essence'].includes(line)) return true;
+  return state.research.some((id) => {
+    const effect = RESEARCH_BY_ID[id]?.effect;
+    return effect?.kind === 'unlockLine' && effect.line === line;
+  });
+}
+
+/** Maximum number of research items that may be queued after upgrades. */
+export function maxResearchQueue(state: GameState): number {
+  return MAX_RESEARCH_QUEUE + state.research.reduce((total, id) => {
+    const effect = RESEARCH_BY_ID[id]?.effect;
+    return total + (effect?.kind === 'researchSlots' ? effect.add : 0);
+  }, 0);
+}
+
 export function totalHeat(state: GameState): Decimal {
   let heatMult = 1;
-  if (state.research.includes('liquid-immersion')) heatMult *= 0.8;
-  if (state.research.includes('lubrication-clause')) heatMult *= 0.85;
+  heatMult *= researchFactor(state, 'heat');
   for (const id of state.upgrades) {
     const upgrade = UPGRADE_BY_ID[id];
     if (upgrade?.kind === 'thermal' && upgrade.heatMultiplier) heatMult *= upgrade.heatMultiplier;
@@ -120,7 +180,7 @@ export function totalHeat(state: GameState): Decimal {
 }
 
 export function totalCooling(state: GameState): Decimal {
-  let coolMult = state.research.includes('thermal-modelling') ? 1.25 : 1;
+  let coolMult = researchFactor(state, 'cooling');
   for (const id of state.upgrades) {
     const upgrade = UPGRADE_BY_ID[id];
     if (upgrade?.kind === 'thermal' && upgrade.coolingMultiplier) coolMult *= upgrade.coolingMultiplier;
@@ -143,15 +203,7 @@ export function thermalFactor(state: GameState): Decimal {
 export type Rates = Record<SpendableResource, Decimal>;
 
 function researchMultiplier(state: GameState, resource: SpendableResource): number {
-  let multiplier = 1;
-  if (resource === 'broth') {
-    if (state.research.includes('broth-distillation')) multiplier *= 1.5;
-    if (state.research.includes('broth-standard')) multiplier *= 1.25;
-  }
-  if (resource === 'compute' && state.research.includes('edge-caching')) multiplier *= 1.5;
-  if (state.research.includes('nordic-verdict')) multiplier *= 1.5;
-  if (state.research.includes('quantum-peat')) multiplier *= 2;
-  return multiplier;
+  return researchFactor(state, 'multiplier', resource);
 }
 
 /** Combine every multiplier affecting one resource's production. */
@@ -161,10 +213,15 @@ export function resourceMultiplier(state: GameState, resource: SpendableResource
     .mul(charterMultiplier(state, resource))
     .mul(questMultiplier(state, resource, now));
   if (resource === 'compute') multiplier = multiplier.mul(thermalFactor(state));
-  for (const id of state.upgrades) {
-    const upgrade = UPGRADE_BY_ID[id];
-    if (upgrade?.kind === 'resource' && upgrade.resourceMultiplier?.resource === resource) {
+  for (const upgrade of UPGRADES_FOR_STATE(state)) {
+    if (upgrade.kind === 'resource' && upgrade.resourceMultiplier &&
+      (upgrade.resourceMultiplier.resource === resource || upgrade.resourceMultiplier.resource === 'all')) {
       multiplier = multiplier.mul(upgrade.resourceMultiplier.factor);
+    }
+    if (upgrade.kind === 'synergy' && upgrade.synergy &&
+      (upgrade.synergy.target === resource || upgrade.synergy.target === 'all')) {
+      const sourceValue = state.buildings[upgrade.synergy.source] ?? state.wallet[upgrade.synergy.source as SpendableResource]?.toNumber() ?? 0;
+      multiplier = multiplier.mul(Math.min(upgrade.synergy.cap, 1 + sourceValue * upgrade.synergy.perUnit));
     }
   }
   return multiplier;
@@ -187,17 +244,17 @@ export function productionPerSecond(state: GameState, now = Date.now()): Rates {
 }
 
 export function consumptionPerSecond(state: GameState, now = Date.now()): Rates {
+  void now;
   const totals = zeroRates();
   for (const building of BUILDINGS) {
     const owned = state.buildings[building.id] ?? 0;
     if (!owned || !building.consumes) continue;
     const multiplier = buildingMultiplier(state, building.id);
     for (const [resource, amount] of Object.entries(building.consumes) as [SpendableResource, number][]) {
-      totals[resource] = totals[resource].add(D(amount).mul(owned).mul(multiplier));
+      totals[resource] = totals[resource].add(
+        D(amount).mul(owned).mul(multiplier).mul(converterEfficiency(state, building.line)),
+      );
     }
-  }
-  for (const resource of SPENDABLE_RESOURCES) {
-    totals[resource] = totals[resource].mul(resourceMultiplier(state, resource, now));
   }
   return totals;
 }
@@ -213,7 +270,10 @@ export function clickPower(state: GameState, now = Date.now()): Decimal {
   }
   brothFraction += charterSum(state, 'clickBrothFraction');
   power = power.add(productionPerSecond(state, now).broth.mul(brothFraction));
-  return power.mul(globalMultiplier(state)).mul(charterMultiplier(state, 'click')).mul(questMultiplier(state, 'click', now));
+  return power
+    .mul(researchFactor(state, 'clickMultiplier'))
+    .mul(researchFactor(state, 'multiplier', 'click'))
+    .mul(globalMultiplier(state)).mul(charterMultiplier(state, 'click')).mul(questMultiplier(state, 'click', now));
 }
 
 export interface Settlement {
@@ -235,7 +295,7 @@ export function settleTick(state: GameState, dtSeconds: number, now = Date.now()
     const multiplier = buildingMultiplier(state, building.id);
     const throttle = Object.entries(building.consumes ?? {}).reduce((limit, [resource, amount]) => {
       const need = D(amount).mul(owned).mul(multiplier)
-        .mul(resourceMultiplier(state, resource as SpendableResource, now));
+        .mul(converterEfficiency(state, building.line));
       return need.lte(0)
         ? limit
         : Math.min(limit, available[resource as SpendableResource].div(need.mul(dtSeconds)).toNumber());
@@ -243,7 +303,7 @@ export function settleTick(state: GameState, dtSeconds: number, now = Date.now()
     const factor = Math.max(0, Math.min(1, throttle));
     for (const [resource, amount] of Object.entries(building.consumes ?? {}) as [SpendableResource, number][]) {
       const cost = safe(D(amount).mul(owned).mul(multiplier)
-        .mul(resourceMultiplier(state, resource, now)).mul(dtSeconds * factor));
+        .mul(converterEfficiency(state, building.line)).mul(dtSeconds * factor));
       spent[resource] = spent[resource].add(cost);
       available[resource] = available[resource].sub(cost).max(0);
     }
@@ -264,12 +324,32 @@ function applySettlement(state: GameState, settlement: Settlement): void {
   state.runCompute = state.runCompute.add(settlement.gained.compute);
 }
 
+/** Buy the cheapest affordable building for each owned automation desk. */
+export function autoBuy(state: GameState, dtSeconds: number): void {
+  for (const upgrade of UPGRADES_FOR_STATE(state)) {
+    if (upgrade.kind !== 'automation' || !upgrade.automation) continue;
+    const timer = (state.automationTimers[upgrade.id] ?? 0) + Math.max(0, dtSeconds);
+    if (timer < upgrade.automation.intervalSec) {
+      state.automationTimers[upgrade.id] = timer;
+      continue;
+    }
+    state.automationTimers[upgrade.id] = timer % upgrade.automation.intervalSec;
+    const candidates = BUILDINGS
+      .filter((building) => building.line === upgrade.automation!.line && buildingVisible(state, building))
+      .sort((a, b) => (a.baseCost.broth ?? 0) - (b.baseCost.broth ?? 0));
+    for (const building of candidates) {
+      if (buyBuilding(state, building.id, 1)) break;
+    }
+  }
+}
+
 /** Advance the simulation by dtSeconds (the rAF loop clamps dt to ≤1s per frame). */
 export function tick(state: GameState, dtSeconds: number, now = Date.now()): GameState {
   if (dtSeconds <= 0) return state;
   expireBuffs(state, now);
   advanceResearch(state, dtSeconds * charterFactor(state, 'researchSpeed'));
   applySettlement(state, settleTick(state, dtSeconds, now));
+  autoBuy(state, dtSeconds);
   return state;
 }
 
@@ -285,7 +365,7 @@ export function buyBuilding(state: GameState, id: string, qty: number): boolean 
   const def = BUILDING_BY_ID[id];
   if (!def || qty <= 0 || !buildingVisible(state, def)) return false;
   const owned = state.buildings[id] ?? 0;
-  const cost = bulkCost(def, owned, qty);
+  const cost = bulkCost(def, owned, qty, state);
   if (!canAfford(state, cost)) return false;
   payCost(state, cost);
   state.buildings[id] = owned + qty;
@@ -301,10 +381,10 @@ export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
   });
 }
 
-export function buildingVisible(state: GameState, def: BuildingDef): boolean {
+export function buildingVisible(state: GameState, def: BuildingDef, rates = productionPerSecond(state)): boolean {
+  if (!lineUnlocked(state, def.line)) return false;
   if (!def.unlock) return true;
   if (state.revealed.includes(def.id)) return true;
-  const rates = productionPerSecond(state);
   return Object.entries(def.unlock.rate ?? {}).every(([resource, threshold]) =>
     rates[resource as SpendableResource].gte(threshold),
   ) && Object.entries(def.unlock.lifetime ?? {}).every(([resource, threshold]) =>
@@ -314,8 +394,9 @@ export function buildingVisible(state: GameState, def: BuildingDef): boolean {
 
 export function revealBuildings(state: GameState): string[] {
   const newlyRevealed: string[] = [];
+  const rates = productionPerSecond(state);
   for (const def of BUILDINGS) {
-    if (!def.unlock || state.revealed.includes(def.id) || !buildingVisible(state, def)) continue;
+    if (!def.unlock || state.revealed.includes(def.id) || !buildingVisible(state, def, rates)) continue;
     state.revealed.push(def.id);
     newlyRevealed.push(def.id);
   }
@@ -341,7 +422,8 @@ export function buyUpgrade(state: GameState, id: string): boolean {
 export function buyResearch(state: GameState, id: string): boolean {
   const def = RESEARCH_BY_ID[id];
   if (!def || state.research.includes(id) || state.researchQueue.some((entry) => entry.id === id) ||
-    state.researchQueue.length >= MAX_RESEARCH_QUEUE) return false;
+    state.researchQueue.length >= maxResearchQueue(state) ||
+    (def.requires ?? []).some((required) => !state.research.includes(required))) return false;
   const cost = decimalCost(def.cost);
   if (!canAfford(state, cost)) return false;
   payCost(state, cost);
@@ -420,6 +502,7 @@ export function prestige(state: GameState): Decimal {
   state.upgrades = [];
   state.research = [];
   state.researchQueue = [];
+  state.automationTimers = {};
   state.quests.claimed = state.quests.claimed.filter((id) =>
     QUESTS.find((quest) => quest.id === id)?.persistsThroughPrestige === true,
   );

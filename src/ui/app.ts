@@ -20,7 +20,7 @@ import {
   canPrestige,
   clickPower,
   maxAffordable,
-  MAX_RESEARCH_QUEUE,
+  maxResearchQueue,
   nightWatchCost,
   prestigeGain,
   productionPerSecond,
@@ -766,7 +766,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   const productionCategories = [...new Set(BUILDINGS.map((def) => def.line))] as ProductionLine[];
-  function renderProductionFilters(state: GameState): void {
+  function renderProductionFilters(state: GameState, rates = productionPerSecond(state)): void {
     if (!productionFilters.firstElementChild) {
       const wrap = document.createElement('div');
       wrap.className = 'filter-tabs';
@@ -793,7 +793,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     const visibleCategories = new Set(
       productionCategories.filter((category) =>
-        BUILDINGS.some((def) => def.line === category && buildingVisible(state, def)),
+        BUILDINGS.some((def) => def.line === category && buildingVisible(state, def, rates)),
       ),
     );
     productionFilters.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
@@ -813,14 +813,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderBuildings(state: GameState): void {
-    renderProductionFilters(state);
     const entries: RowEntry[] = [];
     const categories = productionCategories;
+    const rates = productionPerSecond(state);
+    renderProductionFilters(state, rates);
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
       const categoryBuildings = BUILDINGS.filter((def) => def.line === category);
-      const visible = categoryBuildings.filter((def) => buildingVisible(state, def));
-      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def));
+      const visible = categoryBuildings.filter((def) => buildingVisible(state, def, rates));
+      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def, rates));
       if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
         entries.push({
           key: `heading-${category}`,
@@ -860,7 +861,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             const latest = currentState ?? state;
             const owned = latest.buildings[def.id] ?? 0;
             const qty = effectiveQty(latest, def.id);
-            const cost = bulkCost(def, owned, qty);
+            const cost = bulkCost(def, owned, qty, latest);
             updateRow(row, {
               cost: formatCost(cost),
               owned: `×${owned}`,
@@ -1206,9 +1207,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const entries: RowEntry[] = [];
     entries.push({
       key: 'research-progress-heading',
-      create: () => createSectionHeading(`In progress · ${queued.length} / ${MAX_RESEARCH_QUEUE} slots`),
+      create: () => createSectionHeading(`In progress · ${queued.length} / ${maxResearchQueue(state)} slots`),
       update: (row) => {
-        row.textContent = `In progress · ${state.researchQueue.length} / ${MAX_RESEARCH_QUEUE} slots`;
+        row.textContent = `In progress · ${state.researchQueue.length} / ${maxResearchQueue(state)} slots`;
       },
     });
     for (const entry of queued) {
@@ -1228,7 +1229,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     const available = RESEARCH.filter((research) =>
       !state.research.includes(research.id) &&
-      !state.researchQueue.some((entry) => entry.id === research.id),
+      !state.researchQueue.some((entry) => entry.id === research.id) &&
+      (research.requires ?? []).every((required) => state.research.includes(required)),
     );
     if (available.length > 0) {
       entries.push({
@@ -1253,7 +1255,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           },
         }),
         update: (row) => {
-          const full = state.researchQueue.length >= MAX_RESEARCH_QUEUE;
+          const full = state.researchQueue.length >= maxResearchQueue(state);
           const affordable = canAfford(state, research.cost);
           updateRow(row, {
             cost: `${formatCost(research.cost)} · ⏱ ${formatDuration(research.durationSec)}`,
