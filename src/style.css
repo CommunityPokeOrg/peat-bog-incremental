@@ -1065,6 +1065,10 @@ button.item:not(:disabled) .item-action {
   animation: edge-flow 6s linear infinite;
 }
 
+.charter-edges line[data-cross="true"] {
+  stroke-dasharray: 8 6;
+}
+
 .charter-node {
   position: absolute;
   display: grid;

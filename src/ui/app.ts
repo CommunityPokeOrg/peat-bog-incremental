@@ -1357,6 +1357,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       const parent = CHARTER_BY_ID[node.requires];
       return `Requires ${parent?.name ?? node.requires}`;
     }
+    if (node.requiresAny && !node.requiresAny.some((id) => state.charter.includes(id))) {
+      const names = node.requiresAny.map((id) => CHARTER_BY_ID[id]?.name ?? id).join(' or ');
+      return `Requires ${names}`;
+    }
     return node.description;
   }
 
@@ -1364,6 +1368,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function charterNodeState(state: GameState, node: CharterNodeDef): CharterNodeState {
     if (state.charter.includes(node.id)) return 'signed';
     if (node.requires && !state.charter.includes(node.requires)) return 'locked';
+    if (node.requiresAny && !node.requiresAny.some((id) => state.charter.includes(id))) return 'locked';
     return charterAvailable(state, node) ? 'purchasable' : 'unaffordable';
   }
 
@@ -1658,6 +1663,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             if (!line) return;
             const child = CHARTER_BY_ID[edge.to];
             line.dataset.state = child ? charterNodeState(state, child) : 'locked';
+            line.dataset.cross = edge.crossWing ? 'true' : 'false';
           });
           const sheet = row.querySelector<HTMLElement>('.charter-sheet');
           if (sheet && charterView) {

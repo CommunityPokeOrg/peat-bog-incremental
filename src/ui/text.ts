@@ -1,6 +1,6 @@
 import type { QuestReward } from '../game/quests';
 import type { CharterEffect } from '../game/charter';
-import { formatNumber } from '../game/format';
+import { formatDuration, formatNumber } from '../game/format';
 
 /** One-line summary of a Charter effect for the tree's detail panel. */
 export function formatCharterEffect(effect: CharterEffect): string {
@@ -10,9 +10,19 @@ export function formatCharterEffect(effect: CharterEffect): string {
     case 'cooling': return `Cooling ×${formatMultiplier(effect.factor)}`;
     case 'researchSpeed': return `Research speed ×${formatMultiplier(effect.factor)}`;
     case 'offlineRate': return `Offline rate +${Math.round(effect.add * 100)}%`;
+    case 'offlineCap': return `Offline cap +${formatDuration(effect.addSeconds)}`;
+    case 'offlineMultiplier': return `Offline production ×${formatMultiplier(effect.factor)}`;
     case 'clickBrothFraction': return `+${Math.round(effect.fraction * 100)}% of click broth as evidence`;
+    case 'fieldwork': return `Fieldwork rewards ×${formatMultiplier(effect.factor)}`;
+    case 'costScale': return `${effect.line} costs ×${formatMultiplier(1 + effect.delta)}`;
+    case 'freeBuildings': return `${effect.count} free ${effect.buildingId}`;
+    case 'converterEfficiency': return `${effect.line} inputs ×${formatMultiplier(effect.factor)}`;
+    case 'byproduct': return `${effect.line} yields ${Math.round(effect.fraction * 100)}% ${effect.resource}`;
+    case 'perQuest': return `${effect.target} gains per claimed quest`;
+    case 'perAchievement': return `${effect.target} gains per achievement`;
     case 'coreGain': return `Core award ×${formatMultiplier(effect.factor)}`;
     case 'startingBroth': return `Start each run with ${formatNumber(effect.amount)} broth`;
+    case 'starting': return `Start each run with ${formatNumber(effect.amount)} ${effect.resource}`;
   }
 }
 

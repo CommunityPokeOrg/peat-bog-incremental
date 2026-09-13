@@ -6,6 +6,7 @@ import { RESEARCH } from '../src/game/data';
 import { calibrate } from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
+import { layoutCharter } from '../src/ui/charterLayout';
 import { CHARTER_MAX_SCALE, CHARTER_ZOOM_STEP } from '../src/ui/charterView';
 import { formatQuestReward } from '../src/ui/text';
 
@@ -290,7 +291,7 @@ describe('UI overhaul', () => {
     const node = (id: string): HTMLButtonElement =>
       root.querySelector<HTMLButtonElement>(`.charter-node[data-node="${id}"]`)!;
     expect(root.querySelectorAll('.charter-node')).toHaveLength(CHARTER.length);
-    expect(root.querySelectorAll('.charter-edges line')).toHaveLength(CHARTER.length - 1);
+    expect(root.querySelectorAll('.charter-edges line')).toHaveLength(layoutCharter().edges.length);
     expect(node('seal').dataset.state).toBe('purchasable');
     expect(node('roots-1').dataset.state).toBe('locked');
     expect(node('roots-1').getAttribute('aria-label')).toContain('Locked');

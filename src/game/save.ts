@@ -8,7 +8,7 @@ import {
   type ResearchQueueEntry,
 } from './state';
 import { settleTick, type Rates } from './engine';
-import { CHARTER_ROOT_ID, charterSum } from './charter';
+import { CHARTER_ROOT_ID, charterEffects, charterSum } from './charter';
 import { safe, toDecimalOrZero, type Decimal } from './decimal';
 import type { ResourceId, SpendableResource } from './data';
 import type { QuestBuff } from './quests';
@@ -260,9 +260,15 @@ export function sanitizeElapsedSeconds(wallDeltaMs: number, monotonicDeltaMs: nu
 
 /** Offline progress at the current background rate, capped at 8 hours. */
 export function computeOfflineEarnings(state: GameState, elapsedSec: number): OfflineEarnings {
-  const seconds = Math.min(Math.max(0, elapsedSec), OFFLINE_CAP_SECONDS);
+  const cap = OFFLINE_CAP_SECONDS + charterSum(state, 'offlineCap');
+  const seconds = Math.min(Math.max(0, elapsedSec), cap);
   const rate = offlineRate(state);
   const settlement = settleTick(state, seconds * rate);
+  const offlineMultiplier = charterEffects(state).reduce((product, effect) =>
+    effect.kind === 'offlineMultiplier' ? product * effect.factor : product, 1);
+  for (const resource of Object.keys(settlement.gained) as SpendableResource[]) {
+    settlement.gained[resource] = settlement.gained[resource].mul(offlineMultiplier);
+  }
   return {
     seconds,
     rate,

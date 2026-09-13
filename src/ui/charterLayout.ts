@@ -9,13 +9,23 @@ export interface CharterPoint {
 
 export interface CharterLayout {
   points: Record<string, CharterPoint>;
-  edges: { from: string; to: string }[];
+  edges: { from: string; to: string; crossWing?: boolean }[];
   width: number;
   height: number;
 }
 
-export const CHARTER_RING_GAP = 120;
+export const CHARTER_RING_GAP = 160;
 export const CHARTER_PADDING = 90;
+/** Growth factor applied to each successive Charter depth ring. */
+export const CHARTER_RING_GROWTH = 1.08;
+const CHARTER_NODE_SEPARATION = 78;
+
+/** Return the radial distance for a node depth, widening deeper rings. */
+export function charterRingRadius(depth: number): number {
+  let radius = 0;
+  for (let ring = 0; ring < depth; ring += 1) radius += CHARTER_RING_GAP * CHARTER_RING_GROWTH ** ring;
+  return radius;
+}
 
 /**
  * Radial tree layout. The root sits at the centre; every leaf gets an equal
@@ -57,16 +67,38 @@ export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout 
   if (root) place(root, 0);
   for (const node of nodes) if (!depths.has(node.id)) place(node, 1);
 
-  const maxDepth = Math.max(0, ...depths.values());
-  const radius = maxDepth * CHARTER_RING_GAP;
-  const size = radius * 2 + CHARTER_PADDING * 2;
+  const nodesByDepth = new Map<number, string[]>();
+  for (const [id, depth] of depths) {
+    const atDepth = nodesByDepth.get(depth) ?? [];
+    atDepth.push(id);
+    nodesByDepth.set(depth, atDepth);
+  }
+  const ringRadii = new Map<number, number>();
+  let previousRadius = 0;
+  for (const depth of Array.from(nodesByDepth.keys()).sort((a, b) => a - b)) {
+    const count = nodesByDepth.get(depth)?.length ?? 0;
+    const required = count > 1
+      ? (CHARTER_NODE_SEPARATION + 12) / (2 * Math.sin(Math.PI / count))
+      : 0;
+    const radius = depth === 0
+      ? 0
+      : Math.max(charterRingRadius(depth), required, previousRadius + CHARTER_NODE_SEPARATION + 12);
+    ringRadii.set(depth, radius);
+    previousRadius = radius;
+  }
+  const radius = Math.max(...ringRadii.values());
+  const size = Math.ceil((radius * 2 + CHARTER_PADDING * 2) / 2) * 2;
   const centre = size / 2;
 
   const points: Record<string, CharterPoint> = {};
   for (const node of nodes) {
     const depth = depths.get(node.id) ?? 0;
-    const angle = angles.get(node.id) ?? 0;
-    const r = depth * CHARTER_RING_GAP;
+    const siblings = nodesByDepth.get(depth) ?? [];
+    const index = siblings.indexOf(node.id);
+    const angle = siblings.length > 1
+      ? -Math.PI / 2 + (Math.PI * 2 * index) / siblings.length
+      : angles.get(node.id) ?? 0;
+    const r = ringRadii.get(depth) ?? 0;
     points[node.id] = {
       x: Math.round(centre + Math.cos(angle) * r),
       y: Math.round(centre + Math.sin(angle) * r),
@@ -75,9 +107,15 @@ export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout 
     };
   }
 
-  const edges = nodes
-    .filter((node) => node.requires && points[node.requires])
-    .map((node) => ({ from: node.requires as string, to: node.id }));
+  const edges = nodes.flatMap((node) => {
+    const edgesForNode = node.requires && points[node.requires]
+      ? [{ from: node.requires, to: node.id }]
+      : [];
+    const crossEdges = (node.requiresAny ?? [])
+      .filter((id) => points[id])
+      .map((id) => ({ from: id, to: node.id, crossWing: true }));
+    return [...edgesForNode, ...crossEdges];
+  });
 
   return { points, edges, width: size, height: size };
 }

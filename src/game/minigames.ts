@@ -1,4 +1,5 @@
 import { productionPerSecond } from './engine';
+import { charterFactor } from './charter';
 import type { GameState } from './state';
 import { Decimal, type Decimal as DecimalType } from './decimal';
 
@@ -84,8 +85,9 @@ export function calibrate(
   const rates = productionPerSecond(state);
   const streak = state.calibrationStreak + 1;
   const multiplier = streakMultiplier(streak);
-  const compute = Decimal.max(2, rates.compute.mul(2)).mul(multiplier);
-  const evidence = Decimal.max(0.2, rates.evidence.mul(0.5)).mul(multiplier);
+  const fieldworkFactor = charterFactor(state, 'fieldwork');
+  const compute = Decimal.max(2, rates.compute.mul(2)).mul(multiplier).mul(fieldworkFactor);
+  const evidence = Decimal.max(0.2, rates.evidence.mul(0.5)).mul(multiplier).mul(fieldworkFactor);
   state.calibrationStreak = streak;
   const nextZone = calibrationZone(streak);
   state.calibrationTarget = nextZone + rng() * (1 - 2 * nextZone);
@@ -110,7 +112,8 @@ export function peatCutCharge(elapsedMs: number): number {
 /** Cut peat at a charge fraction and count a near-perfect cut as a hit. */
 export function cutPeat(state: GameState, chargeFraction: number): DecimalType {
   const fraction = Math.max(0, Math.min(1, chargeFraction));
-  const peat = Decimal.max(5, productionPerSecond(state).peat.mul(15)).mul(fraction);
+  const peat = Decimal.max(5, productionPerSecond(state).peat.mul(15))
+    .mul(fraction).mul(charterFactor(state, 'fieldwork'));
   state.wallet.peat = state.wallet.peat.add(peat);
   state.lifetime.peat = state.lifetime.peat.add(peat);
   if (fraction >= 0.95) state.minigameHits += 1;

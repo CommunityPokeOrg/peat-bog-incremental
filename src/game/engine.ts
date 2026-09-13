@@ -16,7 +16,7 @@ import {
 import { D, Decimal, safe } from './decimal';
 import { NIGHT_WATCH_MAX_LEVEL, type GameState } from './state';
 import { QUESTS, expireBuffs, questMultiplier } from './quests';
-import { CHARTER, charterFactor, charterMultiplier, charterSum } from './charter';
+import { CHARTER, charterEffects, charterFactor, charterMultiplier, charterSum } from './charter';
 
 export const SPENDABLE_RESOURCES: SpendableResource[] = RESOURCES
   .filter((resource) => resource.id !== 'bogCores')
@@ -35,7 +35,9 @@ export function costScaleFor(state: GameState, def: BuildingDef): number {
     const effect = RESEARCH_BY_ID[id]?.effect;
     return total + (effect?.kind === 'costScale' && effect.line === def.line ? effect.delta : 0);
   }, 0);
-  return Math.max(1.05, (def.costScale ?? COST_SCALE) + delta);
+  const charterDelta = charterEffects(state).reduce((total, effect) =>
+    effect.kind === 'costScale' && effect.line === def.line ? total + effect.delta : total, 0);
+  return Math.max(1.05, (def.costScale ?? COST_SCALE) + delta + charterDelta);
 }
 
 export function buildingCost(def: BuildingDef, owned: number, state?: GameState): ResourceCost {
@@ -174,7 +176,7 @@ export function totalHeat(state: GameState): Decimal {
   }
   let heat = D(0);
   for (const b of BUILDINGS) {
-    if (b.heat) heat = heat.add(D(b.heat).mul(state.buildings[b.id] ?? 0));
+    if (b.heat) heat = heat.add(D(b.heat).mul(effectiveOwned(state, b.id)));
   }
   return heat.mul(heatMult).mul(charterFactor(state, 'heat'));
 }
@@ -187,7 +189,7 @@ export function totalCooling(state: GameState): Decimal {
   }
   let cooling = D(0);
   for (const b of BUILDINGS) {
-    if (b.cooling) cooling = cooling.add(D(b.cooling).mul(state.buildings[b.id] ?? 0));
+    if (b.cooling) cooling = cooling.add(D(b.cooling).mul(effectiveOwned(state, b.id)));
   }
   return cooling.mul(coolMult).mul(charterFactor(state, 'cooling'));
 }
@@ -227,10 +229,15 @@ export function resourceMultiplier(state: GameState, resource: SpendableResource
   return multiplier;
 }
 
+function effectiveOwned(state: GameState, buildingId: string): number {
+  return (state.buildings[buildingId] ?? 0) + charterEffects(state).reduce((count, effect) =>
+    effect.kind === 'freeBuildings' && effect.buildingId === buildingId ? count + effect.count : count, 0);
+}
+
 export function productionPerSecond(state: GameState, now = Date.now()): Rates {
   const totals = zeroRates();
   for (const building of BUILDINGS) {
-    const owned = state.buildings[building.id] ?? 0;
+    const owned = effectiveOwned(state, building.id);
     if (!owned || !building.produces) continue;
     const multiplier = buildingMultiplier(state, building.id);
     for (const [resource, amount] of Object.entries(building.produces) as [SpendableResource, number][]) {
@@ -247,7 +254,7 @@ export function consumptionPerSecond(state: GameState, now = Date.now()): Rates 
   void now;
   const totals = zeroRates();
   for (const building of BUILDINGS) {
-    const owned = state.buildings[building.id] ?? 0;
+    const owned = effectiveOwned(state, building.id);
     if (!owned || !building.consumes) continue;
     const multiplier = buildingMultiplier(state, building.id);
     for (const [resource, amount] of Object.entries(building.consumes) as [SpendableResource, number][]) {
@@ -290,7 +297,7 @@ export function settleTick(state: GameState, dtSeconds: number, now = Date.now()
     SPENDABLE_RESOURCES.map((resource) => [resource, state.wallet[resource]]),
   ) as Rates;
   for (const building of BUILDINGS) {
-    const owned = state.buildings[building.id] ?? 0;
+    const owned = effectiveOwned(state, building.id);
     if (!owned) continue;
     const multiplier = buildingMultiplier(state, building.id);
     const throttle = Object.entries(building.consumes ?? {}).reduce((limit, [resource, amount]) => {
@@ -311,6 +318,11 @@ export function settleTick(state: GameState, dtSeconds: number, now = Date.now()
       const output = safe(D(amount).mul(owned).mul(multiplier)
         .mul(resourceMultiplier(state, resource, now)).mul(dtSeconds * factor));
       gained[resource] = gained[resource].add(output);
+      for (const effect of charterEffects(state)) {
+        if (effect.kind === 'byproduct' && effect.line === building.line) {
+          gained[effect.resource] = gained[effect.resource].add(output.mul(effect.fraction));
+        }
+      }
     }
   }
   return { gained, spent };
@@ -508,6 +520,9 @@ export function prestige(state: GameState): Decimal {
   );
   state.quests.buffs = [];
   state.wallet.broth = D(charterSum(state, 'startingBroth'));
+  for (const effect of charterEffects(state)) {
+    if (effect.kind === 'starting') state.wallet[effect.resource] = state.wallet[effect.resource].add(effect.amount);
+  }
   return gain;
 }
 
