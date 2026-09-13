@@ -27,6 +27,22 @@ describe('Drainage Charter', () => {
     for (const field of ['id', 'name', 'description'] as const) {
       expect(new Set(CHARTER.map((node) => node[field])).size).toBe(CHARTER.length);
     }
+    const descriptionOpenings = CHARTER.map((node) => node.description.split(/\s+/).slice(0, 6).join(' '));
+    expect(new Set(descriptionOpenings).size).toBe(CHARTER.length);
+    const leafSuffixes = ['Annex', 'Side Letter', 'Footnote', 'Capstone'];
+    for (const suffix of leafSuffixes) {
+      expect(CHARTER.filter((node) => node.name.endsWith(suffix)).length).toBeLessThanOrEqual(1);
+    }
+    const effectTargets = new Set(CHARTER.flatMap((node) => node.effects.map((effect) => {
+      const { kind, target, line, buildingId, resource } = effect as typeof effect & {
+        target?: string;
+        line?: string;
+        buildingId?: string;
+        resource?: string;
+      };
+      return [kind, target, line, buildingId, resource].filter(Boolean).join(':');
+    })));
+    expect(effectTargets.size).toBeGreaterThanOrEqual(25);
     const ids = new Set(CHARTER.map((node) => node.id));
     for (const node of CHARTER) {
       if (node.requires) expect(ids).toContain(node.requires);
