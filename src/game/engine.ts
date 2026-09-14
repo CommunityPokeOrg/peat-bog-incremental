@@ -252,41 +252,67 @@ export function resourceMultiplier(state: GameState, resource: SpendableResource
   return safe(multiplier);
 }
 
-function effectiveOwned(state: GameState, buildingId: string): number {
+export function effectiveOwned(state: GameState, buildingId: string): number {
+  const building = BUILDING_BY_ID[buildingId];
+  if (building?.consumes && state.closedValves.includes(building.line)) return 0;
   return (state.buildings[buildingId] ?? 0) + charterEffects(state).reduce((count, effect) =>
     effect.kind === 'freeBuildings' && effect.buildingId === buildingId ? count + effect.count : count, 0);
 }
 
-export function productionPerSecond(state: GameState, now = Date.now()): Rates {
-  const totals = zeroRates();
+export interface LineFlow {
+  consumes: Rates;
+  produces: Rates;
+}
+
+export function lineFlow(state: GameState, line: ProductionLine, now = Date.now()): LineFlow {
+  const consumes = zeroRates();
+  const produces = zeroRates();
   for (const building of BUILDINGS) {
+    if (building.line !== line) continue;
     const owned = effectiveOwned(state, building.id);
-    if (!owned || !building.produces) continue;
+    if (!owned) continue;
     const multiplier = buildingMultiplier(state, building.id);
-    for (const [resource, amount] of Object.entries(building.produces) as [SpendableResource, number][]) {
-      totals[resource] = totals[resource].add(D(amount).mul(owned).mul(multiplier));
+    for (const [resource, amount] of Object.entries(building.consumes ?? {}) as [SpendableResource, number][]) {
+      consumes[resource] = consumes[resource].add(
+        D(amount).mul(owned).mul(multiplier).mul(converterEfficiency(state, line)),
+      );
+    }
+    for (const [resource, amount] of Object.entries(building.produces ?? {}) as [SpendableResource, number][]) {
+      produces[resource] = produces[resource].add(D(amount).mul(owned).mul(multiplier));
     }
   }
   for (const resource of SPENDABLE_RESOURCES) {
-    totals[resource] = safe(totals[resource].mul(resourceMultiplier(state, resource, now)));
+    produces[resource] = safe(produces[resource].mul(resourceMultiplier(state, resource, now)));
+  }
+  return { consumes, produces };
+}
+
+export function productionPerSecond(state: GameState, now = Date.now()): Rates {
+  const totals = zeroRates();
+  for (const line of new Set(BUILDINGS.map((building) => building.line))) {
+    const flow = lineFlow(state, line, now);
+    for (const resource of SPENDABLE_RESOURCES) totals[resource] = totals[resource].add(flow.produces[resource]);
   }
   return totals;
 }
 
 export function consumptionPerSecond(state: GameState, now = Date.now()): Rates {
-  void now;
   const totals = zeroRates();
-  for (const building of BUILDINGS) {
-    const owned = effectiveOwned(state, building.id);
-    if (!owned || !building.consumes) continue;
-    const multiplier = buildingMultiplier(state, building.id);
-    for (const [resource, amount] of Object.entries(building.consumes) as [SpendableResource, number][]) {
-      totals[resource] = totals[resource].add(
-        D(amount).mul(owned).mul(multiplier).mul(converterEfficiency(state, building.line)),
-      );
-    }
+  for (const line of new Set(BUILDINGS.map((building) => building.line))) {
+    const flow = lineFlow(state, line, now);
+    for (const resource of SPENDABLE_RESOURCES) totals[resource] = totals[resource].add(flow.consumes[resource]);
   }
   return totals;
+}
+
+export function toggleValve(state: GameState, line: ProductionLine): boolean {
+  const index = state.closedValves.indexOf(line);
+  if (index >= 0) {
+    state.closedValves.splice(index, 1);
+    return true;
+  }
+  state.closedValves.push(line);
+  return false;
 }
 
 export function clickPower(state: GameState, now = Date.now()): Decimal {

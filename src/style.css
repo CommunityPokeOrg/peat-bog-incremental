@@ -862,8 +862,16 @@ button.item:not(:disabled) .item-action {
   flex-wrap: wrap;
   align-content: flex-start;
   align-items: stretch;
+  min-width: 0;
   gap: var(--sp-3);
   padding: var(--sp-4);
+}
+
+.panel[data-scene="cut"] .production-filters,
+.panel[data-scene="cut"] .panel-dock {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .panel[data-scene="cut"] .stratum-label {
@@ -1088,6 +1096,171 @@ button.item:not(:disabled) .item-action {
 
 .panel[data-scene="cut"] .plot.locked-teaser .plot-dug {
   display: none;
+}
+
+.panel[data-scene="cut"] .manifold {
+  display: flex;
+  flex: 0 0 100%;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  box-sizing: border-box;
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--scene-accent) 55%, var(--rule-strong));
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(135deg, rgba(239,230,210,.08), transparent 45%),
+    color-mix(in srgb, var(--bog-0) 82%, var(--scene-backdrop));
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2), 0 5px 0 rgba(0,0,0,.16);
+}
+
+.panel[data-scene="cut"] .manifold > .stratum-name {
+  color: var(--scene-accent);
+}
+
+.panel[data-scene="cut"] .pipe-runs {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel[data-scene="cut"] .pipe-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 44px 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sp-2);
+  border: 1px solid color-mix(in srgb, var(--stratum, var(--peat)) 55%, var(--rule));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--stratum, var(--peat)) 22%, transparent);
+}
+
+.panel[data-scene="cut"] .vessels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .6rem;
+  min-width: 0;
+}
+
+.panel[data-scene="cut"] .vessels.out {
+  justify-content: flex-end;
+}
+
+.panel[data-scene="cut"] .vessel {
+  min-width: 0;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.panel[data-scene="cut"] .vessel-icon {
+  font-family: var(--font-body);
+}
+
+.panel[data-scene="cut"] .vessel b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.panel[data-scene="cut"] .pipe {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bog-0) 80%, var(--rule));
+}
+
+.panel[data-scene="cut"] .flow {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--scene-accent) 75%, var(--ink)) 0 8px,
+    transparent 8px 16px
+  );
+  animation: pipe-flow var(--flow, 3s) linear infinite;
+}
+
+.panel[data-scene="cut"] .pipe-run[data-state="starved"] .flow {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--claim) 80%, var(--ink)) 0 8px,
+    transparent 8px 16px
+  );
+  animation-play-state: paused;
+}
+
+.panel[data-scene="cut"] .pipe-run[data-state="closed"] .flow {
+  display: none;
+}
+
+.panel[data-scene="cut"] .pipe-run[data-state="idle"] .flow {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ink-faint) 65%, transparent) 0 8px,
+    transparent 8px 16px
+  );
+  animation-play-state: paused;
+}
+
+.panel[data-scene="cut"] .valve {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 2px solid color-mix(in srgb, var(--rule-strong) 80%, var(--ink));
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--ink-dim), var(--rule-strong) 40%, var(--bog-0));
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform var(--t-duration-sm) var(--t-ease);
+}
+
+.panel[data-scene="cut"] .valve:active {
+  transform: scale(.92);
+}
+
+.panel[data-scene="cut"] .valve-wheel {
+  display: block;
+  width: 25px;
+  height: 25px;
+  border: 2px solid var(--ink-faint);
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--ink-faint) 0 8%,
+    transparent 8% 17%,
+    var(--ink-faint) 17% 25%,
+    transparent 25% 42%,
+    var(--ink-faint) 42% 50%,
+    transparent 50% 67%,
+    var(--ink-faint) 67% 75%,
+    transparent 75% 92%,
+    var(--ink-faint) 92% 100%
+  );
+  transition: transform var(--t-duration-md) var(--t-ease);
+}
+
+.panel[data-scene="cut"] .pipe-run[data-state="closed"] .valve-wheel {
+  transform: rotate(90deg);
+}
+
+.panel[data-scene="cut"] .pipe-run[data-state="idle"] .valve {
+  filter: grayscale(1);
+  opacity: .65;
+}
+
+@keyframes pipe-flow {
+  to { background-position: 16px 0; }
 }
 
 .panel[data-scene="shed"] .tab-content {
@@ -2528,6 +2701,32 @@ button.item:not(:disabled) .item-action {
     flex-basis: 100%;
     max-width: none;
     min-height: 96px;
+  }
+
+  .panel[data-scene="cut"] .manifold {
+    padding: 12px;
+  }
+
+  .panel[data-scene="cut"] .pipe-run {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    gap: var(--sp-2);
+  }
+
+  .panel[data-scene="cut"] .vessels,
+  .panel[data-scene="cut"] .vessels.out {
+    justify-content: center;
+  }
+
+  .panel[data-scene="cut"] .pipe {
+    width: 8px;
+    height: 32px;
+    justify-self: center;
+  }
+
+  .panel[data-scene="cut"] .flow {
+    background-repeat: repeat-y;
+    background-size: 100% 16px;
   }
 
   .panel[data-scene="shed"] .tab-content {

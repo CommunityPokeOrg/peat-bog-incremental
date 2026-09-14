@@ -1,8 +1,8 @@
 import type { QuestBuff, QuestPermanentEffect } from './quests';
 import { D, type Decimal } from './decimal';
-import type { ResourceId, SpendableResource } from './data';
+import type { ProductionLine, ResourceId, SpendableResource } from './data';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const NIGHT_WATCH_MAX_LEVEL = 49;
 
 /** Progress tracked for one fieldwork minigame. */
@@ -50,6 +50,7 @@ export interface GameState {
   upgrades: string[];
   research: string[];
   researchQueue: ResearchQueueEntry[];
+  closedValves: ProductionLine[];
   automationTimers: Record<string, number>;
   achievements: string[];
   quests: {
@@ -115,6 +116,7 @@ export function createInitialState(): GameState {
     upgrades: [],
     research: [],
     researchQueue: [],
+    closedValves: [],
     automationTimers: {},
     achievements: [],
     quests: { claimed: [], buffs: [], permanent: [], bountyCount: {}, bountyBase: {} },

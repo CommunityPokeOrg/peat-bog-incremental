@@ -303,7 +303,7 @@ describe('save', () => {
       lastSaveTime: 123,
     });
     const loaded = deserialize(raw)!;
-    expect(loaded.version).toBe(6);
+    expect(loaded.version).toBe(7);
     expect(loaded.wallet.peat.eq(0)).toBe(true);
     expect(loaded.wallet.evidence.eq(0)).toBe(true);
     expect(loaded.wallet.sphagnum.eq(0)).toBe(true);

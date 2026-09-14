@@ -23,7 +23,9 @@ import {
   canPrestige,
   clickPower,
   discoveredResources,
+  effectiveOwned,
   lineUnlocked,
+  lineFlow,
   maxAffordable,
   maxResearchQueue,
   nightWatchCost,
@@ -34,6 +36,7 @@ import {
   thermalFactor,
   totalCooling,
   totalHeat,
+  toggleValve,
   upgradeVisible,
 } from '../game/engine';
 import { formatCost, formatDuration, formatNumber } from '../game/format';
@@ -844,6 +847,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const rates = productionPerSecond(state);
     const discovered = discoveredResources(state, rates);
     renderProductionFilters(state, rates, discovered);
+    const converterLines = productionCategories.filter((line) =>
+      BUILDINGS.some((def) => def.line === line && Boolean(def.consumes)),
+    );
+    const manifoldLines = converterLines.filter((line) =>
+      lineUnlocked(state, line) && (productionFilter === 'all' || productionFilter === line),
+    );
+    if (manifoldLines.length > 0) {
+      entries.push({
+        key: `manifold:${manifoldLines.join(',')}`,
+        create: () => createManifold(manifoldLines),
+        update: (row) => updateManifold(row, state),
+      });
+    }
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
       if (!lineUnlocked(state, category)) continue;
@@ -1153,6 +1169,104 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     heading.dataset.line = line;
     heading.innerHTML = `<span class="stratum-depth">${index * 4} m</span><h3 class="stratum-name">${label}</h3>`;
     return heading;
+  }
+
+  function lineLabel(line: ProductionLine): string {
+    const label = resourceName(line);
+    return label[0].toUpperCase() + label.slice(1);
+  }
+
+  function syncManifoldVessels(
+    parent: HTMLElement,
+    rates: Record<string, Decimal>,
+    sign: '−' | '+',
+  ): void {
+    const vessels = Object.entries(rates).filter(([, amount]) => amount.gt(0));
+    const signature = vessels.map(([resource]) => resource).join(',');
+    if (parent.dataset.resources !== signature) {
+      parent.replaceChildren(...vessels.map(([resource]) => {
+        const vessel = document.createElement('span');
+        vessel.className = 'vessel';
+        vessel.dataset.resource = resource;
+        vessel.innerHTML = `<span class="vessel-icon" aria-hidden="true"></span> <b></b> <span class="vessel-name"></span>`;
+        return vessel;
+      }));
+      parent.dataset.resources = signature;
+    }
+    for (const [resource, amount] of vessels) {
+      const vessel = parent.querySelector<HTMLElement>(`.vessel[data-resource="${resource}"]`);
+      if (!vessel) continue;
+      const definition = RESOURCES.find((entry) => entry.id === resource);
+      const icon = vessel.querySelector<HTMLElement>('.vessel-icon');
+      const value = vessel.querySelector<HTMLElement>('b');
+      const name = vessel.querySelector<HTMLElement>('.vessel-name');
+      if (icon && icon.textContent !== definition?.emoji) icon.textContent = definition?.emoji ?? '';
+      if (value) {
+        const text = `${sign}${formatNumber(amount)}/s`;
+        if (value.textContent !== text) value.textContent = text;
+      }
+      if (name && name.textContent !== resourceName(resource)) name.textContent = resourceName(resource);
+    }
+  }
+
+  function createManifold(lines: ProductionLine[]): HTMLElement {
+    const manifold = document.createElement('section');
+    manifold.className = 'manifold';
+    manifold.innerHTML = '<h3 class="stratum-name">Still room</h3><ol class="pipe-runs"></ol>';
+    const runs = manifold.querySelector<HTMLOListElement>('.pipe-runs')!;
+    for (const line of lines) {
+      const run = document.createElement('li');
+      run.className = 'pipe-run';
+      run.dataset.line = line;
+      run.innerHTML = `
+        <span class="vessels in"></span>
+        <span class="pipe"><span class="flow"></span></span>
+        <button type="button" class="valve"><span class="valve-wheel" aria-hidden="true"></span></button>
+        <span class="pipe"><span class="flow"></span></span>
+        <span class="vessels out"></span>`;
+      run.querySelector<HTMLButtonElement>('.valve')!.addEventListener('click', () => {
+        const latest = currentState;
+        if (!latest) return;
+        toggleValve(latest, line);
+        sound.play('buy');
+        renderCounters(latest);
+        renderLists(latest);
+      });
+      runs.appendChild(run);
+    }
+    return manifold;
+  }
+
+  function updateManifold(row: HTMLElement, state: GameState): void {
+    for (const run of row.querySelectorAll<HTMLElement>('.pipe-run')) {
+      const line = run.dataset.line as ProductionLine;
+      const flow = lineFlow(state, line);
+      const closed = state.closedValves.includes(line);
+      const hasOwned = BUILDINGS.some((def) =>
+        def.line === line && Boolean(def.consumes) && effectiveOwned(state, def.id) > 0,
+      );
+      const starved = Object.entries(flow.consumes).some(([resource, amount]) =>
+        amount.gt(0) && state.wallet[resource as keyof typeof state.wallet].lt(amount),
+      );
+      const status = closed ? 'closed' : !hasOwned ? 'idle' : starved ? 'starved' : 'flowing';
+      run.dataset.state = status;
+      const valve = run.querySelector<HTMLButtonElement>('.valve')!;
+      const open = !closed;
+      valve.setAttribute('aria-pressed', String(open));
+      valve.setAttribute('aria-label', `${lineLabel(line)} valve, ${open ? 'open' : 'closed'}`);
+      valve.classList.toggle('is-open', open);
+      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.in')!, flow.consumes, '−');
+      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.out')!, flow.produces, '+');
+      const total = [...Object.values(flow.consumes), ...Object.values(flow.produces)]
+        .reduce((sum, amount) => sum + amount.toNumber(), 0);
+      const duration = Math.max(0.4, Math.min(3, 3 / Math.log10(total + 10)));
+      const flowStyle = `${duration}s`;
+      run.querySelectorAll<HTMLElement>('.flow').forEach((element) => {
+        if (element.style.getPropertyValue('--flow') !== flowStyle) {
+          element.style.setProperty('--flow', flowStyle);
+        }
+      });
+    }
   }
 
   function createSectionHeading(label: string): HTMLElement {

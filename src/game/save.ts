@@ -13,7 +13,7 @@ import {
 import { settleTick, type Rates } from './engine';
 import { CHARTER_ROOT_ID, charterEffects, charterSum } from './charter';
 import { D, safe, toDecimalOrZero, type Decimal } from './decimal';
-import type { ResourceId, SpendableResource } from './data';
+import { BUILDINGS, type ProductionLine, type ResourceId, type SpendableResource } from './data';
 import { BOUNTIES, type QuestBuff, type QuestPermanentEffect } from './quests';
 
 export const SAVE_KEY = 'peat-bog-incremental:v1';
@@ -40,6 +40,7 @@ export interface SavedState {
   upgrades: string[];
   research: string[];
   researchQueue: ResearchQueueEntry[];
+  closedValves: ProductionLine[];
   automationTimers: Record<string, number>;
   achievements: string[];
   quests: GameState['quests'];
@@ -52,6 +53,7 @@ const SPENDABLE_RESOURCES: SpendableResource[] = [
 ];
 const RESOURCE_IDS: ResourceId[] = [...SPENDABLE_RESOURCES, 'bogCores'];
 const FIELDWORK_IDS: FieldworkId[] = ['typing', 'strata', 'settle', 'still', 'press', 'constellation'];
+const PRODUCTION_LINES = new Set<ProductionLine>(BUILDINGS.map((building) => building.line));
 const LEGACY_FIELDS: Record<string, string | [string, ResourceId]> = {
   broth: ['wallet', 'broth'],
   compute: ['wallet', 'compute'],
@@ -91,6 +93,7 @@ export function serialize(state: GameState): string {
     upgrades: state.upgrades,
     research: state.research,
     researchQueue: state.researchQueue,
+    closedValves: state.closedValves,
     automationTimers: state.automationTimers,
     achievements: state.achievements,
     quests: state.quests,
@@ -132,6 +135,11 @@ const readFieldwork = (raw: unknown): GameState['fieldwork'] => {
   }
   return out;
 };
+const readClosedValves = (raw: unknown): ProductionLine[] =>
+  Array.isArray(raw)
+    ? [...new Set(raw.filter((value): value is ProductionLine =>
+      typeof value === 'string' && PRODUCTION_LINES.has(value as ProductionLine)))]
+    : [];
 const isQuestPermanent = (v: unknown): v is QuestPermanentEffect =>
   isObjectRecord(v) &&
   typeof (v as Record<string, unknown>).questId === 'string' &&
@@ -273,6 +281,7 @@ export function deserialize(raw: unknown): GameState | null {
   state.upgrades = [...p.upgrades];
   state.research = [...p.research];
   state.researchQueue = isResearchQueue(p.researchQueue) ? [...p.researchQueue] : [];
+  state.closedValves = readClosedValves(p.closedValves);
   state.automationTimers = typeof p.automationTimers === 'object' && p.automationTimers !== null
     ? Object.fromEntries(Object.entries(p.automationTimers).filter(([, value]) => isNum(value)))
     : {};
