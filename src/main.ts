@@ -23,7 +23,7 @@ import {
 } from './game/save';
 import { advanceResearch } from './game/engine';
 import { claimQuest, expireBuffs } from './game/quests';
-import { calibrate, cutPeat } from './game/minigames';
+import { calibrate } from './game/minigames';
 import { clearState, isIndexedDbAvailable, loadWithMigration, saveState } from './game/db';
 import { createInitialState } from './game/state';
 import { RESOURCES } from './game/data';
@@ -170,11 +170,10 @@ async function init(): Promise<void> {
         ],
       });
     },
-    onCutPeat: (charge) => {
-      const gained = cutPeat(state, charge);
-      ui.spawnFloat(gained, 'peat');
+    onFieldwork: (fn) => {
+      const result = fn(state);
       void doSave(false);
-      return gained;
+      return result;
     },
     onCalibrate: (needlePos) => {
       const result = calibrate(state, needlePos);

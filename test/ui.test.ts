@@ -152,7 +152,7 @@ describe('UI list reconciliation', () => {
     });
     ui.renderLists(createInitialState());
     const buildings = root.querySelector<HTMLButtonElement>('[data-tab="buildings"]')!;
-    const upgrades = root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!;
+    const upgrades = root.querySelector<HTMLButtonElement>('[data-tab="fieldwork"]')!;
     buildings.focus();
     buildings.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 

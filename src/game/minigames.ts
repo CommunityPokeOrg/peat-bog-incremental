@@ -99,23 +99,3 @@ export function calibrate(
   state.minigameHits += 1;
   return { hit: true, compute, evidence, streak, multiplier };
 }
-
-/** Convert a peat-cut hold duration into a clamped charge fraction. */
-export function peatCutCharge(elapsedMs: number): number {
-  const elapsed = Math.max(0, elapsedMs);
-  if (elapsed < 1500) return elapsed / 1500;
-  if (elapsed <= 2000) return 1;
-  if (elapsed < 3000) return 1 - (elapsed - 2000) / 2000;
-  return 0.5;
-}
-
-/** Cut peat at a charge fraction and count a near-perfect cut as a hit. */
-export function cutPeat(state: GameState, chargeFraction: number): DecimalType {
-  const fraction = Math.max(0, Math.min(1, chargeFraction));
-  const peat = Decimal.max(5, productionPerSecond(state).peat.mul(15))
-    .mul(fraction).mul(charterFactor(state, 'fieldwork'));
-  state.wallet.peat = state.wallet.peat.add(peat);
-  state.lifetime.peat = state.lifetime.peat.add(peat);
-  if (fraction >= 0.95) state.minigameHits += 1;
-  return peat;
-}

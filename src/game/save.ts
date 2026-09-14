@@ -4,7 +4,10 @@ import {
   emptyWallet,
   NIGHT_WATCH_MAX_LEVEL,
   SAVE_VERSION,
+  emptyFieldwork,
   type GameState,
+  type FieldworkId,
+  type FieldworkProgress,
   type ResearchQueueEntry,
 } from './state';
 import { settleTick, type Rates } from './engine';
@@ -22,6 +25,7 @@ export { NIGHT_WATCH_MAX_LEVEL };
 /** Serialized save shape with data-driven Decimal wallet and lifetime records. */
 export interface SavedState {
   version: number;
+  fieldwork: Record<FieldworkId, FieldworkProgress>;
   wallet: Record<string, string>;
   lifetime: Record<string, string>;
   runCompute: string;
@@ -47,6 +51,7 @@ const SPENDABLE_RESOURCES: SpendableResource[] = [
   'sludge', 'briquettes', 'refinedBroth', 'sediment', 'essence',
 ];
 const RESOURCE_IDS: ResourceId[] = [...SPENDABLE_RESOURCES, 'bogCores'];
+const FIELDWORK_IDS: FieldworkId[] = ['typing', 'strata', 'settle', 'still', 'press', 'constellation'];
 const LEGACY_FIELDS: Record<string, string | [string, ResourceId]> = {
   broth: ['wallet', 'broth'],
   compute: ['wallet', 'compute'],
@@ -71,6 +76,7 @@ export function serialize(state: GameState): string {
   for (const resource of SPENDABLE_RESOURCES) lifetime[resource] = state.lifetime[resource].toString();
   return JSON.stringify({
     version: SAVE_VERSION,
+    fieldwork: state.fieldwork,
     wallet,
     lifetime,
     runCompute: state.runCompute.toString(),
@@ -109,6 +115,23 @@ const isResearchQueue = (v: unknown): v is ResearchQueueEntry[] =>
   );
 const isObjectRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
+const readFieldwork = (raw: unknown): GameState['fieldwork'] => {
+  const out = emptyFieldwork();
+  if (!isObjectRecord(raw)) return out;
+  for (const id of FIELDWORK_IDS) {
+    const entry = raw[id];
+    if (!isObjectRecord(entry)) continue;
+    const best = entry.best;
+    const runs = entry.runs;
+    const cooldownUntil = entry.cooldownUntil;
+    out[id] = {
+      best: isNum(best) ? Math.max(0, best) : 0,
+      runs: isNum(runs) ? Math.max(0, Math.floor(runs)) : 0,
+      cooldownUntil: isNum(cooldownUntil) ? Math.max(0, cooldownUntil) : 0,
+    };
+  }
+  return out;
+};
 const isQuestPermanent = (v: unknown): v is QuestPermanentEffect =>
   isObjectRecord(v) &&
   typeof (v as Record<string, unknown>).questId === 'string' &&
@@ -211,6 +234,7 @@ export function deserialize(raw: unknown): GameState | null {
 
   const state = createInitialState();
   state.version = SAVE_VERSION;
+  state.fieldwork = readFieldwork(p.fieldwork);
   const hasRecords = isStringRecord(p.wallet) || isStringRecord(p.lifetime);
   if (hasRecords) {
     const wallet = readRecord(p.wallet, RESOURCE_IDS, emptyWallet);

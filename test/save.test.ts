@@ -29,7 +29,7 @@ describe('Decimal save migration', () => {
       research: [],
       achievements: [],
     });
-    expect(loaded?.version).toBe(5);
+    expect(loaded?.version).toBe(6);
     expect(loaded?.wallet.broth.eq(123.5)).toBe(true);
     expect(loaded?.wallet.bogCores.eq(8)).toBe(true);
   });

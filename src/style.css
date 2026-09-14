@@ -1863,3 +1863,255 @@ button.item:not(:disabled) .item-action {
     opacity: 1;
   }
 }
+
+/* ---- Fieldwork tab ------------------------------------------------------ */
+
+.fieldwork-grid {
+  display: grid;
+  gap: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+}
+
+.fw-card.is-live {
+  border-color: var(--scene-accent, var(--coolant));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-accent, var(--coolant)) 40%, transparent);
+}
+
+.fw-card.fw-fail {
+  animation: input-shake var(--t-duration-lg) var(--t-ease);
+}
+
+.fw-best,
+.fw-meter,
+.fw-howto {
+  color: var(--ink-dim);
+  font: var(--fs-sm) var(--font-mono);
+}
+
+.fw-howto {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-body);
+}
+
+.fw-stage {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.fw-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.fw-action {
+  min-height: 44px;
+  text-align: center;
+  place-items: center;
+  font-weight: 600;
+}
+
+/* Typing */
+.fw-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  min-height: 2.4rem;
+  padding: var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--bog-0);
+  font: var(--fs-lg) var(--font-mono);
+  color: var(--ink-faint);
+}
+
+.fw-word.is-current {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: .25em;
+}
+
+.fw-word.is-current b {
+  color: var(--evidence);
+  font-weight: 700;
+}
+
+.fw-input {
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--bog-0);
+  color: var(--ink);
+  font: var(--fs-md) var(--font-mono);
+}
+
+/* Strata */
+.fw-face {
+  --depth: 0;
+  position: relative;
+  display: grid;
+  height: 9rem;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+}
+
+.fw-stratum {
+  border-top: 1px dashed color-mix(in srgb, var(--ink) 30%, transparent);
+  background: color-mix(in srgb, var(--peat) 35%, var(--bog-0));
+}
+
+.fw-stratum:nth-child(even) { background: color-mix(in srgb, var(--peat) 18%, var(--bog-0)); }
+.fw-stratum:first-child { border-top: 0; }
+
+.fw-blade {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--depth) * 20%);
+  height: 2px;
+  background: var(--coolant);
+  box-shadow: 0 0 6px var(--coolant);
+}
+
+.fw-face[data-grade="perfect"] .fw-blade { background: var(--moss); box-shadow: 0 0 10px var(--moss); }
+.fw-face[data-grade="miss"] .fw-blade { background: var(--danger); }
+
+/* Settle */
+.fw-tank {
+  --band: .5;
+  --half: .12;
+  --valve: .5;
+  position: relative;
+  height: 3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--moss) 12%, var(--bog-0));
+}
+
+.fw-band {
+  position: absolute;
+  inset-block: 0;
+  left: calc((var(--band) - var(--half)) * 100%);
+  width: calc(var(--half) * 200%);
+  background: color-mix(in srgb, var(--moss) 40%, transparent);
+}
+
+.fw-valve {
+  position: absolute;
+  inset-block: -4px;
+  left: calc(var(--valve) * 100%);
+  width: 3px;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+.fw-slider { width: 100%; min-height: 32px; accent-color: var(--moss); }
+
+/* Still */
+.fw-column {
+  position: relative;
+  height: 9rem;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: linear-gradient(var(--bog-0), color-mix(in srgb, var(--broth) 18%, var(--bog-0)));
+}
+
+.fw-catchline {
+  position: absolute;
+  inset-inline: 0;
+  top: 80%;
+  height: 2px;
+  background: var(--broth);
+}
+
+.fw-column[data-hit="yes"] .fw-catchline { background: var(--moss); box-shadow: 0 0 10px var(--moss); }
+.fw-column[data-hit="no"] .fw-catchline { background: var(--danger); }
+
+.fw-drop {
+  --p: 0;
+  position: absolute;
+  left: 50%;
+  top: calc(var(--p) * 80% - .4rem);
+  width: .8rem;
+  height: .8rem;
+  border-radius: 50% 50% 50% 0;
+  background: var(--broth);
+  transform: translateX(-50%) rotate(-45deg);
+}
+
+/* Press */
+.fw-gauge {
+  --pressure: 0;
+  position: relative;
+  height: 1.4rem;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--bog-0);
+}
+
+.fw-gauge-band {
+  position: absolute;
+  inset-block: 0;
+  left: 60%;
+  width: 30%;
+  background: color-mix(in srgb, var(--moss) 35%, transparent);
+}
+
+.fw-gauge-fill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: calc(min(var(--pressure), 1) * 100%);
+  background: var(--peat);
+  transition: width var(--t-duration-sm) linear;
+}
+
+.fw-pedals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+
+.fw-pedals[data-last="L"] .fw-action:first-child,
+.fw-pedals[data-last="R"] .fw-action:last-child { border-color: var(--peat); }
+
+/* Constellation */
+.fw-sky {
+  position: relative;
+  height: 12rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: radial-gradient(circle at 50% 50%, #1b2440, var(--bog-0));
+}
+
+.fw-star {
+  --i: 0;
+  position: absolute;
+  left: calc(50% + 40% * cos(calc(var(--i) * 360deg / 7)));
+  top: calc(50% + 40% * sin(calc(var(--i) * 360deg / 7)));
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  background: var(--bog-1);
+  color: var(--ink-dim);
+  font: var(--fs-sm) var(--font-mono);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.fw-star.is-lit {
+  background: var(--core);
+  color: var(--bog-0);
+  box-shadow: 0 0 14px var(--core);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-card.fw-fail { animation: none; }
+  .fw-gauge-fill { transition: none; }
+}

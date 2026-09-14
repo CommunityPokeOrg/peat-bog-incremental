@@ -8,7 +8,8 @@ import {
   charterMultiplier,
 } from '../src/game/charter';
 import { BUILDINGS } from '../src/game/data';
-import { calibrate, cutPeat } from '../src/game/minigames';
+import { calibrate } from '../src/game/minigames';
+import { endStrata, startStrata } from '../src/game/fieldwork/strata';
 import { computeOfflineEarnings, deserialize, offlineRate } from '../src/game/save';
 import { createInitialState } from '../src/game/state';
 import {
@@ -148,11 +149,11 @@ describe('Drainage Charter', () => {
     boosted.calibrationTarget = 0.5;
     const boostedCalibration = calibrate(boosted, 0.5, () => 0.5);
     expect(boostedCalibration.compute.gt(baseCalibration.compute)).toBe(true);
-    const peatState = createInitialState();
-    const basePeat = cutPeat(peatState, 1);
+    const strataRun = { ...startStrata(0), cuts: 4, combo: 4 };
+    const basePeat = endStrata(createInitialState(), strataRun, 0);
     const charterPeatState = createInitialState();
     charterPeatState.charter = ['hands-2-1'];
-    expect(cutPeat(charterPeatState, 1).gt(basePeat)).toBe(true);
+    expect(endStrata(charterPeatState, strataRun, 0).gt(basePeat)).toBe(true);
   });
 
   it('applies cost-scale deltas without crossing the floor', () => {

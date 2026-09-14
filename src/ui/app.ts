@@ -60,7 +60,6 @@ import {
   calibrationNeedle,
   calibrationZone,
   needleAtClick,
-  peatCutCharge,
   streakMultiplier,
   type CalibrationResult,
   type NeedleFrame,
@@ -90,14 +89,16 @@ import {
   EMBLEM_STONE,
 } from './emblems';
 import { createSound } from './sound';
+import { createFieldworkPanel, type FieldworkPanel, type Mutate } from './fieldwork';
 
-type TabId = 'docket' | 'buildings' | 'upgrades' | 'research' | 'achievements' | 'charter' | 'settings';
+type TabId = 'docket' | 'buildings' | 'fieldwork' | 'upgrades' | 'research' | 'achievements' | 'charter' | 'settings';
 type Qty = number | 'max';
 type SceneId = 'hall' | 'cut' | 'shed' | 'still' | 'stones' | 'sky' | 'office';
 
 const TAB_SCENES: Record<TabId, SceneId> = {
   docket: 'hall',
   buildings: 'cut',
+  fieldwork: 'cut',
   upgrades: 'shed',
   research: 'still',
   achievements: 'stones',
@@ -108,6 +109,7 @@ const TAB_SCENES: Record<TabId, SceneId> = {
 const TAB_EMBLEMS: Record<TabId, string> = {
   docket: EMBLEM_SCROLL,
   buildings: EMBLEM_SPADE,
+  fieldwork: EMBLEM_SPADE,
   upgrades: EMBLEM_GEAR,
   research: EMBLEM_ALEMBIC,
   achievements: EMBLEM_STONE,
@@ -142,8 +144,9 @@ export interface UiHooks {
   onExport(): string;
   onImport(encoded: string): boolean;
   onHardReset(): void;
-  onCutPeat?(charge: number): Decimal | void;
   onCalibrate?(needlePos: number): CalibrationResult | void;
+  /** Run a fieldwork minigame payout against live state and persist it. */
+  onFieldwork?: Mutate;
   onClaimQuest?(id: string): QuestReward | null | void;
   onCancelResearch?(id: string): boolean | void;
   onQueueResearch?(id: string): boolean | void;
@@ -224,12 +227,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             <span class="field-mark">FIELD 04</span>
           </div>
           <div class="fieldwork-row">
-            <button class="fieldwork-btn" id="cut-btn" aria-label="Cut peat — hold, release when full">
-              <span>Cut peat</span>
-              <span class="fieldwork-copy">Hold, release when full</span>
-              <span class="charge" aria-hidden="true"><span class="charge-fill"></span></span>
+            <button class="fieldwork-btn" id="cut-btn" aria-label="Open the Fieldwork tab">
+              <span>Fieldwork</span>
+              <span class="fieldwork-copy" id="cut-live">Cut peat, type depositions, work the still and press</span>
             </button>
-            <div class="fieldwork-live" id="cut-live" aria-live="polite"></div>
           </div>
           <div class="fieldwork-row" id="calibration-row">
             <div class="needle-track" id="needle-track" aria-hidden="true">
@@ -252,6 +253,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         <nav class="tabs" role="tablist" aria-label="Game panels">
           <button role="tab" data-tab="docket">${TAB_EMBLEMS.docket}<span>Docket</span></button>
           <button role="tab" data-tab="buildings">${TAB_EMBLEMS.buildings}<span>Production</span></button>
+          <button role="tab" data-tab="fieldwork">${TAB_EMBLEMS.fieldwork}<span>Fieldwork</span></button>
           <button role="tab" data-tab="upgrades">${TAB_EMBLEMS.upgrades}<span>Upgrades</span></button>
           <button role="tab" data-tab="research">${TAB_EMBLEMS.research}<span>Research</span></button>
           <button role="tab" data-tab="achievements">${TAB_EMBLEMS.achievements}<span>Achievements</span></button>
@@ -355,15 +357,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   syncScene();
   panelDock.hidden = activeTab !== 'buildings';
   const cutBtn = $('#cut-btn') as HTMLButtonElement;
-  const chargeFill = $('.charge-fill');
-  const cutLive = $('#cut-live');
   const calibrateBtn = $('#calibrate-btn') as HTMLButtonElement;
   const needle = $('.needle');
   const needleZone = $('.needle-zone');
   const needleTrack = $('#needle-track');
   const calibrateLive = $('#calibrate-live');
   const calibrationStreak = $('#calibration-streak');
-  let cutStartedAt: number | null = null;
   const MISS_COOLDOWN_MS = 5000;
   let calibrateCooldownUntil = 0;
   let lastReducedNeedleFrame = 0;
@@ -386,7 +385,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   });
 
   const tabButtons = [...root.querySelectorAll<HTMLButtonElement>('.tabs [role="tab"]')];
+  let fieldworkPanel: FieldworkPanel | null = null;
   const activateTab = (btn: HTMLButtonElement, focus = false): void => {
+    if (activeTab === 'fieldwork' && btn.dataset.tab !== 'fieldwork') {
+      fieldworkPanel?.abandon();
+      fieldworkPanel = null;
+    }
     activeTab = btn.dataset.tab as TabId;
     tabButtons.forEach((tab) => {
       const selected = tab === btn;
@@ -437,39 +441,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     hooks.onPrestige();
   });
 
-  const finishCut = (now = performance.now()): void => {
-    if (cutStartedAt === null) return;
-    const charge = peatCutCharge(now - cutStartedAt);
-    cutStartedAt = null;
-    chargeFill.style.width = `${charge * 100}%`;
-    const gained = hooks.onCutPeat?.(charge);
-    chargeFill.style.width = '0%';
-    if (typeof gained === 'number') {
-      cutLive.textContent = `+${formatNumber(gained)} peat`;
-    }
-  };
-  const startCut = (): void => {
-    if (cutStartedAt !== null) return;
-    cutStartedAt = performance.now();
-  };
-  cutBtn.addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    cutBtn.setPointerCapture?.(event.pointerId);
-    startCut();
-  });
-  cutBtn.addEventListener('pointerup', () => finishCut());
-  cutBtn.addEventListener('pointercancel', () => finishCut());
-  cutBtn.addEventListener('keydown', (event) => {
-    if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) {
-      event.preventDefault();
-      startCut();
-    }
-  });
-  cutBtn.addEventListener('keyup', (event) => {
-    if (event.key === ' ' || event.key === 'Enter') {
-      event.preventDefault();
-      finishCut();
-    }
+  cutBtn.addEventListener('click', () => {
+    const tab = tabButtons.find((btn) => btn.dataset.tab === 'fieldwork');
+    if (tab) activateTab(tab, true);
   });
   calibrateBtn.addEventListener('click', () => {
     if (calibrateBtn.disabled) return;
@@ -595,8 +569,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderFieldwork(state: GameState, now = performance.now()): void {
-    const charge = cutStartedAt === null ? 0 : peatCutCharge(now - cutStartedAt);
-    if (cutStartedAt !== null) chargeFill.style.width = `${charge * 100}%`;
+    if (activeTab === 'fieldwork') fieldworkPanel?.render(state, now);
     const zone = calibrationZone(state.calibrationStreak);
     needleZone.style.setProperty('--zone-left', `${(state.calibrationTarget - zone) * 100}%`);
     needleZone.style.setProperty('--zone-width', `${zone * 200}%`);
@@ -1958,11 +1931,25 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return p;
   }
 
+  function renderFieldworkTab(): void {
+    if (fieldworkPanel) return;
+    const mutate = hooks.onFieldwork;
+    if (!mutate) {
+      tabContent.replaceChildren(emptyNote('Fieldwork is not available.'));
+      return;
+    }
+    fieldworkPanel = createFieldworkPanel(tabContent, mutate, (amount, resource) => {
+      spawnFloat(amount, resource);
+      sound.play('click');
+    });
+  }
+
   function renderLists(state: GameState): void {
     currentState = state;
     switch (activeTab) {
       case 'docket': renderDocket(state); break;
       case 'buildings': renderBuildings(state); break;
+      case 'fieldwork': renderFieldworkTab(); break;
       case 'upgrades': renderUpgrades(state); break;
       case 'research': renderResearch(state); break;
       case 'achievements': renderAchievements(state); break;

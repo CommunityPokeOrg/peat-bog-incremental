@@ -2,8 +2,30 @@ import type { QuestBuff, QuestPermanentEffect } from './quests';
 import { D, type Decimal } from './decimal';
 import type { ResourceId, SpendableResource } from './data';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 export const NIGHT_WATCH_MAX_LEVEL = 49;
+
+/** Progress tracked for one fieldwork minigame. */
+export interface FieldworkProgress {
+  best: number;
+  runs: number;
+  cooldownUntil: number;
+}
+
+/** Stable fieldwork progress keys shared by state and save migrations. */
+export type FieldworkId = 'typing' | 'strata' | 'settle' | 'still' | 'press' | 'constellation';
+
+/** Create empty progress for every fieldwork minigame. */
+export function emptyFieldwork(): Record<FieldworkId, FieldworkProgress> {
+  return {
+    typing: { best: 0, runs: 0, cooldownUntil: 0 },
+    strata: { best: 0, runs: 0, cooldownUntil: 0 },
+    settle: { best: 0, runs: 0, cooldownUntil: 0 },
+    still: { best: 0, runs: 0, cooldownUntil: 0 },
+    press: { best: 0, runs: 0, cooldownUntil: 0 },
+    constellation: { best: 0, runs: 0, cooldownUntil: 0 },
+  };
+}
 
 /** One queued research item and its remaining duration in seconds. */
 export interface ResearchQueueEntry {
@@ -13,6 +35,7 @@ export interface ResearchQueueEntry {
 
 export interface GameState {
   version: number;
+  fieldwork: Record<FieldworkId, FieldworkProgress>;
   wallet: Record<ResourceId, Decimal>;
   lifetime: Record<SpendableResource, Decimal>;
   runCompute: Decimal;
@@ -77,6 +100,7 @@ export function emptyLifetime(): Record<SpendableResource, Decimal> {
 export function createInitialState(): GameState {
   return {
     version: SAVE_VERSION,
+    fieldwork: emptyFieldwork(),
     wallet: emptyWallet(),
     lifetime: emptyLifetime(),
     runCompute: D(0),
