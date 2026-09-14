@@ -189,6 +189,8 @@ textarea:focus-visible,
   font-variant-numeric: tabular-nums;
 }
 
+.res[hidden] { display: none; }
+
 .res[data-resource="broth"] { border-color: var(--broth); }
 .res[data-resource="compute"] { border-color: var(--coolant); }
 .res[data-resource="peat"] { border-color: var(--peat); }

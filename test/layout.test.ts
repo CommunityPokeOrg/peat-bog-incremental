@@ -23,6 +23,7 @@ describe('list layout rules', () => {
     expect(resources).toMatch(/overflow-x:\s*auto/);
     expect(resources).not.toMatch(/justify-content:\s*flex-end/);
     expect(firstChip).toMatch(/margin-inline-start:\s*auto/);
+    expect(css).toMatch(/\.res\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
   });
 
   it('greys out the Buy pill on unaffordable rows', () => {
