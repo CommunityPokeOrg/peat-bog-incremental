@@ -22,6 +22,7 @@ import {
   canAfford,
   canPrestige,
   clickPower,
+  discoveredResources,
   lineUnlocked,
   maxAffordable,
   maxResearchQueue,
@@ -788,7 +789,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   const productionCategories = [...new Set(BUILDINGS.map((def) => def.line))] as ProductionLine[];
-  function renderProductionFilters(state: GameState, rates = productionPerSecond(state)): void {
+  function renderProductionFilters(
+    state: GameState,
+    rates = productionPerSecond(state),
+    discovered = discoveredResources(state, rates),
+  ): void {
     if (!productionFilters.firstElementChild) {
       const wrap = document.createElement('div');
       wrap.className = 'filter-tabs';
@@ -815,7 +820,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     const visibleCategories = new Set(
       productionCategories.filter((category) =>
-        BUILDINGS.some((def) => def.line === category && buildingVisible(state, def, rates)),
+        BUILDINGS.some((def) => def.line === category && buildingVisible(state, def, rates, discovered)),
       ),
     );
     productionFilters.querySelectorAll<HTMLButtonElement>('.filter-tab').forEach((button) => {
@@ -838,13 +843,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const entries: RowEntry[] = [];
     const categories = productionCategories;
     const rates = productionPerSecond(state);
-    renderProductionFilters(state, rates);
+    const discovered = discoveredResources(state, rates);
+    renderProductionFilters(state, rates, discovered);
     for (const category of categories) {
       if (productionFilter !== 'all' && productionFilter !== category) continue;
       if (!lineUnlocked(state, category)) continue;
       const categoryBuildings = BUILDINGS.filter((def) => def.line === category);
-      const visible = categoryBuildings.filter((def) => buildingVisible(state, def, rates));
-      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def, rates));
+      const visible = categoryBuildings.filter((def) => buildingVisible(state, def, rates, discovered));
+      const nextLocked = categoryBuildings.find((def) => !buildingVisible(state, def, rates, discovered));
       if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
         entries.push({
           key: `heading-${category}`,
@@ -1274,15 +1280,17 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   function renderUpgrades(state: GameState): void {
     const owned = new Set(state.upgrades);
+    const rates = productionPerSecond(state);
+    const discovered = discoveredResources(state, rates);
     const available = UPGRADES
-      .filter((u) => !owned.has(u.id) && upgradeVisible(state, u))
+      .filter((u) => !owned.has(u.id) && upgradeVisible(state, u, rates, discovered))
       .sort((a, b) => (a.cost.broth ?? 0) - (b.cost.broth ?? 0) || (a.cost.compute ?? 0) - (b.cost.compute ?? 0));
     const upcoming = UPGRADES
       .filter((u) => {
-        if (owned.has(u.id) || upgradeVisible(state, u)) return false;
+        if (owned.has(u.id) || upgradeVisible(state, u, rates, discovered)) return false;
         return (u.requires ?? []).every(({ buildingId }) => {
           const building = BUILDING_BY_ID[buildingId];
-          return building && buildingVisible(state, building);
+          return building && buildingVisible(state, building, rates, discovered);
         });
       })
       .sort((a, b) => {

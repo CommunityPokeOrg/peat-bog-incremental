@@ -241,7 +241,8 @@ describe('progressive building gating', () => {
   it('gates click upgrades by lifetime earnings', () => {
     const state = createInitialState();
     expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(false);
-  state.lifetime.broth = D(5);
+    state.lifetime.broth = D(5);
+    state.lifetime.peat = D(1);
     expect(upgradeVisible(state, UPGRADE_BY_ID.spade)).toBe(true);
     expect(upgradeVisible(state, UPGRADE_BY_ID.buckets)).toBe(false);
   });

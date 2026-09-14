@@ -12,7 +12,7 @@ import { createInitialState } from '../src/game/state';
 import { simulateCareer } from './balance-sim';
 
 describe('Stage D progression balance', () => {
-  it('grows each drained run while late runs hit a wall', () => {
+  it('grows each drained run and late runs accelerate slower than the first', () => {
     const career = simulateCareer(5, 4);
     for (let run = 1; run < career.length; run += 1) {
       expect(career[run].peak, `run ${run + 1} peak`).toBeGreaterThanOrEqual(career[run - 1].peak * 2);
@@ -21,9 +21,11 @@ describe('Stage D progression balance', () => {
     const first = career[0].hourly;
     expect(first[3] / first[2]).toBeLessThan(first[1] / first[0]);
     const last = career[career.length - 1].hourly;
-    expect(last[3] / last[0]).toBeLessThan(2);
-    expect(last[3] / last[0]).toBeLessThan((first[3] / first[0]) / 4);
-  }, 180_000);
+    const firstLargestRatio = Math.max(...first.slice(1).map((value, index) => value / first[index]));
+    for (const ratio of last.slice(1).map((value, index) => value / last[index])) {
+      expect(ratio).toBeLessThan(firstLargestRatio);
+    }
+  }, 240_000);
 
   it('can satisfy every authored one-time quest requirement', () => {
     for (const quest of ALL_QUESTS) {

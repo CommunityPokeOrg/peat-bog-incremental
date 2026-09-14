@@ -122,7 +122,9 @@ describe('UI list reconciliation', () => {
     });
     const state = createInitialState();
     state.wallet.broth = D(100);
+    state.wallet.peat = D(100);
     state.lifetime.broth = D(100);
+    state.lifetime.peat = D(100);
     ui.renderLists(state);
     root.querySelector<HTMLButtonElement>('[data-tab="upgrades"]')!.click();
     const spade = root.querySelector<HTMLButtonElement>('[data-key="spade"]');

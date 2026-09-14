@@ -128,6 +128,106 @@ const BASE_BUILDINGS: Omit<BuildingDef, 'boostNames'>[] = [
   { id: 'celestial-alembic', name: 'Celestial Alembic', emoji: '🌠', description: 'The final vessel reaches upward and finds the bog waiting there.', baseCost: { broth: 50_000_000_000, sediment: 2_000_000, refinedBroth: 500_000 }, line: 'essence', costScale: 1.2, consumes: { sediment: 80, refinedBroth: 20 }, produces: { essence: 12 }, unlock: { rate: { essence: 7.2 }, lifetime: { sediment: 1_000_000 } } },
 ];
 
+const SECONDARY_COST_RATIOS: Record<SpendableResource, number> = {
+  broth: 1,
+  peat: 0.006,
+  compute: 0.01,
+  sphagnum: 0.0013,
+  methane: 0.0003,
+  evidence: 0.00005,
+  sludge: 0.0003,
+  briquettes: 0.0015,
+  refinedBroth: 0.00075,
+  sediment: 0.0003,
+  essence: 0.00003,
+};
+
+const BUILDING_COST_RESOURCES: Record<string, SpendableResource[]> = {
+  harvester: [],
+  vat: ['peat'],
+  pump: ['peat', 'sphagnum'],
+  dredger: [],
+  refinery: ['peat', 'evidence', 'methane'],
+  still: ['peat', 'sphagnum', 'evidence'],
+  biome: ['peat', 'sludge', 'evidence'],
+  fryer: ['methane', 'sludge', 'evidence'],
+  kettle: ['methane', 'sludge', 'evidence'],
+  cutter: [],
+  excavator: ['peat', 'sphagnum'],
+  bogwalker: ['peat', 'evidence', 'methane'],
+  barge: ['peat', 'methane', 'evidence'],
+  nursery: ['peat'],
+  terrace: ['peat', 'sphagnum'],
+  loom: ['sphagnum', 'peat', 'evidence'],
+  digester: ['peat'],
+  gasdome: ['sphagnum', 'methane'],
+  flare: ['methane', 'sphagnum', 'evidence'],
+  chiller: [],
+  mossbed: ['peat', 'sphagnum'],
+  tower: ['peat', 'sphagnum'],
+  glycol: ['sphagnum', 'methane', 'evidence'],
+  jacket: ['sphagnum', 'methane', 'evidence'],
+  exchanger: ['sphagnum', 'methane', 'sludge'],
+  cryo: ['methane', 'evidence', 'sludge'],
+  rack: [],
+  pod: ['peat', 'evidence'],
+  hall: ['evidence', 'sludge'],
+  cluster: ['evidence', 'methane', 'sludge'],
+  hyperscaler: ['evidence', 'sphagnum', 'sludge'],
+  turbinehall: ['methane', 'evidence', 'sludge'],
+  clerk: ['methane'],
+  archive: ['evidence', 'sphagnum'],
+  deposition: ['sphagnum'],
+  courthouse: ['evidence', 'methane', 'sludge'],
+  'peat-press': ['peat'],
+  'drying-kiln': ['peat', 'sphagnum'],
+  'briquette-works': ['peat', 'methane', 'evidence'],
+  'arcane-extractor': ['sludge', 'briquettes', 'refinedBroth'],
+  'cosmic-condenser': ['sludge', 'sediment', 'essence'],
+  'peat-monument': ['peat', 'methane', 'sludge'],
+  'peat-rail': ['peat', 'methane', 'sludge'],
+  'peat-estate': ['peat', 'sediment', 'evidence'],
+  'moss-cathedral': ['sphagnum', 'methane', 'sludge'],
+  'moss-reserve': ['sphagnum', 'peat', 'evidence'],
+  'gas-orchard': ['methane', 'sphagnum', 'sludge'],
+  'gas-reservoir': ['methane', 'evidence', 'sludge'],
+  'deep-freeze': ['sphagnum', 'methane', 'sediment'],
+  'ice-gallery': ['sphagnum', 'refinedBroth', 'sediment'],
+  'polar-mire': ['sphagnum', 'methane', 'essence'],
+  'quantum-hall': ['evidence', 'briquettes', 'refinedBroth'],
+  'mire-cluster': ['evidence', 'briquettes', 'sediment'],
+  'bog-supercomputer': ['evidence', 'refinedBroth', 'essence'],
+  'court-oracle': ['evidence', 'briquettes', 'essence'],
+  'docket-tower': ['evidence', 'methane', 'sludge'],
+  'precedent-vault': ['evidence', 'sphagnum', 'methane'],
+  'sludge-settler': ['sludge'],
+  'sediment-vault': ['sludge', 'sphagnum'],
+  'copper-still': ['peat', 'methane', 'sludge'],
+  'fractionating-column': ['methane', 'refinedBroth', 'sediment'],
+  'double-run-still': ['methane', 'sediment', 'essence'],
+  'essence-condenser': ['sediment', 'refinedBroth'],
+  'celestial-alembic': ['sediment', 'refinedBroth', 'essence'],
+};
+
+function roundTwoSignificant(value: number): number {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  const place = 10 ** (Math.floor(Math.log10(Math.abs(value))) - 1);
+  return Math.round(value / place) * place;
+}
+
+function diversifiedBuildingCost(building: Omit<BuildingDef, 'boostNames'>, index: number): ResourceCostSpec {
+  const broth = building.baseCost.broth ?? 0;
+  const cost: ResourceCostSpec = { ...building.baseCost, broth };
+  const tier = BASE_BUILDINGS.filter((candidate) => candidate.line === building.line).indexOf(building) + 1;
+  for (const [resourceIndex, resource] of (BUILDING_COST_RESOURCES[building.id] ?? []).entries()) {
+    if (cost[resource] !== undefined) continue;
+    const variation = (0.5 + ((index + resourceIndex) % 6) * 0.1) *
+      (tier >= 7 ? 2.9 : 1);
+    cost[resource] = roundTwoSignificant(broth * SECONDARY_COST_RATIOS[resource] * variation);
+  }
+  return cost;
+}
+
 const BOOST_NAMES: Record<string, [string, string, string, string]> = {
   harvester: ['Bog Sodder', 'Wetland Pull', 'Cartwheel Shave', 'Blackwater Return'],
   vat: ['Yeast Docket', 'Warm Mash', 'Bubble Lot', 'Forty-Litre Pour'],
@@ -201,6 +301,7 @@ export const BUILDINGS: BuildingDef[] = BASE_BUILDINGS.map((building) => {
   const costScale = building.costScale ?? (tier <= 3 ? 1.15 : tier <= 6 ? 1.17 : 1.2);
   return {
     ...building,
+    baseCost: diversifiedBuildingCost(building, BASE_BUILDINGS.indexOf(building)),
     costScale,
     boostNames: BOOST_NAMES[building.id],
   };
@@ -253,6 +354,49 @@ function scaleCost(cost: ResourceCostSpec, factor: number): ResourceCostSpec {
   return out;
 }
 
+const BOOST_SECONDARY_RESOURCE: Partial<Record<ProductionLine, SpendableResource>> = {
+  broth: 'sludge',
+  peat: 'sphagnum',
+  sphagnum: 'peat',
+  methane: 'sphagnum',
+  cooling: 'methane',
+  compute: 'briquettes',
+  evidence: 'sphagnum',
+  briquettes: 'methane',
+  refinedBroth: 'sediment',
+  sediment: 'refinedBroth',
+  essence: 'sediment',
+};
+
+const RESOURCE_PRODUCER_BROTH_COST: Partial<Record<SpendableResource, number>> = {
+  peat: 40,
+  compute: 2_500,
+  sphagnum: 800,
+  methane: 15_000,
+  evidence: 20_000,
+  sludge: 12_000,
+  briquettes: 180_000,
+  refinedBroth: 2_500_000,
+  sediment: 2_000_000,
+  essence: 1_000_000_000,
+};
+
+function boostCost(building: BuildingDef, factor: number, index: number): ResourceCostSpec {
+  const cost = scaleCost(building.baseCost, factor);
+  const secondary = BOOST_SECONDARY_RESOURCE[building.line];
+  const broth = cost.broth ?? 0;
+  if (
+    index > 0 &&
+    secondary &&
+    cost[secondary] === undefined &&
+    (RESOURCE_PRODUCER_BROTH_COST[secondary] ?? Infinity) < broth
+  ) {
+    const variation = 0.5 + index * 0.25;
+    cost[secondary] = roundTwoSignificant(broth * SECONDARY_COST_RATIOS[secondary] * variation);
+  }
+  return cost;
+}
+
 /** Generated output boost thresholds shared by every production building. */
 export const BOOST_TIERS = [
   { count: 10, factor: 10, roman: 'I' },
@@ -261,7 +405,7 @@ export const BOOST_TIERS = [
   { count: 200, factor: 10_000, roman: 'IV' },
 ];
 
-export const UPGRADES: UpgradeDef[] = [
+const RAW_UPGRADES: UpgradeDef[] = [
   {
     id: 'spade',
     name: 'Sharper Spade',
@@ -381,7 +525,7 @@ export const UPGRADES: UpgradeDef[] = [
       name: building.boostNames[index],
       emoji: building.emoji,
       description: `${building.name} output ×${factor}.`,
-      cost: scaleCost(building.baseCost, factor),
+      cost: boostCost(building, factor, index),
       kind: 'building',
       buildingId: building.id,
       requires: [{ buildingId: building.id, count }],
@@ -475,6 +619,105 @@ export const UPGRADES: UpgradeDef[] = [
     resourceMultiplier: { resource: 'all' as const, factor: Number(factor) },
   })),
 ];
+
+const UPGRADE_RESOURCE_FALLBACKS: Record<UpgradeKind, SpendableResource> = {
+  click: 'peat',
+  building: 'sludge',
+  thermal: 'sphagnum',
+  resource: 'sediment',
+  offline: 'sphagnum',
+  synergy: 'sphagnum',
+  converter: 'methane',
+  automation: 'evidence',
+};
+
+const UPGRADE_SECONDARY_FALLBACKS: Partial<Record<UpgradeKind, SpendableResource[]>> = {
+  click: ['peat', 'evidence'],
+  offline: ['sphagnum', 'evidence'],
+  synergy: ['sphagnum', 'methane'],
+  converter: ['methane'],
+  thermal: ['sphagnum', 'methane', 'sediment'],
+  automation: ['evidence', 'methane'],
+  resource: ['sediment', 'refinedBroth'],
+};
+
+const CONVERTER_INPUTS: Partial<Record<ProductionLine, SpendableResource>> = {
+  briquettes: 'briquettes',
+  refinedBroth: 'refinedBroth',
+  sediment: 'sediment',
+  essence: 'essence',
+};
+
+const CONVERTER_PRODUCER_BUILDINGS: Partial<Record<SpendableResource, string>> = {
+  briquettes: 'peat-press',
+  refinedBroth: 'copper-still',
+  sediment: 'sludge-settler',
+  essence: 'essence-condenser',
+};
+
+const ESSENCE_UPGRADE_BROTH_COSTS: Record<string, number> = {
+  'essence-spark': 2_000_000_000,
+  'essence-glow': 20_000_000_000,
+  'essence-aura': 200_000_000_000,
+  'essence-crown': 2_000_000_000_000,
+};
+
+function diversifiedUpgradeCost(upgrade: UpgradeDef, index: number): ResourceCostSpec {
+  if (upgrade.kind === 'building') return upgrade.cost;
+  const existing = Object.keys(upgrade.cost).filter((resource) => resource !== 'broth') as SpendableResource[];
+  const requiredResources = new Set(
+    (upgrade.requires ?? []).flatMap(({ buildingId }) =>
+      Object.keys(BASE_BUILDINGS.find((building) => building.id === buildingId)?.produces ?? [])),
+  );
+  const brothFromData = upgrade.cost.broth;
+  const resourceFloor = existing.reduce(
+    (floor, resource) => Math.max(floor, (RESOURCE_PRODUCER_BROTH_COST[resource] ?? 0) + 1),
+    1_000,
+  );
+  const essenceTier = ESSENCE_UPGRADE_BROTH_COSTS[upgrade.id] ?? 0;
+  const broth = brothFromData ?? Math.max(essenceTier, resourceFloor, ...existing.map((resource) => (upgrade.cost[resource] ?? 0) * 20));
+  const resources = [...existing];
+  const fallbacks = UPGRADE_SECONDARY_FALLBACKS[upgrade.kind] ?? [
+    UPGRADE_RESOURCE_FALLBACKS[upgrade.kind],
+  ];
+  if (resources.length === 0) {
+    if (upgrade.kind === 'converter' && upgrade.converterEfficiency) {
+      const input = CONVERTER_INPUTS[upgrade.converterEfficiency.line];
+      if (input) resources.push(input);
+    }
+    if (resources.length === 0) resources.push(fallbacks[0]);
+  }
+  for (const resource of fallbacks) {
+    if (resources.length >= 2) break;
+    if (
+      !requiredResources.has(resource) &&
+      (RESOURCE_PRODUCER_BROTH_COST[resource] ?? Infinity) >= broth
+    ) continue;
+    if (!resources.includes(resource)) resources.push(resource);
+  }
+  const cost: ResourceCostSpec = { ...upgrade.cost, broth };
+  for (const [resourceIndex, resource] of resources.entries()) {
+    if (cost[resource] !== undefined) continue;
+    const tierScale = index < 100 ? 1 : index < 200 ? 2 : 3;
+    const variation = (0.5 + ((index + resourceIndex) % 5) * 0.1) * tierScale;
+    cost[resource] = roundTwoSignificant(broth * SECONDARY_COST_RATIOS[resource] * variation);
+  }
+  return cost;
+}
+
+export const UPGRADES: UpgradeDef[] = RAW_UPGRADES.map((upgrade) => {
+  if (upgrade.kind === 'converter' && upgrade.converterEfficiency) {
+    const input = CONVERTER_INPUTS[upgrade.converterEfficiency.line];
+    const producer = input && CONVERTER_PRODUCER_BUILDINGS[input];
+    if (input && producer && (RESOURCE_PRODUCER_BROTH_COST[input] ?? Infinity) >= (upgrade.cost.broth ?? 0)) {
+      return { ...upgrade, requires: [{ buildingId: producer, count: 1 }] };
+    }
+  }
+  return upgrade;
+}).map((upgrade, index) => ({
+  ...upgrade,
+  cost: diversifiedUpgradeCost(upgrade, index),
+}));
 
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(
   UPGRADES.map((u) => [u.id, u]),

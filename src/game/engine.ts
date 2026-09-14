@@ -204,6 +204,29 @@ export function thermalFactor(state: GameState): Decimal {
 /** Current production rates for all generated resources. */
 export type Rates = Record<SpendableResource, Decimal>;
 
+/** Resources the current state has encountered or can produce. */
+export function discoveredResources(state: GameState, rates = productionPerSecond(state)): Set<SpendableResource> {
+  const discovered = new Set<SpendableResource>(['broth', 'compute']);
+  for (const resource of SPENDABLE_RESOURCES) {
+    if (state.wallet[resource].gt(0) || state.lifetime[resource].gt(0)) discovered.add(resource);
+  }
+  for (const building of BUILDINGS) {
+    if (!building.produces || !lineUnlocked(state, building.line)) continue;
+    const owned = (state.buildings[building.id] ?? 0) > 0;
+    const unlock = !building.unlock ||
+      state.revealed.includes(building.id) ||
+      Object.entries(building.unlock.rate ?? {}).every(([resource, threshold]) =>
+        rates[resource as SpendableResource].gte(threshold),
+      ) && Object.entries(building.unlock.lifetime ?? {}).every(([resource, threshold]) =>
+        state.lifetime[resource as SpendableResource].gte(threshold),
+      );
+    if (!owned && (!unlock || !Object.keys(building.baseCost).every((resource) =>
+      discovered.has(resource as SpendableResource))) ) continue;
+    for (const resource of Object.keys(building.produces) as SpendableResource[]) discovered.add(resource);
+  }
+  return discovered;
+}
+
 function researchMultiplier(state: GameState, resource: SpendableResource): number {
   return researchFactor(state, 'multiplier', resource);
 }
@@ -385,16 +408,32 @@ export function buyBuilding(state: GameState, id: string, qty: number): boolean 
   return true;
 }
 
-export function upgradeVisible(state: GameState, u: UpgradeDef): boolean {
+export function upgradeVisible(
+  state: GameState,
+  u: UpgradeDef,
+  rates = productionPerSecond(state),
+  discovered = discoveredResources(state, rates),
+): boolean {
   if (state.upgrades.includes(u.id)) return true;
-  if (u.requires?.length) return u.requires.every(({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count);
+  if (u.requires?.length && !u.requires.every(({ buildingId, count }) => (state.buildings[buildingId] ?? 0) >= count)) return false;
+  if (!SPENDABLE_RESOURCES.every((resource) => {
+    const cost = u.cost[resource];
+    return cost === undefined || discovered.has(resource);
+  })) return false;
+  if (u.requires?.length) return true;
   return SPENDABLE_RESOURCES.every((resource) => {
     const cost = u.cost[resource];
     return cost === undefined || state.lifetime[resource].gte(D(cost).mul(0.1));
   });
 }
 
-export function buildingVisible(state: GameState, def: BuildingDef, rates = productionPerSecond(state)): boolean {
+export function buildingVisible(
+  state: GameState,
+  def: BuildingDef,
+  rates = productionPerSecond(state),
+  discovered = discoveredResources(state, rates),
+): boolean {
+  if (!Object.keys(def.baseCost).every((resource) => discovered.has(resource as SpendableResource))) return false;
   if (!lineUnlocked(state, def.line)) return false;
   if (!def.unlock) return true;
   if (state.revealed.includes(def.id)) return true;
@@ -409,12 +448,7 @@ export function buildingVisible(state: GameState, def: BuildingDef, rates = prod
 export function resourceDiscovered(state: GameState, resource: SpendableResource): boolean {
   if (resource === 'broth' || resource === 'compute') return true;
   if (state.wallet[resource].gt(0) || state.lifetime[resource].gt(0)) return true;
-  const rates = productionPerSecond(state);
-  return BUILDINGS.some((building) =>
-    building.produces?.[resource] !== undefined &&
-    lineUnlocked(state, building.line) &&
-    ((state.buildings[building.id] ?? 0) > 0 || buildingVisible(state, building, rates)),
-  );
+  return discoveredResources(state, productionPerSecond(state)).has(resource);
 }
 
 export function revealBuildings(state: GameState): string[] {
