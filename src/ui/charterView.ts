@@ -24,6 +24,15 @@ export interface Size {
 export const clampScale = (scale: number): number =>
   Math.min(CHARTER_MAX_SCALE, Math.max(CHARTER_MIN_SCALE, scale));
 
+/** Fit a sheet within a viewport while preserving a margin around its edges. */
+export function fitScale(sheet: Size, viewport: Size, margin = 24): number {
+  return clampScale(Math.min(
+    1,
+    (viewport.width - margin * 2) / sheet.width,
+    (viewport.height - margin * 2) / sheet.height,
+  ));
+}
+
 /** Centre sheet point `focus` in a viewport of `viewport` size at `scale`. */
 export function centreOn(focus: { x: number; y: number }, viewport: Size, scale = 1): CharterView {
   const s = clampScale(scale);

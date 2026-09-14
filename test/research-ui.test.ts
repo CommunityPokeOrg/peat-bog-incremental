@@ -42,4 +42,14 @@ describe('research constellation UI', () => {
     ui.renderLists(state);
     expect(root.querySelector<HTMLElement>(`[data-research="${RESEARCH[0].id}"]`)?.dataset.status).toBe('queued');
   });
+
+  it('hides stars whose prerequisites have not been discovered', () => {
+    const root = document.createElement('div');
+    const ui = makeUi(root);
+    ui.renderLists(createInitialState());
+    const hidden = root.querySelector<HTMLButtonElement>('[data-research="thermal-docket"]');
+    expect(hidden).not.toBeNull();
+    expect(hidden?.hidden).toBe(true);
+    expect(hidden?.hasAttribute('hidden')).toBe(true);
+  });
 });

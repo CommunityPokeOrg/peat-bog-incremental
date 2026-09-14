@@ -72,6 +72,7 @@ import {
   CHARTER_ZOOM_STEP,
   clampPan,
   centreOn,
+  fitScale,
   panBy,
   toCss,
   wheelZoomFactor,
@@ -1643,7 +1644,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       const size = charterViewport(canvas);
       if (size.width === 0 || size.height === 0) return;
       if (!camera.view || !camera.interacted) {
-        setCharterView(canvas, sheet, layout, centreOn(layout.points[camera.focusId], size, 1), camera, false);
+        setCharterView(
+          canvas,
+          sheet,
+          layout,
+          centreOn(layout.points[camera.focusId], size, fitScale({ width: layout.width, height: layout.height }, size)),
+          camera,
+          false,
+        );
       } else {
         setCharterView(canvas, sheet, layout, camera.view, camera, false);
       }
@@ -1702,7 +1710,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const size = charterViewport(canvas);
         const pivot = { x: size.width / 2, y: size.height / 2 };
         if (button.dataset.zoom === 'reset') {
-          applyPan(centreOn(layout.points[camera.focusId], size, 1));
+          applyPan(centreOn(
+            layout.points[camera.focusId],
+            size,
+            fitScale({ width: layout.width, height: layout.height }, size),
+          ));
         } else {
           const factor = button.dataset.zoom === 'in' ? CHARTER_ZOOM_STEP : 1 / CHARTER_ZOOM_STEP;
           applyPan(zoomAt(current, factor, pivot));
@@ -1784,7 +1796,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         applyPan(panBy(camera.view, dx, dy));
       } else if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
         event.preventDefault();
-        if (event.key === '0') applyPan(centreOn(layout.points[camera.focusId], size, 1));
+        if (event.key === '0') {
+          applyPan(centreOn(
+            layout.points[camera.focusId],
+            size,
+            fitScale({ width: layout.width, height: layout.height }, size),
+          ));
+        }
         else applyPan(zoomAt(camera.view, event.key === '-' ? 1 / CHARTER_ZOOM_STEP : CHARTER_ZOOM_STEP, pivot));
       }
     });

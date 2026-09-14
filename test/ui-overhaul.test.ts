@@ -7,7 +7,7 @@ import { calibrate } from '../src/game/minigames';
 import { createInitialState } from '../src/game/state';
 import { createUi } from '../src/ui/app';
 import { layoutCharter } from '../src/ui/charterLayout';
-import { CHARTER_MAX_SCALE, CHARTER_ZOOM_STEP } from '../src/ui/charterView';
+import { CHARTER_MAX_SCALE, CHARTER_MIN_SCALE, CHARTER_ZOOM_STEP } from '../src/ui/charterView';
 import { formatQuestReward } from '../src/ui/text';
 
 function makeUi(root: HTMLElement, overrides: Partial<Parameters<typeof createUi>[1]> = {}) {
@@ -401,14 +401,14 @@ describe('UI overhaul', () => {
     const reset = root.querySelector<HTMLButtonElement>('[data-zoom="reset"]')!;
 
     zoomIn.click();
-    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_ZOOM_STEP);
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_MIN_SCALE * CHARTER_ZOOM_STEP);
     zoomOut.click();
-    expect(sheetTransform(canvas).scale).toBeCloseTo(1);
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_MIN_SCALE);
     for (let i = 0; i < 10 && !zoomIn.disabled; i += 1) zoomIn.click();
     expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_MAX_SCALE);
     expect(zoomIn.disabled).toBe(true);
     reset.click();
-    expect(sheetTransform(canvas).scale).toBe(1);
+    expect(sheetTransform(canvas).scale).toBe(CHARTER_MIN_SCALE);
   });
 
   it('wheel-zooms the Charter canvas and prevents page scrolling', () => {
@@ -420,7 +420,7 @@ describe('UI overhaul', () => {
     const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 200, clientY: 150, deltaY: -100 });
     canvas.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
-    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_ZOOM_STEP);
+    expect(sheetTransform(canvas).scale).toBeCloseTo(CHARTER_MIN_SCALE * CHARTER_ZOOM_STEP);
   });
 
   it('pans by pointer drag and suppresses the node click it starts over', () => {

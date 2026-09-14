@@ -4,6 +4,7 @@ import {
   CHARTER_MIN_SCALE,
   centreOn,
   clampPan,
+  fitScale,
   panBy,
   wheelZoomFactor,
   zoomAt,
@@ -12,6 +13,14 @@ import {
 const viewport = { width: 400, height: 300 };
 
 describe('charter view camera', () => {
+  it('fits a sheet to the viewport without exceeding one or the minimum scale', () => {
+    expect(fitScale({ width: 300, height: 200 }, { width: 400, height: 300 })).toBe(1);
+    expect(fitScale({ width: 1000, height: 800 }, { width: 400, height: 300 }))
+      .toBeCloseTo((300 - 48) / 800);
+    expect(fitScale({ width: 10_000, height: 10_000 }, { width: 100, height: 100 }))
+      .toBe(CHARTER_MIN_SCALE);
+  });
+
   it('centres a sheet point in the viewport', () => {
     const view = centreOn({ x: 500, y: 500 }, viewport, 1);
     expect(view).toEqual({ x: -300, y: -350, scale: 1 });

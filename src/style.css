@@ -190,6 +190,7 @@ textarea:focus-visible,
 }
 
 .res[hidden] { display: none; }
+.charter-node[hidden] { display: none; }
 
 .res[data-resource="broth"] { border-color: var(--broth); }
 .res[data-resource="compute"] { border-color: var(--coolant); }
