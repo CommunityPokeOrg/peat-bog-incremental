@@ -1090,6 +1090,162 @@ button.item:not(:disabled) .item-action {
   display: none;
 }
 
+.panel[data-scene="shed"] .tab-content {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: stretch;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background:
+    radial-gradient(circle, rgba(239,230,210,.12) 0 2px, transparent 2.5px) 0 0 / 24px 24px,
+    var(--scene-backdrop);
+}
+
+.panel[data-scene="shed"] .rail {
+  display: flex;
+  flex: 0 0 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 2.3rem;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+  border-bottom: 1px solid color-mix(in srgb, var(--scene-accent) 65%, var(--rule));
+  color: var(--ink);
+}
+
+.panel[data-scene="shed"] .rail-label {
+  margin: 0;
+  color: var(--scene-accent);
+  font: 700 var(--fs-md) var(--font-display);
+}
+
+.panel[data-scene="shed"] .rail-count {
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+  white-space: nowrap;
+}
+
+.panel[data-scene="shed"] .tool {
+  --tool-wood: color-mix(in srgb, var(--bog-3) 82%, var(--peat));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "emoji name"
+    "desc desc"
+    "cost action";
+  align-items: start;
+  row-gap: var(--sp-2);
+  position: relative;
+  flex: 1 1 200px;
+  max-width: 280px;
+  min-width: 0;
+  width: 100%;
+  min-height: 132px;
+  padding-top: 1.75rem;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--scene-accent) 35%, var(--rule-strong));
+  border-left: 3px solid color-mix(in srgb, var(--scene-accent) 70%, var(--rule-strong));
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(135deg, rgba(239,230,210,.08), transparent 42%),
+    var(--tool-wood);
+  box-shadow: 0 5px 0 rgba(0,0,0,.2);
+  transition:
+    transform var(--t-duration-sm) var(--t-ease),
+    box-shadow var(--t-duration-sm) var(--t-ease),
+    opacity var(--t-duration-md) var(--t-ease);
+}
+
+.panel[data-scene="shed"] .tool::before {
+  position: absolute;
+  top: .45rem;
+  left: 50%;
+  width: 10px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--rule-strong) 80%, var(--ink));
+  border-bottom: 0;
+  border-radius: 50% 50% 0 0;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.panel[data-scene="shed"] .tool > :not(.item-body) {
+  position: relative;
+  z-index: 1;
+}
+
+.panel[data-scene="shed"] .tool .item-body {
+  display: contents;
+  min-width: 0;
+}
+
+.panel[data-scene="shed"] .tool .item-emoji {
+  grid-area: emoji;
+  align-self: start;
+  font-size: 1.6rem;
+}
+
+.panel[data-scene="shed"] .tool .item-name {
+  grid-area: name;
+  min-width: 0;
+}
+
+.panel[data-scene="shed"] .tool .item-desc {
+  grid-area: desc;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel[data-scene="shed"] .tool .item-cost {
+  grid-area: cost;
+  align-self: end;
+  min-width: 0;
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.panel[data-scene="shed"] .tool .item-action {
+  grid-area: action;
+  justify-self: end;
+  align-self: end;
+}
+
+.panel[data-scene="shed"] .tool.lifted {
+  opacity: 0;
+  transform: translateY(-6px) rotate(-3deg);
+}
+
+.panel[data-scene="shed"] .tool.silhouette {
+  border: 1px dashed rgba(255,255,255,.35);
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+}
+
+.panel[data-scene="shed"] .tool.silhouette::before {
+  border-style: dashed;
+  border-color: rgba(255,255,255,.35);
+}
+
+.panel[data-scene="shed"] .tool.silhouette .item-emoji {
+  filter: grayscale(1);
+}
+
+.panel[data-scene="shed"] .tool.silhouette .item-desc,
+.panel[data-scene="shed"] .tool.silhouette .item-cost {
+  color: color-mix(in srgb, var(--ink-dim) 65%, transparent);
+}
+
+.panel[data-scene="shed"] .tool:hover:not(:disabled),
+.panel[data-scene="shed"] .tool:focus-visible:not(:disabled) {
+  box-shadow: 0 8px 14px rgba(0,0,0,.28);
+}
+
 .panel[data-scene="hall"] .tab-content {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -2372,6 +2528,16 @@ button.item:not(:disabled) .item-action {
     flex-basis: 100%;
     max-width: none;
     min-height: 96px;
+  }
+
+  .panel[data-scene="shed"] .tab-content {
+    gap: var(--sp-2);
+    padding: 12px;
+  }
+
+  .panel[data-scene="shed"] .tool {
+    flex-basis: 100%;
+    max-width: none;
   }
 
   .dossier:nth-child(n) {

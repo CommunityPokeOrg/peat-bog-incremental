@@ -1162,6 +1162,33 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return heading;
   }
 
+  const UPGRADE_KIND_LABELS: Record<string, string> = {
+    click: 'Hand tools',
+    thermal: 'Cooling gear',
+    resource: 'Bog tonics',
+    offline: 'Night shift',
+    synergy: 'Rigging',
+    converter: 'Still fittings',
+    automation: 'Clockwork',
+  };
+
+  function upgradeGroup(upgrade: (typeof UPGRADES)[number]): string {
+    return upgrade.buildingId ?? upgrade.requires?.[0]?.buildingId ?? upgrade.kind;
+  }
+
+  function upgradeGroupLabel(group: string): string {
+    return BUILDING_BY_ID[group]?.name ?? UPGRADE_KIND_LABELS[group] ?? group;
+  }
+
+  function createRail(label: string): HTMLElement {
+    const rail = document.createElement('section');
+    rail.className = 'rail';
+    rail.innerHTML = '<h3 class="rail-label"></h3><span class="rail-count"></span>';
+    const heading = rail.querySelector<HTMLElement>('.rail-label');
+    if (heading) heading.textContent = label;
+    return rail;
+  }
+
   function createCaseFile(): HTMLElement {
     const heading = document.createElement('section');
     heading.className = 'case-file';
@@ -1239,25 +1266,31 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     state: GameState,
     upcoming = false,
   ): RowEntry {
+    const key = upcoming ? `soon-${upgrade.id}` : upgrade.id;
+    const group = upgradeGroup(upgrade);
     return {
-      key: upcoming ? `soon-${upgrade.id}` : upgrade.id,
-      create: () =>
-        createRow(upcoming ? `soon-${upgrade.id}` : upgrade.id, {
+      key,
+      create: () => {
+        const row = createRow(key, {
           emoji: upgrade.emoji,
           name: upgrade.name,
           desc: upcoming ? upcomingText(state, upgrade) : upgrade.description,
-          className: upcoming ? 'upcoming-upgrade' : undefined,
+          className: upcoming ? 'upcoming-upgrade tool silhouette' : 'tool',
           onClick: upcoming
             ? undefined
             : () => {
                 const latest = currentState;
                 if (latest && buyUpgrade(latest, upgrade.id)) {
+                  row.classList.add('lifted');
                   sound.play('buy');
                   renderLists(latest);
                   popRowCount(upgrade.id);
                 }
               },
-        }),
+        });
+        row.dataset.group = group;
+        return row;
+      },
       update: (row) => {
         const latest = currentState ?? state;
         const isOwned = latest.upgrades.includes(upgrade.id);
@@ -1343,21 +1376,51 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       .slice(0, 6);
     const entries: RowEntry[] = [createNightWatchEntry(state)];
     if (owned.size > 0) entries.push(createOwnedDrawerEntry());
-    if (available.length > 0) {
-      entries.push({
-        key: 'available-heading',
-        create: () => createSectionHeading('Available'),
-        update: () => {},
-      });
+    const grouped = new Map<string, { available: (typeof UPGRADES)[number][]; upcoming: (typeof UPGRADES)[number][] }>();
+    for (const upgrade of available) {
+      const group = upgradeGroup(upgrade);
+      const bucket = grouped.get(group) ?? { available: [], upcoming: [] };
+      bucket.available.push(upgrade);
+      grouped.set(group, bucket);
     }
-    entries.push(...available.map((u) => createUpgradeEntry(u, state)));
-    if (upcoming.length > 0) {
+    for (const upgrade of upcoming) {
+      const group = upgradeGroup(upgrade);
+      const bucket = grouped.get(group) ?? { available: [], upcoming: [] };
+      bucket.upcoming.push(upgrade);
+      grouped.set(group, bucket);
+    }
+    const availableOrder = new Map(available.map((upgrade, index) => [upgrade.id, index]));
+    const upcomingOrder = new Map(upcoming.map((upgrade, index) => [upgrade.id, index]));
+    const buildingOrder = new Map(BUILDINGS.map((building, index) => [building.id, index]));
+    const groups = [...grouped.keys()].sort((a, b) => {
+      const aBuilding = buildingOrder.get(a);
+      const bBuilding = buildingOrder.get(b);
+      if (aBuilding !== undefined || bBuilding !== undefined) {
+        if (aBuilding === undefined) return 1;
+        if (bBuilding === undefined) return -1;
+        return aBuilding - bBuilding;
+      }
+      const aIndex = grouped.get(a)?.available[0]
+        ? availableOrder.get(grouped.get(a)!.available[0].id) ?? Number.POSITIVE_INFINITY
+        : available.length + (upcomingOrder.get(grouped.get(a)!.upcoming[0].id) ?? Number.POSITIVE_INFINITY);
+      const bIndex = grouped.get(b)?.available[0]
+        ? availableOrder.get(grouped.get(b)!.available[0].id) ?? Number.POSITIVE_INFINITY
+        : available.length + (upcomingOrder.get(grouped.get(b)!.upcoming[0].id) ?? Number.POSITIVE_INFINITY);
+      return aIndex - bIndex;
+    });
+    for (const group of groups) {
+      const bucket = grouped.get(group)!;
       entries.push({
-        key: 'upcoming-heading',
-        create: () => createSectionHeading('Upcoming'),
-        update: () => {},
+        key: `rail-${group}`,
+        create: () => createRail(upgradeGroupLabel(group)),
+        update: (row) => {
+          const count = row.querySelector<HTMLElement>('.rail-count');
+          const total = bucket.available.length + bucket.upcoming.length;
+          if (count) count.textContent = `${total} hung`;
+        },
       });
-      entries.push(...upcoming.map((u) => createUpgradeEntry(u, state, true)));
+      entries.push(...bucket.available.map((upgrade) => createUpgradeEntry(upgrade, state)));
+      entries.push(...bucket.upcoming.map((upgrade) => createUpgradeEntry(upgrade, state, true)));
     }
     if (entries.length === 0) {
       entries.push({
