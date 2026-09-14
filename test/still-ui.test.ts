@@ -36,6 +36,10 @@ describe('still-room manifold UI', () => {
 
     const run = root.querySelector<HTMLElement>('.pipe-run[data-line="refinedBroth"]')!;
     expect(run.dataset.state).toBe('flowing');
+    expect(run.querySelector<HTMLElement>('.run-label')?.textContent).toContain('Refined broth');
+    const idleRun = root.querySelector<HTMLElement>('.pipe-run[data-line="compute"]')!;
+    expect(idleRun.dataset.state).toBe('idle');
+    expect(idleRun.querySelector('.vessel b')?.textContent).toBe('—');
     const valve = run.querySelector<HTMLButtonElement>('.valve')!;
     valve.click();
     expect(valve.getAttribute('aria-pressed')).toBe('false');

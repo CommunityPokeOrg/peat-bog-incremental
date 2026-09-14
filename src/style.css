@@ -1142,6 +1142,14 @@ button.item:not(:disabled) .item-action {
   background: color-mix(in srgb, var(--stratum, var(--peat)) 22%, transparent);
 }
 
+.panel[data-scene="cut"] .run-label {
+  grid-column: 1 / -1;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .panel[data-scene="cut"] .vessels {
   display: flex;
   flex-wrap: wrap;
@@ -2709,18 +2717,20 @@ button.item:not(:disabled) .item-action {
 
   .panel[data-scene="cut"] .pipe-run {
     grid-template-columns: 1fr;
-    justify-items: stretch;
+    align-items: center;
+    justify-items: center;
     gap: var(--sp-2);
   }
 
   .panel[data-scene="cut"] .vessels,
   .panel[data-scene="cut"] .vessels.out {
+    width: 100%;
     justify-content: center;
   }
 
   .panel[data-scene="cut"] .pipe {
     width: 8px;
-    height: 32px;
+    height: 24px;
     justify-self: center;
   }
 

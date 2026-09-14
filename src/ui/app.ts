@@ -41,7 +41,7 @@ import {
 } from '../game/engine';
 import { formatCost, formatDuration, formatNumber } from '../game/format';
 import { offlineRateBreakdown } from '../game/save';
-import { type Decimal } from '../game/decimal';
+import { D, type Decimal } from '../game/decimal';
 import type { GameState } from '../game/state';
 import {
   ALL_QUESTS,
@@ -1180,8 +1180,18 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     parent: HTMLElement,
     rates: Record<string, Decimal>,
     sign: '−' | '+',
+    fallbackResources: string[] = [],
   ): void {
-    const vessels = Object.entries(rates).filter(([, amount]) => amount.gt(0));
+    const vessels = Object.entries(rates)
+      .filter(([, amount]) => amount.gt(0))
+      .map(([resource, amount]) => [resource, amount] as [string, Decimal]);
+    const vesselResources = new Set(vessels.map(([resource]) => resource));
+    for (const resource of fallbackResources) {
+      if (!vesselResources.has(resource)) {
+        vessels.push([resource, D(0)]);
+        vesselResources.add(resource);
+      }
+    }
     const signature = vessels.map(([resource]) => resource).join(',');
     if (parent.dataset.resources !== signature) {
       parent.replaceChildren(...vessels.map(([resource]) => {
@@ -1202,7 +1212,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       const name = vessel.querySelector<HTMLElement>('.vessel-name');
       if (icon && icon.textContent !== definition?.emoji) icon.textContent = definition?.emoji ?? '';
       if (value) {
-        const text = `${sign}${formatNumber(amount)}/s`;
+        const text = amount.gt(0) ? `${sign}${formatNumber(amount)}/s` : '—';
         if (value.textContent !== text) value.textContent = text;
       }
       if (name && name.textContent !== resourceName(resource)) name.textContent = resourceName(resource);
@@ -1219,6 +1229,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       run.className = 'pipe-run';
       run.dataset.line = line;
       run.innerHTML = `
+        <span class="run-label"></span>
         <span class="vessels in"></span>
         <span class="pipe"><span class="flow"></span></span>
         <button type="button" class="valve"><span class="valve-wheel" aria-hidden="true"></span></button>
@@ -1249,14 +1260,30 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         amount.gt(0) && state.wallet[resource as keyof typeof state.wallet].lt(amount),
       );
       const status = closed ? 'closed' : !hasOwned ? 'idle' : starved ? 'starved' : 'flowing';
+      const label = run.querySelector<HTMLElement>('.run-label')!;
+      const statusLabel = status === 'idle' ? 'idle — no stills built' : status;
+      const labelText = `${lineLabel(line)} · ${statusLabel}`;
+      if (label.textContent !== labelText) label.textContent = labelText;
       run.dataset.state = status;
       const valve = run.querySelector<HTMLButtonElement>('.valve')!;
       const open = !closed;
+      const valveLabel = `${lineLabel(line)} valve, ${open ? 'open' : 'closed'}`;
       valve.setAttribute('aria-pressed', String(open));
-      valve.setAttribute('aria-label', `${lineLabel(line)} valve, ${open ? 'open' : 'closed'}`);
+      valve.setAttribute('aria-label', valveLabel);
+      valve.title = valveLabel;
       valve.classList.toggle('is-open', open);
-      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.in')!, flow.consumes, '−');
-      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.out')!, flow.produces, '+');
+      const inputs = status === 'idle'
+        ? [...new Set(BUILDINGS
+          .filter((def) => def.line === line)
+          .flatMap((def) => Object.keys(def.consumes ?? {})))]
+        : [];
+      const outputs = status === 'idle'
+        ? [...new Set(BUILDINGS
+          .filter((def) => def.line === line)
+          .flatMap((def) => Object.keys(def.produces ?? {})))]
+        : [];
+      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.in')!, flow.consumes, '−', inputs);
+      syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.out')!, flow.produces, '+', outputs);
       const total = [...Object.values(flow.consumes), ...Object.values(flow.produces)]
         .reduce((sum, amount) => sum + amount.toNumber(), 0);
       const duration = Math.max(0.4, Math.min(3, 3 / Math.log10(total + 10)));
