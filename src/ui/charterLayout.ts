@@ -1,5 +1,10 @@
 import { CHARTER, CHARTER_ROOT_ID, type CharterNodeDef } from '../game/charter';
 
+export interface RadialNode {
+  id: string;
+  requires?: string;
+}
+
 export interface CharterPoint {
   x: number;
   y: number;
@@ -33,8 +38,8 @@ export function charterRingRadius(depth: number): number {
  * its leaves, and radius grows with depth. Works for any depth or fan-out
  * derived from `requires`, so new wings need no layout code.
  */
-export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout {
-  const children = new Map<string, CharterNodeDef[]>();
+export function layoutRadial(nodes: RadialNode[], rootId: string): CharterLayout {
+  const children = new Map<string, RadialNode[]>();
   for (const node of nodes) {
     if (!node.requires) continue;
     const list = children.get(node.requires) ?? [];
@@ -48,7 +53,7 @@ export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout 
   const slot = (Math.PI * 2) / Math.max(1, leafCount);
   let nextLeaf = 0;
 
-  const place = (node: CharterNodeDef, depth: number): number => {
+  const place = (node: RadialNode, depth: number): number => {
     depths.set(node.id, depth);
     const kids = children.get(node.id) ?? [];
     let angle: number;
@@ -63,7 +68,7 @@ export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout 
     return angle;
   };
 
-  const root = nodes.find((node) => node.id === CHARTER_ROOT_ID) ?? nodes[0];
+  const root = nodes.find((node) => node.id === rootId) ?? nodes[0];
   if (root) place(root, 0);
   for (const node of nodes) if (!depths.has(node.id)) place(node, 1);
 
@@ -107,15 +112,19 @@ export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout 
     };
   }
 
-  const edges = nodes.flatMap((node) => {
-    const edgesForNode = node.requires && points[node.requires]
+  const edges = nodes.flatMap((node) =>
+    node.requires && points[node.requires]
       ? [{ from: node.requires, to: node.id }]
-      : [];
-    const crossEdges = (node.requiresAny ?? [])
-      .filter((id) => points[id])
-      .map((id) => ({ from: id, to: node.id, crossWing: true }));
-    return [...edgesForNode, ...crossEdges];
-  });
+      : []);
 
   return { points, edges, width: size, height: size };
+}
+
+export function layoutCharter(nodes: CharterNodeDef[] = CHARTER): CharterLayout {
+  const layout = layoutRadial(nodes, CHARTER_ROOT_ID);
+  const crossEdges = nodes.flatMap((node) =>
+    (node.requiresAny ?? [])
+      .filter((id) => layout.points[id])
+      .map((id) => ({ from: id, to: node.id, crossWing: true })));
+  return { ...layout, edges: [...layout.edges, ...crossEdges] };
 }

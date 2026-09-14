@@ -53,7 +53,8 @@ import {
   type QuestReward,
 } from '../game/quests';
 import { CHARTER, CHARTER_BRANCHES, CHARTER_BY_ID, CHARTER_ROOT_ID, buyCharter, charterAvailable, type CharterNodeDef } from '../game/charter';
-import { layoutCharter } from './charterLayout';
+import { layoutCharter, type CharterLayout } from './charterLayout';
+import { layoutResearch, RESEARCH_SKY_ID } from './researchLayout';
 import { describeResearchEffect, formatCharterEffect, formatMultiplier, formatQuestReward, pluralize } from './text';
 import { researchBranch } from '../game/data';
 import {
@@ -1304,80 +1305,208 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function renderResearch(state: GameState): void {
-    const queued = state.researchQueue;
-    const entries: RowEntry[] = [];
-    entries.push({
-      key: 'research-progress-heading',
-      create: () => createSectionHeading(`In progress · ${queued.length} / ${maxResearchQueue(state)} slots`),
-      update: (row) => {
-        row.textContent = `In progress · ${state.researchQueue.length} / ${maxResearchQueue(state)} slots`;
-      },
-    });
-    for (const entry of queued) {
-      const research = RESEARCH.find((item) => item.id === entry.id);
-      if (!research) continue;
-      entries.push({
-        key: `queue-${entry.id}`,
-        create: () => {
-          const row = createResearchRow(entry.id, true);
-          row.querySelector<HTMLButtonElement>('.research-cancel')?.addEventListener('click', () => {
-            if (currentState && hooks.onCancelResearch?.(entry.id) !== false) renderLists(currentState);
-          });
-          return row;
-        },
-        update: (row) => updateResearchRow(row, research, state, true),
-      });
-    }
-    const branches: ResearchBranch[] = ['thermal', 'extraction', 'distillation', 'litigation', 'celestial'];
-    for (const branch of branches) {
-      const branchResearch = RESEARCH.filter((research) => researchBranch(research.id) === branch);
-      const visibleResearch = branchResearch.filter((research) => researchVisible(state, research.id));
-      if (visibleResearch.length === 0) continue;
-      entries.push({
-        key: `research-branch-${branch}`,
-        create: () => {
-          const heading = document.createElement('div');
-          heading.className = 'research-branch-heading';
-          heading.innerHTML = `<strong>${RESEARCH_BRANCHES[branch].name}</strong><span>${RESEARCH_BRANCHES[branch].blurb}</span>`;
-          return heading;
-        },
-        update: (row) => {
-          row.querySelector('strong')!.textContent = RESEARCH_BRANCHES[branch].name;
-          row.querySelector('span')!.textContent = RESEARCH_BRANCHES[branch].blurb;
-        },
-      });
-      for (const research of visibleResearch) {
-        entries.push({
-          key: `catalog-${research.id}`,
-          create: () => {
-            const row = createResearchRow(research.id, false);
-            row.querySelector<HTMLButtonElement>('.research-cancel')!.addEventListener('click', () => {
-              const latest = currentState;
-              if (!latest) return;
-              if (latest.researchQueue.some((entry) => entry.id === research.id)) {
-                if (hooks.onCancelResearch?.(research.id) !== false) renderLists(latest);
-                return;
-              }
-              if (!latest.research.includes(research.id) &&
-                hooks.onQueueResearch?.(research.id) !== false) {
-                if (!hooks.onQueueResearch) buyResearch(latest, research.id);
-                renderLists(latest);
-              }
-            });
-            return row;
-          },
-          update: (row) => {
-            const done = state.research.includes(research.id);
-            const queuedEntry = state.researchQueue.some((entry) => entry.id === research.id);
-            const prerequisitesMet = (research.requires ?? []).every((required) => state.research.includes(required));
-            const available = !done && !queuedEntry && prerequisitesMet;
-            const status = done ? 'done' : queuedEntry ? 'queued' : available ? 'available' : 'locked';
-            updateResearchRow(row, research, state, queuedEntry, status);
-          },
-        });
-      }
+    const layout = layoutResearch();
+    const selected = RESEARCH.find((research) => research.id === researchSelected);
+    const visibleAvailable = RESEARCH.find((research) =>
+      researchVisible(state, research.id) &&
+      !state.research.includes(research.id) &&
+      !state.researchQueue.some((entry) => entry.id === research.id) &&
+      (research.requires ?? []).every((required) => state.research.includes(required)));
+    if (!selected || !researchVisible(state, selected.id)) {
+      researchSelected = visibleAvailable?.id ?? RESEARCH[0].id;
     }
     const completed = RESEARCH.filter((research) => state.research.includes(research.id));
+    const entries: RowEntry[] = [
+      {
+        key: 'research-progress-heading',
+        create: () => createSectionHeading(`In progress · ${state.researchQueue.length} / ${maxResearchQueue(state)} slots`),
+        update: (row) => {
+          row.textContent = `In progress · ${state.researchQueue.length} / ${maxResearchQueue(state)} slots`;
+        },
+      },
+      {
+        key: 'research-sky',
+        create: () => {
+          const canvas = document.createElement('div');
+          canvas.className = 'charter-canvas research-sky';
+          canvas.setAttribute('role', 'group');
+          canvas.setAttribute('aria-label', 'Research constellation. Drag to pan, scroll or pinch to zoom.');
+          canvas.tabIndex = 0;
+          const sheet = document.createElement('div');
+          sheet.className = 'charter-sheet';
+          sheet.style.position = 'absolute';
+          sheet.style.left = '0';
+          sheet.style.top = '0';
+          sheet.style.width = `${layout.width}px`;
+          sheet.style.height = `${layout.height}px`;
+          sheet.style.transformOrigin = '0 0';
+          sheet.style.willChange = 'transform';
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('class', 'charter-edges');
+          svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+          svg.setAttribute('aria-hidden', 'true');
+          for (const edge of [...layout.edges, ...layout.crossLinks.map((link) => ({ ...link, crossWing: true }))]) {
+            const from = layout.points[edge.from];
+            const to = layout.points[edge.to];
+            if (!from || !to) continue;
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', String(from.x));
+            line.setAttribute('y1', String(from.y));
+            line.setAttribute('x2', String(to.x));
+            line.setAttribute('y2', String(to.y));
+            if (edge.crossWing) line.dataset.cross = 'true';
+            svg.appendChild(line);
+          }
+          sheet.appendChild(svg);
+          for (const branch of Object.keys(RESEARCH_BRANCHES) as ResearchBranch[]) {
+            const point = layout.points[`hub:${branch}`];
+            const hub = document.createElement('span');
+            hub.className = 'research-hub';
+            hub.dataset.branch = branch;
+            hub.style.left = `${point.x}px`;
+            hub.style.top = `${point.y}px`;
+            hub.textContent = RESEARCH_BRANCHES[branch].name;
+            sheet.appendChild(hub);
+          }
+          for (const research of RESEARCH) {
+            const point = layout.points[research.id];
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'charter-node research-star';
+            button.dataset.research = research.id;
+            button.style.left = `${point.x}px`;
+            button.style.top = `${point.y}px`;
+            button.innerHTML = `<span class="charter-node-glyph" aria-hidden="true">${research.emoji}</span><span class="charter-node-name">${research.name}</span>`;
+            button.addEventListener('click', () => {
+              researchSelected = research.id;
+              const latest = currentState;
+              if (latest) renderResearch(latest);
+            });
+            sheet.appendChild(button);
+          }
+          const toolbar = document.createElement('div');
+          toolbar.className = 'charter-zoom';
+          toolbar.innerHTML = `
+            <button type="button" class="charter-zoom-btn" data-zoom="in" aria-label="Zoom in">+</button>
+            <button type="button" class="charter-zoom-btn" data-zoom="out" aria-label="Zoom out">−</button>
+            <button type="button" class="charter-zoom-btn" data-zoom="reset" aria-label="Reset view">⌖</button>`;
+          canvas.append(sheet, toolbar);
+          setupCharterCamera(canvas, sheet, toolbar, layout, researchCamera);
+          return canvas;
+        },
+        update: (row) => {
+          for (const button of row.querySelectorAll<HTMLButtonElement>('.research-star')) {
+            const research = RESEARCH_BY_ID[button.dataset.research ?? ''];
+            if (!research) continue;
+            const hidden = !researchVisible(state, research.id);
+            const done = state.research.includes(research.id);
+            const queued = state.researchQueue.some((entry) => entry.id === research.id);
+            const available = !done && !queued &&
+              (research.requires ?? []).every((required) => state.research.includes(required));
+            const status = done ? 'done' : queued ? 'queued' : available ? 'available' : 'locked';
+            const progress = researchProgress(state, research.id);
+            button.hidden = hidden;
+            button.dataset.status = status;
+            button.setAttribute('aria-pressed', String(research.id === researchSelected));
+            button.setAttribute('aria-label', `${research.name}, ${status}`);
+            if (queued && progress) button.style.setProperty('--progress', String(progress.fraction));
+            else button.style.removeProperty('--progress');
+          }
+          const lines = row.querySelectorAll<SVGLineElement>('.charter-edges line');
+          const allEdges = [...layout.edges, ...layout.crossLinks.map((link) => ({ ...link, crossWing: true }))];
+          allEdges.forEach((edge, index) => {
+            const line = lines[index];
+            if (!line) return;
+            const child = RESEARCH_BY_ID[edge.to];
+            const hidden = child ? !researchVisible(state, child.id) : false;
+            const queued = child ? state.researchQueue.some((entry) => entry.id === child.id) : false;
+            const done = child ? state.research.includes(child.id) : false;
+            const available = child ? (child.requires ?? []).every((required) => state.research.includes(required)) : false;
+            line.dataset.state = done ? 'done' : queued ? 'queued' : available ? 'available' : 'locked';
+            line.style.display = hidden ? 'none' : '';
+          });
+          for (const hub of row.querySelectorAll<HTMLElement>('.research-hub')) {
+            const branch = hub.dataset.branch as ResearchBranch;
+            hub.hidden = !RESEARCH.some((research) =>
+              researchBranch(research.id) === branch && researchVisible(state, research.id));
+          }
+          const sheet = row.querySelector<HTMLElement>('.charter-sheet');
+          if (sheet && researchCamera.view) sheet.style.transform = toCss(researchCamera.view);
+        },
+      },
+      {
+        key: 'research-detail',
+        create: () => {
+          const detail = document.createElement('div');
+          detail.className = 'charter-detail research-detail';
+          detail.setAttribute('aria-live', 'polite');
+          detail.innerHTML = `
+            <div class="charter-detail-head">
+              <span class="charter-detail-glyph" aria-hidden="true"></span>
+              <div><h3 class="charter-detail-name"></h3><p class="charter-detail-branch"></p></div>
+            </div>
+            <p class="charter-detail-desc"></p>
+            <p class="charter-detail-effects"></p>
+            <p class="research-requires"></p>
+            <p class="research-cost"></p>
+            <p class="research-remaining"></p>
+            <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
+            <div class="charter-detail-foot"><span></span><button type="button" class="btn research-cancel"></button></div>`;
+          detail.querySelector<HTMLButtonElement>('.research-cancel')?.addEventListener('click', () => {
+            const latest = currentState;
+            const research = RESEARCH_BY_ID[researchSelected];
+            if (!latest || !research) return;
+            if (latest.researchQueue.some((entry) => entry.id === research.id)) {
+              if (hooks.onCancelResearch?.(research.id) !== false) renderLists(latest);
+              return;
+            }
+            if (!latest.research.includes(research.id) &&
+              hooks.onQueueResearch?.(research.id) !== false) {
+              if (!hooks.onQueueResearch) buyResearch(latest, research.id);
+              renderLists(latest);
+            }
+          });
+          return detail;
+        },
+        update: (row) => {
+          const research = RESEARCH_BY_ID[researchSelected] ?? RESEARCH[0];
+          const done = state.research.includes(research.id);
+          const queued = state.researchQueue.some((entry) => entry.id === research.id);
+          const available = !done && !queued &&
+            (research.requires ?? []).every((required) => state.research.includes(required));
+          const hidden = !researchVisible(state, research.id);
+          const status = done ? 'done' : queued ? 'queued' : available ? 'available' : 'locked';
+          row.dataset.status = status;
+          row.querySelector('.charter-detail-glyph')!.textContent = research.emoji;
+          row.querySelector('.charter-detail-name')!.textContent = research.name;
+          row.querySelector('.charter-detail-branch')!.textContent =
+            `${RESEARCH_BRANCHES[researchBranch(research.id)].name} · ${status}`;
+          row.querySelector('.charter-detail-desc')!.textContent = research.description;
+          row.querySelector('.charter-detail-effects')!.textContent =
+            describeResearchEffect(research.effect, resourceName);
+          row.querySelector('.research-requires')!.textContent = (research.requires ?? []).length > 0
+            ? `Requires: ${(research.requires ?? []).map((id) => RESEARCH_BY_ID[id]?.name ?? id).join(', ')}`
+            : 'Requires: none';
+          row.querySelector('.research-cost')!.textContent = `Cost: ${formatCost(research.cost)}`;
+          const progress = researchProgress(state, research.id);
+          const fraction = progress?.fraction ?? 0;
+          const bar = row.querySelector<HTMLElement>('.progress')!;
+          bar.hidden = !queued;
+          bar.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
+          bar.setAttribute('aria-label', `${research.name} progress`);
+          bar.querySelector<HTMLElement>('.progress-fill')!.style.width = `${fraction * 100}%`;
+          row.querySelector('.research-remaining')!.textContent = progress
+            ? `Remaining: ${formatDuration(progress.remaining)}`
+            : '';
+          const action = row.querySelector<HTMLButtonElement>('.research-cancel')!;
+          const queueFull = status === 'available' && state.researchQueue.length >= maxResearchQueue(state);
+          action.textContent = status === 'queued' ? 'Cancel' : queueFull ? 'Queue full' : status === 'available' ? 'Queue' : status;
+          action.disabled = (status !== 'available' && status !== 'queued') || queueFull;
+          action.hidden = status === 'done' || hidden;
+          action.setAttribute('aria-label', status === 'available' ? `Queue ${research.name}` : `${research.name} ${status}`);
+        },
+      },
+    ];
     if (completed.length > 0) {
       entries.push({
         key: 'completed-research',
@@ -1405,55 +1534,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       });
     }
     reconcileRows(entries);
-  }
-
-  function createResearchRow(id: string, queued: boolean): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'item research-row';
-    row.dataset.key = queued ? `queue-${id}` : id;
-    row.innerHTML = `
-      <span class="item-emoji" aria-hidden="true"></span>
-      <span class="item-body">
-        <span class="item-name"><span class="item-name-label"></span></span>
-        <span class="item-desc"></span>
-        <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
-      </span>
-      <span class="research-meta"><span class="research-state"></span><span class="research-remaining"></span><button class="btn research-cancel">Queue</button></span>`;
-    return row;
-  }
-
-  function updateResearchRow(
-    row: HTMLElement,
-    research: (typeof RESEARCH)[number],
-    state: GameState,
-    queued: boolean,
-    status: 'done' | 'queued' | 'available' | 'locked' = queued ? 'queued' : 'available',
-  ): void {
-    row.querySelector<HTMLElement>('.item-emoji')!.textContent = research.emoji;
-    row.querySelector<HTMLElement>('.item-name-label')!.textContent = research.name;
-    const prerequisites = (research.requires ?? [])
-      .map((id) => RESEARCH_BY_ID[id]?.name ?? id)
-      .join(', ');
-    const prerequisiteText = prerequisites ? ` Requires: ${prerequisites}.` : '';
-    row.querySelector<HTMLElement>('.item-desc')!.textContent =
-      `${research.description} ${describeResearchEffect(research.effect, resourceName)}.${prerequisiteText}`;
-    const bar = row.querySelector<HTMLElement>('.progress')!;
-    const progress = researchProgress(state, research.id);
-    const fraction = progress?.fraction ?? 0;
-    bar.setAttribute('aria-valuenow', String(Math.round(fraction * 100)));
-    bar.setAttribute('aria-label', `${research.name} progress`);
-    bar.querySelector<HTMLElement>('.progress-fill')!.style.width = `${fraction * 100}%`;
-    const remaining = row.querySelector<HTMLElement>('.research-remaining')!;
-    remaining.textContent = progress ? formatDuration(progress.remaining) : '';
-    const stateLabel = row.querySelector<HTMLElement>('.research-state')!;
-    stateLabel.textContent = status;
-    row.dataset.status = status;
-    const action = row.querySelector<HTMLButtonElement>('.research-cancel')!;
-    const queueFull = status === 'available' && state.researchQueue.length >= maxResearchQueue(state);
-    action.textContent = status === 'queued' ? 'Cancel' : queueFull ? 'Queue full' : status === 'available' ? 'Queue' : status;
-    action.disabled = (status !== 'available' && status !== 'queued') || queueFull;
-    action.hidden = status === 'done';
-    action.setAttribute('aria-label', status === 'available' ? `Queue ${research.name}` : `${research.name} ${status}`);
   }
 
   function renderAchievements(state: GameState): void {
@@ -1505,8 +1585,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   };
 
   let charterSelected: string = CHARTER_ROOT_ID;
-  let charterView: CharterView | null = null;
-  let charterInteracted = false;
+  let researchSelected = RESEARCH[0]?.id ?? '';
+  interface Camera {
+    view: CharterView | null;
+    interacted: boolean;
+    focusId: string;
+  }
+  const charterCamera: Camera = { view: null, interacted: false, focusId: CHARTER_ROOT_ID };
+  const researchCamera: Camera = { view: null, interacted: false, focusId: RESEARCH_SKY_ID };
 
   function signCharter(node: CharterNodeDef): void {
     const latest = currentState;
@@ -1528,40 +1614,42 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function setCharterView(
     canvas: HTMLElement,
     sheet: HTMLElement,
-    layout: ReturnType<typeof layoutCharter>,
+    layout: CharterLayout,
     next: CharterView,
+    camera: Camera,
     interacted = true,
   ): void {
     const viewport = charterViewport(canvas);
     if (viewport.width === 0 || viewport.height === 0) return;
-    charterView = clampPan(next, { width: layout.width, height: layout.height }, viewport);
-    if (interacted) charterInteracted = true;
-    sheet.style.transform = toCss(charterView);
-    canvas.dataset.far = String(charterView.scale < 0.6);
+    camera.view = clampPan(next, { width: layout.width, height: layout.height }, viewport);
+    if (interacted) camera.interacted = true;
+    sheet.style.transform = toCss(camera.view);
+    canvas.dataset.far = String(camera.view.scale < 0.6);
     const zoomIn = canvas.querySelector<HTMLButtonElement>('[data-zoom="in"]');
     const zoomOut = canvas.querySelector<HTMLButtonElement>('[data-zoom="out"]');
-    if (zoomIn) zoomIn.disabled = charterView.scale >= CHARTER_MAX_SCALE;
-    if (zoomOut) zoomOut.disabled = charterView.scale <= CHARTER_MIN_SCALE;
+    if (zoomIn) zoomIn.disabled = camera.view.scale >= CHARTER_MAX_SCALE;
+    if (zoomOut) zoomOut.disabled = camera.view.scale <= CHARTER_MIN_SCALE;
   }
 
   function setupCharterCamera(
     canvas: HTMLElement,
     sheet: HTMLElement,
     toolbar: HTMLElement,
-    layout: ReturnType<typeof layoutCharter>,
+    layout: CharterLayout,
+    camera: Camera,
   ): void {
     const viewport = charterViewport(canvas);
     const centre = (): void => {
       const size = charterViewport(canvas);
       if (size.width === 0 || size.height === 0) return;
-      if (!charterView || !charterInteracted) {
-        setCharterView(canvas, sheet, layout, centreOn(layout.points[CHARTER_ROOT_ID], size, 1), false);
+      if (!camera.view || !camera.interacted) {
+        setCharterView(canvas, sheet, layout, centreOn(layout.points[camera.focusId], size, 1), camera, false);
       } else {
-        setCharterView(canvas, sheet, layout, charterView, false);
+        setCharterView(canvas, sheet, layout, camera.view, camera, false);
       }
     };
     const ensureView = (): void => {
-      if (!charterView && canvas.clientWidth > 0 && canvas.clientHeight > 0) centre();
+      if (!camera.view && canvas.clientWidth > 0 && canvas.clientHeight > 0) centre();
     };
     if (viewport.width > 0 && viewport.height > 0) centre();
     if (typeof ResizeObserver === 'function') {
@@ -1602,19 +1690,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       }
     };
     const applyPan = (next: CharterView): void => {
-      setCharterView(canvas, sheet, layout, next);
+      setCharterView(canvas, sheet, layout, next, camera);
     };
 
     toolbar.addEventListener('pointerdown', (event) => event.stopPropagation());
     toolbar.querySelectorAll<HTMLButtonElement>('.charter-zoom-btn').forEach((button) => {
       button.addEventListener('click', () => {
         ensureView();
-        const current = charterView;
+        const current = camera.view;
         if (!current) return;
         const size = charterViewport(canvas);
         const pivot = { x: size.width / 2, y: size.height / 2 };
         if (button.dataset.zoom === 'reset') {
-          applyPan(centreOn(layout.points[CHARTER_ROOT_ID], size, 1));
+          applyPan(centreOn(layout.points[camera.focusId], size, 1));
         } else {
           const factor = button.dataset.zoom === 'in' ? CHARTER_ZOOM_STEP : 1 / CHARTER_ZOOM_STEP;
           applyPan(zoomAt(current, factor, pivot));
@@ -1639,9 +1727,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       if (pointers.size >= 2) {
         const afterPinch = pairSnapshot();
         const prior = previousPinch ?? beforePinch;
-        if (afterPinch && prior && prior.distance > 0 && charterView) {
+        if (afterPinch && prior && prior.distance > 0 && camera.view) {
           const pivot = canvasPoint(afterPinch.midpoint.x, afterPinch.midpoint.y);
-          const zoomed = zoomAt(charterView, afterPinch.distance / prior.distance, pivot);
+          const zoomed = zoomAt(camera.view, afterPinch.distance / prior.distance, pivot);
           applyPan(panBy(
             zoomed,
             afterPinch.midpoint.x - prior.midpoint.x,
@@ -1657,8 +1745,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       if (!dragging && Math.hypot(event.clientX - start.x, event.clientY - start.y) > CHARTER_DRAG_THRESHOLD_PX) {
         markDragging();
       }
-      if (dragging && charterView) {
-        applyPan(panBy(charterView, event.clientX - previous.x, event.clientY - previous.y));
+      if (dragging && camera.view) {
+        applyPan(panBy(camera.view, event.clientX - previous.x, event.clientY - previous.y));
       }
     });
     const endPointer = (event: PointerEvent): void => {
@@ -1680,24 +1768,24 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     canvas.addEventListener('wheel', (event) => {
       event.preventDefault();
       ensureView();
-      if (!charterView) return;
-      applyPan(zoomAt(charterView, wheelZoomFactor(event.deltaY), canvasPoint(event.clientX, event.clientY)));
+      if (!camera.view) return;
+      applyPan(zoomAt(camera.view, wheelZoomFactor(event.deltaY), canvasPoint(event.clientX, event.clientY)));
     }, { passive: false });
     canvas.addEventListener('keydown', (event) => {
       if (event.target !== canvas) return;
       ensureView();
-      if (!charterView) return;
+      if (!camera.view) return;
       const size = charterViewport(canvas);
       const pivot = { x: size.width / 2, y: size.height / 2 };
       if (event.key === 'ArrowRight' || event.key === 'ArrowLeft' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
         event.preventDefault();
         const dx = event.key === 'ArrowRight' ? 40 : event.key === 'ArrowLeft' ? -40 : 0;
         const dy = event.key === 'ArrowDown' ? 40 : event.key === 'ArrowUp' ? -40 : 0;
-        applyPan(panBy(charterView, dx, dy));
+        applyPan(panBy(camera.view, dx, dy));
       } else if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
         event.preventDefault();
-        if (event.key === '0') applyPan(centreOn(layout.points[CHARTER_ROOT_ID], size, 1));
-        else applyPan(zoomAt(charterView, event.key === '-' ? 1 / CHARTER_ZOOM_STEP : CHARTER_ZOOM_STEP, pivot));
+        if (event.key === '0') applyPan(centreOn(layout.points[camera.focusId], size, 1));
+        else applyPan(zoomAt(camera.view, event.key === '-' ? 1 / CHARTER_ZOOM_STEP : CHARTER_ZOOM_STEP, pivot));
       }
     });
   }
@@ -1777,7 +1865,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             <button type="button" class="charter-zoom-btn" data-zoom="reset" aria-label="Reset view">⌖</button>`;
           canvas.appendChild(sheet);
           canvas.appendChild(toolbar);
-          setupCharterCamera(canvas, sheet, toolbar, layout);
+          setupCharterCamera(canvas, sheet, toolbar, layout, charterCamera);
           return canvas;
         },
         update: (row) => {
@@ -1803,8 +1891,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             line.dataset.cross = edge.crossWing ? 'true' : 'false';
           });
           const sheet = row.querySelector<HTMLElement>('.charter-sheet');
-          if (sheet && charterView) {
-            sheet.style.transform = toCss(charterView);
+          if (sheet && charterCamera.view) {
+            sheet.style.transform = toCss(charterCamera.view);
           }
         },
       },

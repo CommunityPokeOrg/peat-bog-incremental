@@ -251,6 +251,7 @@ describe('UI overhaul', () => {
 
     state.researchQueue = RESEARCH.slice(0, 3).map((item) => ({ id: item.id, remaining: 20 }));
     ui.renderLists(state);
+    root.querySelector<HTMLButtonElement>(`[data-research="${RESEARCH[3].id}"]`)!.click();
     expect(root.textContent).toContain('Queue full');
   });
 

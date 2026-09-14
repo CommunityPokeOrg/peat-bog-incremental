@@ -988,6 +988,74 @@ button.item:not(:disabled) .item-action {
   touch-action: none;
 }
 
+.research-sky {
+  min-height: 420px;
+}
+
+.research-hub {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: var(--scene-accent);
+  font-size: var(--fs-xs);
+  font-variant: small-caps;
+  letter-spacing: .08em;
+  pointer-events: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.research-star[data-status="locked"] {
+  color: var(--ink-faint);
+}
+
+.research-star[data-status="locked"] .charter-node-glyph {
+  filter: grayscale(1);
+  opacity: .5;
+  border-style: dashed;
+}
+
+.research-star[data-status="available"] {
+  color: var(--ink);
+}
+
+.research-star[data-status="available"] .charter-node-glyph {
+  border-color: var(--scene-accent);
+  background: color-mix(in srgb, var(--scene-accent) 14%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--scene-accent) 18%, transparent);
+}
+
+.research-star[data-status="queued"] .charter-node-glyph::before {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--scene-accent) calc(var(--progress, 0) * 360deg),
+    transparent 0
+  );
+  content: "";
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+}
+
+.research-star[data-status="done"] {
+  color: var(--ink);
+}
+
+.research-star[data-status="done"] .charter-node-glyph {
+  border-color: var(--scene-accent);
+  background: var(--scene-accent);
+  color: var(--bog-0);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--scene-accent) 45%, transparent);
+}
+
+.research-detail .research-requires,
+.research-detail .research-cost,
+.research-detail .research-remaining {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--fs-xs);
+}
+
 .charter-canvas.is-panning {
   cursor: grabbing;
   user-select: none;
