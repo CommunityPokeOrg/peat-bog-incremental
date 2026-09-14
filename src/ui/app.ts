@@ -848,7 +848,11 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const discovered = discoveredResources(state, rates);
     renderProductionFilters(state, rates, discovered);
     const converterLines = productionCategories.filter((line) =>
-      BUILDINGS.some((def) => def.line === line && Boolean(def.consumes)),
+      BUILDINGS.some((def) =>
+        def.line === line &&
+        Boolean(def.consumes) &&
+        (effectiveOwned(state, def.id) > 0 || buildingVisible(state, def, rates, discovered)),
+      ),
     );
     const manifoldLines = converterLines.filter((line) =>
       lineUnlocked(state, line) && (productionFilter === 'all' || productionFilter === line),
@@ -1219,6 +1223,19 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
   }
 
+  function manifoldBuildingDefs(
+    state: GameState,
+    line: ProductionLine,
+    rates: ReturnType<typeof productionPerSecond>,
+    discovered: ReturnType<typeof discoveredResources>,
+  ) {
+    return BUILDINGS.filter((def) =>
+      def.line === line &&
+      Boolean(def.consumes) &&
+      (effectiveOwned(state, def.id) > 0 || buildingVisible(state, def, rates, discovered)),
+    );
+  }
+
   function createManifold(lines: ProductionLine[]): HTMLElement {
     const manifold = document.createElement('section');
     manifold.className = 'manifold';
@@ -1249,13 +1266,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   function updateManifold(row: HTMLElement, state: GameState): void {
+    const rates = productionPerSecond(state);
+    const discovered = discoveredResources(state, rates);
     for (const run of row.querySelectorAll<HTMLElement>('.pipe-run')) {
       const line = run.dataset.line as ProductionLine;
       const flow = lineFlow(state, line);
       const closed = state.closedValves.includes(line);
-      const hasOwned = BUILDINGS.some((def) =>
-        def.line === line && Boolean(def.consumes) && effectiveOwned(state, def.id) > 0,
-      );
+      const visibleDefs = manifoldBuildingDefs(state, line, rates, discovered);
+      const hasOwned = visibleDefs.some((def) => effectiveOwned(state, def.id) > 0);
       const starved = Object.entries(flow.consumes).some(([resource, amount]) =>
         amount.gt(0) && state.wallet[resource as keyof typeof state.wallet].lt(amount),
       );
@@ -1273,14 +1291,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       valve.title = valveLabel;
       valve.classList.toggle('is-open', open);
       const inputs = status === 'idle'
-        ? [...new Set(BUILDINGS
-          .filter((def) => def.line === line)
-          .flatMap((def) => Object.keys(def.consumes ?? {})))]
+        ? [...new Set(visibleDefs.flatMap((def) => Object.keys(def.consumes ?? {})))]
+          .filter((resource) => discovered.has(resource as Parameters<typeof discovered.has>[0]))
         : [];
       const outputs = status === 'idle'
-        ? [...new Set(BUILDINGS
-          .filter((def) => def.line === line)
-          .flatMap((def) => Object.keys(def.produces ?? {})))]
+        ? [...new Set(visibleDefs.flatMap((def) => Object.keys(def.produces ?? {})))]
+          .filter((resource) => discovered.has(resource as Parameters<typeof discovered.has>[0]))
         : [];
       syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.in')!, flow.consumes, '−', inputs);
       syncManifoldVessels(run.querySelector<HTMLElement>('.vessels.out')!, flow.produces, '+', outputs);
