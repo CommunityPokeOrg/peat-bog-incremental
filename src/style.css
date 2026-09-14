@@ -856,6 +856,198 @@ button.item:not(:disabled) .item-action {
   content: "";
 }
 
+.panel[data-scene="cut"] .tab-content {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+}
+
+.panel[data-scene="cut"] .stratum-label {
+  --stratum: var(--peat);
+  display: flex;
+  flex: 0 0 100%;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-height: 2.4rem;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--stratum) 65%, var(--rule));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--stratum) 25%, transparent), transparent);
+  color: var(--ink);
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="broth"],
+.panel[data-scene="cut"] .plot[data-line="broth"] {
+  --stratum: #48515a;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="peat"],
+.panel[data-scene="cut"] .plot[data-line="peat"] {
+  --stratum: #6c432b;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="sphagnum"],
+.panel[data-scene="cut"] .plot[data-line="sphagnum"] {
+  --stratum: #4f6745;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="methane"],
+.panel[data-scene="cut"] .plot[data-line="methane"] {
+  --stratum: #77704f;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="cooling"],
+.panel[data-scene="cut"] .plot[data-line="cooling"] {
+  --stratum: #56666b;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="compute"],
+.panel[data-scene="cut"] .plot[data-line="compute"] {
+  --stratum: #354c5c;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="evidence"],
+.panel[data-scene="cut"] .plot[data-line="evidence"] {
+  --stratum: #4e4d5a;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="sludge"],
+.panel[data-scene="cut"] .plot[data-line="sludge"] {
+  --stratum: #403c3a;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="briquettes"],
+.panel[data-scene="cut"] .plot[data-line="briquettes"] {
+  --stratum: #3b3941;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="refinedBroth"],
+.panel[data-scene="cut"] .plot[data-line="refinedBroth"] {
+  --stratum: #343c4c;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="sediment"],
+.panel[data-scene="cut"] .plot[data-line="sediment"] {
+  --stratum: #2e3844;
+}
+
+.panel[data-scene="cut"] .stratum-label[data-line="essence"],
+.panel[data-scene="cut"] .plot[data-line="essence"] {
+  --stratum: #29344a;
+}
+
+.panel[data-scene="cut"] .stratum-depth {
+  min-width: 3.5ch;
+  color: color-mix(in srgb, var(--stratum) 70%, var(--ink));
+  font: var(--fs-xs) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel[data-scene="cut"] .stratum-name {
+  margin: 0;
+  color: var(--ink);
+  font: 700 var(--fs-md) var(--font-display);
+}
+
+.panel[data-scene="cut"] .plot {
+  --stratum: var(--peat);
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+  min-height: 120px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--stratum) 65%, var(--rule-strong));
+  border-left: 3px solid color-mix(in srgb, var(--stratum) 70%, var(--ink-faint));
+  border-radius: var(--r-sm);
+  background: transparent;
+}
+
+.panel[data-scene="cut"] .plot:hover:not(:disabled),
+.panel[data-scene="cut"] .plot:focus-visible:not(:disabled) {
+  border-color: var(--scene-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-accent) 45%, transparent);
+}
+
+.panel[data-scene="cut"] .plot-face {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(105deg, rgba(239,230,210,.05) 0 2px, transparent 2px 11px),
+    var(--stratum);
+  pointer-events: none;
+}
+
+.panel[data-scene="cut"] .plot-dug,
+.panel[data-scene="cut"] .plot-cut {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.panel[data-scene="cut"] .plot-dug {
+  height: var(--dug);
+  background:
+    repeating-radial-gradient(ellipse at 50% 0, rgba(239,230,210,.16) 0 2px, transparent 2px 9px),
+    color-mix(in srgb, var(--stratum) 54%, var(--bog-0));
+}
+
+.panel[data-scene="cut"] .plot-cut {
+  height: var(--cut);
+  border-top: 2px dashed color-mix(in srgb, var(--scene-accent) 80%, var(--ink));
+  background: color-mix(in srgb, var(--scene-accent) 22%, transparent);
+  opacity: 0;
+  transition: opacity var(--t-duration-md) var(--t-ease);
+}
+
+.panel[data-scene="cut"] .plot:hover:not(:disabled) .plot-cut,
+.panel[data-scene="cut"] .plot:focus-visible:not(:disabled) .plot-cut {
+  opacity: 1;
+}
+
+.panel[data-scene="cut"] .plot > :not(.plot-face) {
+  position: relative;
+  z-index: 1;
+}
+
+.panel[data-scene="cut"] .plot .item-body {
+  align-self: stretch;
+}
+
+.panel[data-scene="cut"] .plot .item-action {
+  align-self: end;
+}
+
+.panel[data-scene="cut"] .plot:disabled .plot-face {
+  filter: grayscale(.75) brightness(.72);
+}
+
+.panel[data-scene="cut"] .plot:disabled .plot-cut,
+.panel[data-scene="cut"] .plot.locked-teaser .plot-cut {
+  display: none;
+}
+
+.panel[data-scene="cut"] .plot.locked-teaser {
+  border-color: color-mix(in srgb, var(--rule-strong) 65%, var(--stratum));
+  color: var(--ink-faint);
+}
+
+.panel[data-scene="cut"] .plot.locked-teaser .plot-face {
+  background:
+    repeating-linear-gradient(105deg, rgba(239,230,210,.025) 0 2px, transparent 2px 11px),
+    #161719;
+}
+
+.panel[data-scene="cut"] .plot.locked-teaser .plot-dug {
+  display: none;
+}
+
 .panel[data-scene="hall"] .tab-content {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -2127,6 +2319,17 @@ button.item:not(:disabled) .item-action {
   .panel[data-scene="hall"] .tab-content {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+
+  .panel[data-scene="cut"] .tab-content {
+    gap: var(--sp-2);
+    padding: 12px;
+  }
+
+  .panel[data-scene="cut"] .plot {
+    flex-basis: 100%;
+    max-width: none;
+    min-height: 96px;
   }
 
   .dossier:nth-child(n) {

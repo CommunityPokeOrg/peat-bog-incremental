@@ -686,6 +686,30 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return row;
   }
 
+  function createPlot(key: string, line: ProductionLine, parts: RowStaticParts): HTMLElement {
+    const row = parts.onClick ? document.createElement('button') : document.createElement('div');
+    row.className = `item plot${parts.className ? ` ${parts.className}` : ''}`;
+    row.dataset.key = key;
+    row.dataset.line = line;
+    row.innerHTML = `
+      <span class="plot-face" aria-hidden="true">
+        <span class="plot-dug" style="--dug: 0%"></span>
+        <span class="plot-cut" style="--cut: 0%"></span>
+      </span>
+      <span class="item-emoji" aria-hidden="true">${parts.emoji}</span>
+      <span class="item-body">
+        <span class="item-name"><span class="item-name-label">${parts.name}</span><span class="owned"></span></span>
+        <span class="item-desc">${parts.desc}</span>
+        <span class="item-cost"></span>
+      </span>
+      <span class="${parts.trailingClass ?? 'item-action'}" aria-hidden="true"></span>`;
+    row.querySelector<HTMLElement>('.owned')?.addEventListener('animationend', () => {
+      row.querySelector<HTMLElement>('.owned')?.classList.remove('pop');
+    });
+    if (parts.onClick) row.addEventListener('click', parts.onClick);
+    return row;
+  }
+
   function popRowCount(key: string): void {
     const count = tabContent.querySelector<HTMLElement>(`[data-key="${key}"] .owned`);
     if (!count) return;
@@ -829,8 +853,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
         entries.push({
           key: `heading-${category}`,
-          create: () => createSectionHeading(category[0].toUpperCase() + category.slice(1)),
-          update: () => {},
+          create: () => createStratum(category[0].toUpperCase() + category.slice(1), category, productionCategories.indexOf(category)),
+          update: (row) => {
+            row.dataset.line = category;
+          },
         });
       }
       for (const def of visible) {
@@ -846,7 +872,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         entries.push({
           key: def.id,
           create: () =>
-            createRow(def.id, {
+            createPlot(def.id, category, {
               emoji: def.emoji,
               name: def.name,
               desc: desc(),
@@ -866,6 +892,20 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             const owned = latest.buildings[def.id] ?? 0;
             const qty = effectiveQty(latest, def.id);
             const cost = bulkCost(def, owned, qty, latest);
+            const dug = Math.min(100, (100 * Math.log10(owned + 1)) / Math.log10(1001));
+            const nextDug = Math.min(100, (100 * Math.log10(owned + qty + 1)) / Math.log10(1001));
+            const cut = Math.min(100 - dug, Math.max(0, nextDug - dug));
+            const dugLayer = row.querySelector<HTMLElement>('.plot-dug')!;
+            const cutLayer = row.querySelector<HTMLElement>('.plot-cut')!;
+            const dugValue = `${dug}%`;
+            const cutValue = `${cut}%`;
+            if (dugLayer.style.getPropertyValue('--dug') !== dugValue) {
+              dugLayer.style.setProperty('--dug', dugValue);
+            }
+            if (cutLayer.style.getPropertyValue('--cut') !== cutValue) {
+              cutLayer.style.setProperty('--cut', cutValue);
+            }
+            row.dataset.line = category;
             updateRow(row, {
               cost: formatCost(cost),
               owned: `×${owned}`,
@@ -886,13 +926,16 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         entries.push({
           key: `locked-${nextLocked.id}`,
           create: () =>
-            createRow(`locked-${nextLocked.id}`, {
+            createPlot(`locked-${nextLocked.id}`, category, {
               emoji: '🔒',
               name: 'Next blueprint',
-              desc: `Unlocks at ${threshold}`,
-              className: 'locked-teaser',
+              desc: `Undug — unlocks at ${threshold}`,
+              className: 'locked-teaser undug',
             }),
-          update: (row) => updateRow(row, { status: 'locked', desc: `Unlocks at ${threshold}` }),
+          update: (row) => {
+            row.dataset.line = category;
+            updateRow(row, { status: 'locked', desc: `Undug — unlocks at ${threshold}` });
+          },
         });
       }
     }
@@ -1102,6 +1145,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       });
     }
     reconcileRows(entries);
+  }
+
+  function createStratum(label: string, line: ProductionLine, index: number): HTMLElement {
+    const heading = document.createElement('section');
+    heading.className = 'stratum-label';
+    heading.dataset.line = line;
+    heading.innerHTML = `<span class="stratum-depth">${index * 4} m</span><h3 class="stratum-name">${label}</h3>`;
+    return heading;
   }
 
   function createSectionHeading(label: string): HTMLElement {
