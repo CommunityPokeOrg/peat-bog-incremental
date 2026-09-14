@@ -899,22 +899,26 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     reconcileRows(entries);
   }
 
-  function createQuestRow(questId: string): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'item quest-row';
+  function createDossier(questId: string, kind?: 'bounty'): HTMLElement {
+    const row = document.createElement('article');
+    row.className = 'item dossier';
     row.dataset.key = questId;
+    if (kind) row.dataset.kind = kind;
     row.innerHTML = `
-      <span class="item-emoji" aria-hidden="true"></span>
-      <span class="item-body">
-        <span class="item-name"><span class="item-name-label"></span></span>
-        <span class="item-desc"></span>
+      <span class="dossier-pin" aria-hidden="true"></span>
+      <header class="dossier-head">
+        <span class="item-emoji" aria-hidden="true"></span>
+        <span class="item-name-label"></span>
+      </header>
+      <p class="item-desc"></p>
+      <div class="dossier-body">
         <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
         <span class="quest-progress"></span>
         <span class="quest-reward"></span>
-      </span>
+      </div>
       <span class="quest-action item-action" data-state="out">
-        <button type="button" class="btn" hidden></button>
-        <span class="claimed-badge" hidden>Claimed ✓</span>
+        <button type="button" class="btn stamp" hidden></button>
+        <span class="claimed-badge stamp-ink" hidden>CLOSED<span hidden>Claimed ✓</span></span>
       </span>`;
     const button = row.querySelector<HTMLButtonElement>('button')!;
     button.addEventListener('click', () => {
@@ -974,19 +978,22 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const entries: RowEntry[] = [];
     for (const chapter of chapters) {
       const quests = ALL_QUESTS.filter((quest) => quest.chapter === chapter && questVisible(state, quest));
-      const claimed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
+      const closed = quests.filter((quest) => state.quests.claimed.includes(quest.id)).length;
       if (quests.length === 0) continue;
       entries.push({
         key: `chapter-${chapter}`,
-        create: () => createSectionHeading(`${chapterLabels[chapter]} · ${claimed}/${quests.length} claimed`),
+        create: () => createCaseFile(),
         update: (row) => {
-          row.textContent = `${chapterLabels[chapter]} · ${claimed}/${quests.length} claimed`;
+          row.querySelector<HTMLElement>('.case-file-tab')!.textContent = chapterLabels[chapter];
+          row.querySelector<HTMLElement>('.case-file-count')!.textContent = `${closed}/${quests.length} closed`;
+          row.querySelector<HTMLElement>('.case-file-legacy')!.textContent =
+            `${chapterLabels[chapter]} · ${closed}/${quests.length} claimed`;
         },
       });
       for (const quest of quests) {
         entries.push({
           key: quest.id,
-          create: () => createQuestRow(quest.id),
+          create: () => createDossier(quest.id),
           update: (row) => {
             const done = state.quests.claimed.includes(quest.id);
             const progress = questProgress(state, quest);
@@ -1018,7 +1025,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             if (done) {
               button.hidden = true;
               button.disabled = true;
-              button.className = 'btn';
+              button.className = 'btn stamp';
               button.textContent = 'Claim';
               button.removeAttribute('aria-label');
               badge.hidden = false;
@@ -1026,7 +1033,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             } else if (ready) {
               button.hidden = false;
               button.disabled = false;
-              button.className = `btn ${quest.chapter === 'discovery' || quest.chapter === 'litigation' || quest.chapter === 'verdict' || quest.chapter === 'keepers' ? 'quest-claim' : 'quest-story-claim'}`;
+              button.className = `btn stamp ${quest.chapter === 'discovery' || quest.chapter === 'litigation' || quest.chapter === 'verdict' || quest.chapter === 'keepers' ? 'quest-claim' : 'quest-story-claim'}`;
               button.textContent = 'Claim';
               button.setAttribute('aria-label', `Claim ${quest.name}`);
               badge.hidden = true;
@@ -1034,7 +1041,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             } else {
               button.hidden = true;
               button.disabled = true;
-              button.className = 'btn';
+              button.className = 'btn stamp';
               button.textContent = 'Claim';
               button.removeAttribute('aria-label');
               badge.hidden = true;
@@ -1054,16 +1061,18 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     }
     entries.push({
       key: 'chapter-bounties',
-      create: () => createSectionHeading(`Bounties · ${visibleBounties.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0)} completed`),
+      create: () => createCaseFile(),
       update: (row) => {
         const completed = visibleBounties.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0);
-        row.textContent = `Bounties · ${completed} completed`;
+        row.querySelector<HTMLElement>('.case-file-tab')!.textContent = 'Bounties';
+        row.querySelector<HTMLElement>('.case-file-count')!.textContent = `${completed} completed`;
+        row.querySelector<HTMLElement>('.case-file-legacy')!.textContent = `Bounties · ${completed} completed`;
       },
     });
     for (const bounty of visibleBounties) {
       entries.push({
         key: bounty.id,
-        create: () => createQuestRow(bounty.id),
+        create: () => createDossier(bounty.id, 'bounty'),
         update: (row) => {
           acceptBounty(state, bounty.id);
           const instance = bountyInstance(state, bounty.id);
@@ -1086,7 +1095,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const button = action.querySelector<HTMLButtonElement>('button')!;
           const badge = action.querySelector<HTMLElement>('.claimed-badge')!;
           button.hidden = false;
-          button.className = ready ? 'btn quest-bounty-claim' : 'btn';
+          button.className = ready ? 'btn stamp quest-bounty-claim' : 'btn stamp';
           button.textContent = ready ? 'Claim' : 'In progress';
           button.disabled = !ready;
           button.setAttribute('aria-label', `${ready ? 'Claim' : 'View'} ${bounty.name} ×${instance}`);
@@ -1102,6 +1111,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const heading = document.createElement('div');
     heading.className = 'section-heading';
     heading.textContent = label;
+    return heading;
+  }
+
+  function createCaseFile(): HTMLElement {
+    const heading = document.createElement('section');
+    heading.className = 'case-file';
+    heading.innerHTML = '<h3 class="case-file-tab"></h3><span class="case-file-count"></span><span class="case-file-legacy" hidden></span>';
     return heading;
   }
 

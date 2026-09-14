@@ -17,6 +17,9 @@
   --evidence: #d9c9a3;
   --core: #c48cff;
   --danger: #e0684a;
+  --claim: #b84f4a;
+  --cork: #6c452e;
+  --parchment: #e8d9b8;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -851,6 +854,206 @@ button.item:not(:disabled) .item-action {
   flex: 1;
   background: var(--rule);
   content: "";
+}
+
+.panel[data-scene="docket"] .tab-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px 16px;
+  align-content: start;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 226, 172, .12) 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 68%, rgba(35, 17, 8, .18) 0 1px, transparent 2px),
+    var(--cork);
+  background-size: 19px 23px, 27px 31px, auto;
+}
+
+.case-file {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  position: relative;
+  min-height: 2.5rem;
+  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+  border-bottom: 1px solid color-mix(in srgb, var(--parchment) 55%, var(--cork));
+  color: var(--parchment);
+  font-variant: small-caps;
+  letter-spacing: .08em;
+}
+
+.case-file::after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  background: var(--claim, var(--danger));
+  content: "";
+}
+
+.case-file-tab {
+  margin: 0;
+  font: 700 var(--fs-md) var(--font-display);
+}
+
+.case-file-count {
+  color: color-mix(in srgb, var(--parchment) 72%, var(--cork));
+  font: var(--fs-xs) var(--font-mono);
+  white-space: nowrap;
+}
+
+.dossier {
+  --tilt: 0deg;
+  position: relative;
+  display: block;
+  min-height: 240px;
+  padding: 28px 16px 16px;
+  border: 1px solid color-mix(in srgb, var(--parchment) 55%, var(--cork));
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 1.65rem,
+      rgba(104, 75, 40, .12) 1.65rem,
+      rgba(104, 75, 40, .12) calc(1.65rem + 1px)
+    ),
+    var(--parchment);
+  box-shadow: 0 7px 12px rgba(18, 9, 4, .28);
+  color: var(--bog-1);
+  transform: rotate(var(--tilt));
+  transform-origin: top center;
+  transition: transform var(--t-duration-md) var(--t-ease), box-shadow var(--t-duration-md) var(--t-ease);
+}
+
+.dossier:nth-child(5n + 1) { --tilt: -2deg; }
+.dossier:nth-child(5n + 2) { --tilt: 1deg; }
+.dossier:nth-child(5n + 3) { --tilt: -1deg; }
+.dossier:nth-child(5n + 4) { --tilt: 2deg; }
+.dossier:nth-child(5n + 5) { --tilt: 0deg; }
+
+.dossier-pin {
+  position: absolute;
+  z-index: 1;
+  top: 9px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border: 1px solid color-mix(in srgb, var(--scene-accent) 58%, var(--bog-1));
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff7d8 0 14%, var(--scene-accent) 28%, var(--coolant-deep));
+  box-shadow: 0 2px 4px rgba(18, 9, 4, .35);
+  transform: translateX(-50%);
+}
+
+.dossier-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--bog-1);
+  font: 700 var(--fs-lg) var(--font-display);
+}
+
+.dossier .item-emoji {
+  font-size: 1.35rem;
+}
+
+.dossier .item-name-label {
+  overflow-wrap: anywhere;
+}
+
+.dossier .item-desc {
+  margin: var(--sp-3) 0;
+  color: color-mix(in srgb, var(--bog-1) 76%, var(--parchment));
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+}
+
+.dossier-body {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.dossier .progress {
+  background: rgba(46, 27, 12, .2);
+}
+
+.dossier .progress-fill {
+  background: var(--scene-accent);
+}
+
+.dossier .quest-progress,
+.dossier .quest-reward {
+  color: color-mix(in srgb, var(--bog-1) 72%, var(--parchment));
+}
+
+.dossier .quest-action {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: var(--sp-3);
+}
+
+.dossier.ready {
+  box-shadow: 0 10px 22px rgba(18, 9, 4, .34), 0 0 18px color-mix(in srgb, var(--scene-accent) 35%, transparent);
+  transform: rotate(var(--tilt)) translateY(-3px);
+}
+
+.dossier.ready .dossier-pin {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--scene-accent) 24%, transparent), 0 2px 4px rgba(18, 9, 4, .35);
+}
+
+.dossier.claimed {
+  border: 2px dashed color-mix(in srgb, var(--claim) 55%, var(--parchment));
+  filter: saturate(.45);
+  outline: 1px dashed color-mix(in srgb, var(--claim) 45%, var(--parchment));
+  outline-offset: -5px;
+}
+
+.stamp {
+  min-height: 44px;
+  padding: .45rem .9rem;
+  border: 3px solid var(--claim, var(--danger));
+  border-radius: 3px;
+  background: transparent;
+  color: var(--claim, var(--danger));
+  font: 800 var(--fs-sm) var(--font-mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.stamp:active:not(:disabled) {
+  transform: translateY(2px) scale(.98);
+}
+
+.stamp-ink {
+  color: var(--claim, var(--danger));
+  font: 800 var(--fs-lg) var(--font-mono);
+  letter-spacing: .12em;
+  mix-blend-mode: multiply;
+  transform: rotate(-12deg);
+}
+
+.dossier.claimed .stamp-ink {
+  animation: stamp-in var(--t-duration-md) var(--t-ease);
+}
+
+.dossier[data-kind="bounty"] {
+  border-top: 2px dashed var(--broth-deep);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 1.65rem,
+      rgba(104, 75, 40, .1) 1.65rem,
+      rgba(104, 75, 40, .1) calc(1.65rem + 1px)
+    ),
+    #ead39a;
 }
 
 .locked-teaser,
@@ -1759,6 +1962,17 @@ button.item:not(:disabled) .item-action {
   to { stroke-dashoffset: 0; }
 }
 
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-12deg) scale(1.4);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-12deg) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wisps,
   .still-bubble {
@@ -1902,6 +2116,17 @@ button.item:not(:disabled) .item-action {
 
   .qty-selector span {
     margin-right: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .panel[data-scene="docket"] .tab-content {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .dossier {
+    --tilt: 0deg;
   }
 }
 
@@ -2183,4 +2408,14 @@ button.item:not(:disabled) .item-action {
 @media (prefers-reduced-motion: reduce) {
   .fw-card.fw-fail { animation: none; }
   .fw-gauge-fill { transition: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dossier {
+    --tilt: 0deg;
+  }
+
+  .dossier.claimed .stamp-ink {
+    animation: none;
+  }
 }
