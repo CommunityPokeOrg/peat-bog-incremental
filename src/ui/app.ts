@@ -1591,9 +1591,16 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     view: CharterView | null;
     interacted: boolean;
     focusId: string;
+    /** Home view: fit the whole sheet (small maps) or centre `focusId` at 1× (large maps). */
+    fit: boolean;
   }
-  const charterCamera: Camera = { view: null, interacted: false, focusId: CHARTER_ROOT_ID };
-  const researchCamera: Camera = { view: null, interacted: false, focusId: RESEARCH_SKY_ID };
+  const charterCamera: Camera = { view: null, interacted: false, focusId: CHARTER_ROOT_ID, fit: false };
+  const researchCamera: Camera = { view: null, interacted: false, focusId: RESEARCH_SKY_ID, fit: true };
+
+  function homeView(camera: Camera, layout: CharterLayout, size: { width: number; height: number }): CharterView {
+    const scale = camera.fit ? fitScale({ width: layout.width, height: layout.height }, size) : 1;
+    return centreOn(layout.points[camera.focusId], size, scale);
+  }
 
   function signCharter(node: CharterNodeDef): void {
     const latest = currentState;
@@ -1648,7 +1655,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           canvas,
           sheet,
           layout,
-          centreOn(layout.points[camera.focusId], size, fitScale({ width: layout.width, height: layout.height }, size)),
+          homeView(camera, layout, size),
           camera,
           false,
         );
@@ -1710,11 +1717,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const size = charterViewport(canvas);
         const pivot = { x: size.width / 2, y: size.height / 2 };
         if (button.dataset.zoom === 'reset') {
-          applyPan(centreOn(
-            layout.points[camera.focusId],
-            size,
-            fitScale({ width: layout.width, height: layout.height }, size),
-          ));
+          applyPan(homeView(camera, layout, size));
         } else {
           const factor = button.dataset.zoom === 'in' ? CHARTER_ZOOM_STEP : 1 / CHARTER_ZOOM_STEP;
           applyPan(zoomAt(current, factor, pivot));
@@ -1797,11 +1800,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       } else if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '0') {
         event.preventDefault();
         if (event.key === '0') {
-          applyPan(centreOn(
-            layout.points[camera.focusId],
-            size,
-            fitScale({ width: layout.width, height: layout.height }, size),
-          ));
+          applyPan(homeView(camera, layout, size));
         }
         else applyPan(zoomAt(camera.view, event.key === '-' ? 1 / CHARTER_ZOOM_STEP : CHARTER_ZOOM_STEP, pivot));
       }
