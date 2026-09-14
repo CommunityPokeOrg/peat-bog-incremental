@@ -140,7 +140,7 @@ describe('UI overhaul', () => {
     expect((row as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('claims a ready docket filing and replaces Claim with Claimed', () => {
+  it('claims a ready docket filing and stamps it CLOSED', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     state.totalClicks = 10;
@@ -157,7 +157,7 @@ describe('UI overhaul', () => {
     expect(claim.getAttribute('aria-label')).toBe('Claim First Scoop on Record');
     claim.click();
     expect(root.querySelector('.quest-claim')).toBeNull();
-    expect(root.textContent).toContain('Claimed ✓');
+    expect(root.textContent).toContain('CLOSED');
   });
 
   it('renders the Keepers of the Bog docket chapter', () => {
@@ -169,7 +169,7 @@ describe('UI overhaul', () => {
     }
     const ui = makeUi(root, { initialTab: 'docket' });
     ui.renderLists(state);
-    expect(root.textContent).toContain('Keepers of the Bog · 0/10 claimed');
+    expect(root.textContent).toContain('0/10 closed');
     expect(root.textContent).toContain('Pierre of the Peat');
     expect(root.textContent).toContain('Poke, Oracle of the Bog');
   });

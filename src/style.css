@@ -856,7 +856,7 @@ button.item:not(:disabled) .item-action {
   content: "";
 }
 
-.panel[data-scene="docket"] .tab-content {
+.panel[data-scene="hall"] .tab-content {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 18px 16px;
@@ -905,11 +905,12 @@ button.item:not(:disabled) .item-action {
   white-space: nowrap;
 }
 
-.dossier {
+.dossier,
+.dossier:hover {
   --tilt: 0deg;
   position: relative;
   display: block;
-  min-height: 240px;
+  min-height: auto;
   padding: 28px 16px 16px;
   border: 1px solid color-mix(in srgb, var(--parchment) 55%, var(--cork));
   border-radius: 2px;
@@ -992,9 +993,12 @@ button.item:not(:disabled) .item-action {
 
 .dossier .quest-action {
   display: flex;
-  min-height: 44px;
   align-items: center;
   justify-content: flex-end;
+}
+
+.dossier .quest-action:has(> :not([hidden])) {
+  min-height: 44px;
   margin-top: var(--sp-3);
 }
 
@@ -2120,12 +2124,12 @@ button.item:not(:disabled) .item-action {
 }
 
 @media (max-width: 560px) {
-  .panel[data-scene="docket"] .tab-content {
+  .panel[data-scene="hall"] .tab-content {
     grid-template-columns: 1fr;
     padding: 12px;
   }
 
-  .dossier {
+  .dossier:nth-child(n) {
     --tilt: 0deg;
   }
 }
@@ -2411,7 +2415,7 @@ button.item:not(:disabled) .item-action {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dossier {
+  .dossier:nth-child(n) {
     --tilt: 0deg;
   }
 

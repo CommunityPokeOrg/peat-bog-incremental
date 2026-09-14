@@ -918,7 +918,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       </div>
       <span class="quest-action item-action" data-state="out">
         <button type="button" class="btn stamp" hidden></button>
-        <span class="claimed-badge stamp-ink" hidden>CLOSED<span hidden>Claimed ✓</span></span>
+        <span class="claimed-badge stamp-ink" hidden>CLOSED</span>
       </span>`;
     const button = row.querySelector<HTMLButtonElement>('button')!;
     button.addEventListener('click', () => {
@@ -986,8 +986,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         update: (row) => {
           row.querySelector<HTMLElement>('.case-file-tab')!.textContent = chapterLabels[chapter];
           row.querySelector<HTMLElement>('.case-file-count')!.textContent = `${closed}/${quests.length} closed`;
-          row.querySelector<HTMLElement>('.case-file-legacy')!.textContent =
-            `${chapterLabels[chapter]} · ${closed}/${quests.length} claimed`;
         },
       });
       for (const quest of quests) {
@@ -1066,7 +1064,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const completed = visibleBounties.reduce((sum, bounty) => sum + (state.quests.bountyCount[bounty.id] ?? 0), 0);
         row.querySelector<HTMLElement>('.case-file-tab')!.textContent = 'Bounties';
         row.querySelector<HTMLElement>('.case-file-count')!.textContent = `${completed} completed`;
-        row.querySelector<HTMLElement>('.case-file-legacy')!.textContent = `Bounties · ${completed} completed`;
       },
     });
     for (const bounty of visibleBounties) {
@@ -1117,7 +1114,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function createCaseFile(): HTMLElement {
     const heading = document.createElement('section');
     heading.className = 'case-file';
-    heading.innerHTML = '<h3 class="case-file-tab"></h3><span class="case-file-count"></span><span class="case-file-legacy" hidden></span>';
+    heading.innerHTML = '<h3 class="case-file-tab"></h3><span class="case-file-count"></span>';
     return heading;
   }
 
