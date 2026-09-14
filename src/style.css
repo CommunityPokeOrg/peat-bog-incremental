@@ -861,6 +861,7 @@ button.item:not(:disabled) .item-action {
   flex-direction: row;
   flex-wrap: wrap;
   align-content: flex-start;
+  align-items: stretch;
   gap: var(--sp-3);
   padding: var(--sp-4);
 }
@@ -954,12 +955,24 @@ button.item:not(:disabled) .item-action {
 
 .panel[data-scene="cut"] .plot {
   --stratum: var(--peat);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "emoji name"
+    "desc desc"
+    "cost action";
+  align-items: start;
+  row-gap: var(--sp-2);
   position: relative;
   flex: 1 1 220px;
   max-width: 320px;
-  min-height: 120px;
+  min-width: 0;
+  width: 100%;
+  min-height: 150px;
   overflow: hidden;
   isolation: isolate;
+  box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--stratum) 65%, var(--rule-strong));
   border-left: 3px solid color-mix(in srgb, var(--stratum) 70%, var(--ink-faint));
   border-radius: var(--r-sm);
@@ -1017,10 +1030,39 @@ button.item:not(:disabled) .item-action {
 }
 
 .panel[data-scene="cut"] .plot .item-body {
-  align-self: stretch;
+  display: contents;
+  min-width: 0;
+}
+
+.panel[data-scene="cut"] .plot .item-emoji {
+  grid-area: emoji;
+  align-self: start;
+  font-size: 1.6rem;
+}
+
+.panel[data-scene="cut"] .plot .item-name {
+  grid-area: name;
+  min-width: 0;
+}
+
+.panel[data-scene="cut"] .plot .item-desc {
+  grid-area: desc;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel[data-scene="cut"] .plot .item-cost {
+  grid-area: cost;
+  align-self: end;
+  min-width: 0;
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .panel[data-scene="cut"] .plot .item-action {
+  grid-area: action;
+  justify-self: end;
   align-self: end;
 }
 
