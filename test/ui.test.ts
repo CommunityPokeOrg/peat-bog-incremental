@@ -105,7 +105,7 @@ describe('UI list reconciliation', () => {
     const name = row.querySelector('.item-name')!;
     const owned = row.querySelector('.owned')!;
     expect(owned.textContent).toBe('×12345');
-    expect(name.textContent).toContain('Peat Harvester');
+    expect(name.textContent).toContain('Billing Intern');
     expect(name.contains(owned)).toBe(true);
   });
 

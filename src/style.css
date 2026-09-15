@@ -1,21 +1,21 @@
 :root {
-  --bog-0: #0b0a08;
-  --bog-1: #15120d;
-  --bog-2: #1e1a13;
-  --bog-3: #2a251b;
-  --rule: #3a3325;
-  --rule-strong: #57492f;
-  --ink: #efe6d2;
-  --ink-dim: #a89d84;
-  --ink-faint: #6e6551;
-  --broth: #e2a648;
-  --broth-deep: #9c6a1f;
-  --coolant: #63d3e8;
-  --coolant-deep: #1f6f80;
-  --moss: #8fbf6a;
-  --peat: #b07a4a;
-  --evidence: #d9c9a3;
-  --core: #c48cff;
+  --bog-0: #07090d;
+  --bog-1: #0d1118;
+  --bog-2: #131a24;
+  --bog-3: #1c2534;
+  --rule: #2a3548;
+  --rule-strong: #3d4d68;
+  --ink: #e6edf6;
+  --ink-dim: #93a3b8;
+  --ink-faint: #5a6a80;
+  --broth: #d4a94e;
+  --broth-deep: #8a6a24;
+  --coolant: #4da3ff;
+  --coolant-deep: #1f4d80;
+  --moss: #4fd18b;
+  --peat: #7a9dc4;
+  --evidence: #c9d6e6;
+  --core: #ffd166;
   --danger: #e0684a;
   --claim: #b84f4a;
   --cork: #6c452e;
@@ -64,9 +64,9 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    radial-gradient(ellipse at 8% 16%, rgba(176, 122, 74, .14), transparent 35%),
-    radial-gradient(ellipse at 91% 78%, rgba(99, 211, 232, .1), transparent 32%),
-    radial-gradient(ellipse at 52% 110%, rgba(226, 166, 72, .08), transparent 46%),
+    radial-gradient(ellipse at 8% 16%, rgba(77, 163, 255, .12), transparent 35%),
+    radial-gradient(ellipse at 91% 78%, rgba(79, 209, 139, .08), transparent 32%),
+    radial-gradient(ellipse at 52% 110%, rgba(212, 169, 78, .1), transparent 46%),
     var(--bog-0);
   color: var(--ink);
   font-family: var(--font-body);
@@ -85,12 +85,12 @@ body::after {
 }
 
 body::before {
-  background: radial-gradient(ellipse at 25% 40%, rgba(176, 122, 74, .22), transparent 35%);
+  background: radial-gradient(ellipse at 25% 40%, rgba(77, 163, 255, .18), transparent 35%);
   animation: mist-drift-a 40s linear infinite alternate;
 }
 
 body::after {
-  background: radial-gradient(ellipse at 76% 52%, rgba(99, 211, 232, .15), transparent 32%);
+  background: radial-gradient(ellipse at 76% 52%, rgba(79, 209, 139, .12), transparent 32%);
   animation: mist-drift-b 55s linear infinite alternate;
 }
 
@@ -332,7 +332,7 @@ textarea:focus-visible,
   justify-items: center;
   min-height: 290px;
   background:
-    radial-gradient(circle at 50% 30%, rgba(226,166,72,.08), transparent 45%),
+    radial-gradient(circle at 50% 30%, rgba(212,169,78,.1), transparent 45%),
     var(--bog-1);
 }
 
@@ -447,7 +447,7 @@ kbd {
 .panel[data-scene="hall"] {
   --scene-accent: var(--evidence);
   --scene-backdrop:
-    repeating-linear-gradient(0deg, transparent 0 27px, rgba(217,201,163,.08) 28px),
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(201,214,230,.07) 28px),
     radial-gradient(ellipse at 50% 0, rgba(217,201,163,.2), transparent 65%),
     var(--bog-2);
 }

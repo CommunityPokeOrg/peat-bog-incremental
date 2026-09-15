@@ -35,7 +35,7 @@ describe('production cross-section UI', () => {
     expect(harvester.querySelector<HTMLElement>('.plot-dug')!.style.getPropertyValue('--dug')).toBe('0%');
     const heading = root.querySelector<HTMLElement>('[data-key="heading-broth"]')!;
     expect(heading.classList.contains('stratum-label')).toBe(true);
-    expect(heading.querySelector('.stratum-depth')?.textContent).toBe('0 m');
+    expect(heading.querySelector('.stratum-depth')?.textContent).toBe('0 ms');
 
     harvester.click();
 
@@ -52,6 +52,6 @@ describe('production cross-section UI', () => {
     expect(teaser.classList.contains('plot')).toBe(true);
     expect(teaser.classList.contains('undug')).toBe(true);
     expect(teaser.classList.contains('locked-teaser')).toBe(true);
-    expect(teaser.textContent).toContain('Undug');
+    expect(teaser.textContent).toContain('Unfiled');
   });
 });

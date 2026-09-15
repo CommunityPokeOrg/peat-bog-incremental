@@ -36,7 +36,7 @@ describe('tool-shed upgrades UI', () => {
     expect(spade.classList.contains('tool')).toBe(true);
     expect(spade.dataset.group).toBe('click');
     expect(spade.previousElementSibling?.classList.contains('rail')).toBe(true);
-    expect(spade.previousElementSibling?.querySelector('.rail-label')?.textContent).toBe('Hand tools');
+    expect(spade.previousElementSibling?.querySelector('.rail-label')?.textContent).toBe('Billing tools');
     expect(root.querySelector('.silhouette[data-key^="soon-"]')).not.toBeNull();
   });
 
@@ -54,9 +54,9 @@ describe('tool-shed upgrades UI', () => {
     const part = root.querySelector<HTMLElement>('[data-key="spade"] .item-cost .cost-part')!;
     expect(part.dataset.resource).toBe('broth');
     expect(part.dataset.affordable).toBe('true');
-    expect(part.textContent).toContain('🫧');
+    expect(part.textContent).toContain('🪙');
     expect(part.querySelector('.cost-amount')?.textContent).toBe('50');
-    expect(part.querySelector('.sr-only')?.textContent).toContain('fp16 compute broth');
+    expect(part.querySelector('.sr-only')?.textContent).toContain('legal-compute tokens');
 
     state.wallet.broth = D(0);
     ui.renderLists(state);

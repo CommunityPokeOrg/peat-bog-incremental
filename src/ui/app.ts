@@ -180,8 +180,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     <header class="ledger-strip">
       <div class="ledger-main">
         <div class="wordmark">
-          <h1>Peat Bog</h1>
-          <p class="case-label">Sector 4 · The Peat Bog Trial</p>
+          <h1>Wall Street Legal</h1>
+          <p class="case-label">McFly &amp; Chronicler LLP · High-Frequency Litigation Arbitrage</p>
         </div>
         <div class="resources" id="resources" aria-live="polite" aria-atomic="true"></div>
       </div>
@@ -193,32 +193,32 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     <main class="layout">
       <section class="harvest-panel" aria-label="Harvest">
         <div class="card harvest-card">
-          <p class="eyebrow">Primary action · broth line</p>
+          <p class="eyebrow">Primary action · billing desk</p>
           <div class="harvest-zone" id="harvest-zone">
-            <button id="harvest-btn" class="harvest-btn" aria-label="Harvest broth (shortcut: H)">
-              <span class="harvest-emoji" aria-hidden="true">🫧</span>
-              <span class="harvest-label">Harvest broth</span>
+            <button id="harvest-btn" class="harvest-btn" aria-label="Bill tokens (shortcut: H)">
+              <span class="harvest-emoji" aria-hidden="true">🪙</span>
+              <span class="harvest-label">Bill tokens</span>
               <span class="bubble bubble-a" aria-hidden="true"></span>
               <span class="bubble bubble-b" aria-hidden="true"></span>
               <span class="bubble bubble-c" aria-hidden="true"></span>
             </button>
             <div class="float-layer" id="float-layer" aria-hidden="true"></div>
           </div>
-          <p class="click-power">Click power: <strong id="click-power">1</strong> broth <kbd>H</kbd></p>
+          <p class="click-power">Click power: <strong id="click-power">1</strong> tokens <kbd>H</kbd></p>
         </div>
         <div class="card thermal-card">
           <div class="card-heading">
             <div>
-              <p class="eyebrow">Thermal gauge</p>
-              <h2>Rack temperature</h2>
+              <p class="eyebrow">Latency budget</p>
+              <h2>Rack latency</h2>
             </div>
             <span class="thermal-state">LIVE</span>
           </div>
           <div class="thermal-labels">
-            <span id="thermal-text">No heat generated</span>
+            <span id="thermal-text">No latency accrued</span>
             <span id="thermal-pct"></span>
           </div>
-          <div class="thermal-bar" role="meter" aria-label="Cooling versus heat" id="thermal-meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+          <div class="thermal-bar" role="meter" aria-label="Latency budget versus load" id="thermal-meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
             <div class="thermal-fill" id="thermal-fill"></div>
           </div>
           <div class="thermal-sub" id="thermal-sub"></div>
@@ -229,12 +229,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
               <p class="eyebrow">Manual systems</p>
               <h2>Fieldwork</h2>
             </div>
-            <span class="field-mark">FIELD 04</span>
+            <span class="field-mark">DESK 04</span>
           </div>
           <div class="fieldwork-row">
             <button class="fieldwork-btn" id="cut-btn" aria-label="Open the Fieldwork tab">
               <span>Fieldwork</span>
-              <span class="fieldwork-copy" id="cut-live">Cut peat, type depositions, work the still and press</span>
+              <span class="fieldwork-copy" id="cut-live">Pull discovery, type depositions, work the mint and press</span>
             </button>
           </div>
           <div class="fieldwork-row" id="calibration-row">
@@ -242,13 +242,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
               <span class="needle-zone"></span>
               <span class="needle"></span>
             </div>
-            <button class="fieldwork-btn" id="calibrate-btn" aria-label="Calibrate the racks">Calibrate</button>
+            <button class="fieldwork-btn" id="calibrate-btn" aria-label="Time the filing window">File motion</button>
             <div class="fieldwork-streak" id="calibration-streak"></div>
             <div class="fieldwork-live" id="calibrate-live" aria-live="polite"></div>
           </div>
         </div>
         <div class="card prestige-card" id="prestige-card">
-          <h2>Drain the Bog</h2>
+          <h2>Chapter 11 Restructure</h2>
           <p id="prestige-info"></p>
           <button id="prestige-btn" class="btn btn-prestige"></button>
         </div>
@@ -281,7 +281,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     <footer class="site-footer">
       <button class="sound-toggle" id="sound-toggle" type="button" aria-pressed="false" aria-label="Sound off"></button>
       <span id="save-indicator" aria-live="polite"></span>
-      <span>Sector 4 · Peat Bog Trial · McFly &amp; Chronicler LLP v Burger King Nordic</span>
+      <span>McFly &amp; Chronicler LLP v Burger King Nordic · High-Frequency Litigation Arbitrage</span>
       <span id="field-note"></span>
     </footer>
     <div class="toasts" id="toasts" aria-live="assertive"></div>
@@ -464,7 +464,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       sound.play('miss');
       calibrateCooldownUntil = now + MISS_COOLDOWN_MS;
       calibrateBtn.disabled = true;
-      calibrateBtn.textContent = 'Cooling down…';
+      calibrateBtn.textContent = 'Recouping…';
       calibrateLive.textContent = 'Miss — streak reset, target recentred.';
       needleTrack.classList.remove('is-shaking');
       void needleTrack.offsetWidth;
@@ -567,7 +567,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const nextCurrent = next ? next.progress.current.min(next.progress.target) : 0;
     nextHint.textContent = next
       ? `Next up: ${next.name} (${formatNumber(nextCurrent)} / ${formatNumber(next.progress.target)})`
-      : 'Settlement docket complete — the peat bog trial is settled.';
+      : 'Settlement docket complete — the Sector 4 litigation is settled.';
     clickPowerEl.textContent = formatNumber(clickPower(state));
     renderThermal(state);
     renderPrestige(state);
@@ -594,14 +594,14 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const hasRack = (state.buildings.rack ?? 0) >= 1;
     calibrateBtn.disabled = !hasRack || now < calibrateCooldownUntil;
     calibrateBtn.textContent = !hasRack
-      ? 'Calibration unlocks with your first Server Rack'
+      ? 'Filing window opens with your first Server Rack'
       : now < calibrateCooldownUntil
-        ? 'Cooling down…'
-        : 'Calibrate';
+        ? 'Recouping…'
+        : 'File motion';
     calibrateBtn.setAttribute('aria-label', calibrateBtn.textContent);
     needleTrack.hidden = !hasRack;
     if (!hasRack) {
-      calibrateLive.textContent = 'Calibration unlocks with your first Server Rack.';
+      calibrateLive.textContent = 'The filing window opens with your first Server Rack.';
     }
   }
 
@@ -611,16 +611,16 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const factor = thermalFactor(state);
     const pct = Math.round(factor.toNumber() * 100);
     if (heat.lte(0)) {
-      thermalText.textContent = 'No heat generated';
+      thermalText.textContent = 'No latency accrued';
       thermalPct.textContent = '';
-      thermalSub.textContent = 'Buy Server Racks to generate compute.';
+      thermalSub.textContent = 'Buy Server Racks to generate arbitrage compute.'
     } else {
-      thermalText.textContent = `Heat ${formatNumber(heat)} / Cooling ${formatNumber(cooling)}`;
-      thermalPct.textContent = `${pct}% cooled`;
+      thermalText.textContent = `Load ${formatNumber(heat)} / Budget ${formatNumber(cooling)}`;
+      thermalPct.textContent = `${pct}% provisioned`;
       thermalSub.textContent =
         factor.gte(1)
-          ? 'Racks running at full speed.'
-          : 'Racks throttled — build more cooling!';
+          ? 'Desks running at full speed.'
+          : 'Racks throttled — provision more latency budget!';
     }
     thermalFill.style.width = `${pct}%`;
     thermalFill.style.setProperty('--cooled', `${pct}%`);
@@ -631,15 +631,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function renderPrestige(state: GameState): void {
     const gain = prestigeGain(state);
     const ok = canPrestige(state);
-    const charterHint = state.wallet.bogCores.gt(0) ? ' Banked cores can be spent in the Charter tab.' : '';
+    const charterHint = state.wallet.bogCores.gt(0) ? ' Banked precedents can be spent in the Charter tab.' : '';
     prestigeInfo.textContent = ok
-      ? `Petition Magistrate Reino to drain the bog. Draining banks ${formatNumber(gain)} Bog Core${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production, permanent). Run resets; achievements and cores stay.${charterHint}`
-      : `Petition Magistrate Reino to drain the bog. Available at ${formatNumber(1_000_000)} compute this run (${formatNumber(state.runCompute)} so far).${charterHint}`;
+      ? `Petition Magistrate Reino to approve a Chapter 11 restructure. Restructuring banks ${formatNumber(gain)} precedent${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production, permanent). The run resets; achievements and precedents stay.${charterHint}`
+      : `Petition Magistrate Reino to approve a Chapter 11 restructure. Available at ${formatNumber(1_000_000)} arbitrage compute this run (${formatNumber(state.runCompute)} so far).${charterHint}`;
     prestigeBtn.disabled = !ok;
-    prestigeBtn.textContent = ok ? `Drain for ${formatNumber(gain)} 💠` : 'Drain the bog';
+    prestigeBtn.textContent = ok ? `Restructure for ${formatNumber(gain)} 💠` : 'File Chapter 11';
     prestigeBtn.setAttribute(
       'aria-label',
-      ok ? `Drain the bog and gain ${formatNumber(gain)} Bog Cores` : 'Drain the bog (locked)',
+      ok ? `File Chapter 11 and bank ${formatNumber(gain)} precedents` : 'Chapter 11 (locked)',
     );
   }
 
@@ -982,13 +982,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           create: () =>
             createPlot(`locked-${nextLocked.id}`, category, {
               emoji: '🔒',
-              name: 'Next blueprint',
-              desc: `Undug — unlocks at ${threshold}`,
+              name: 'Next desk',
+              desc: `Unfiled — unlocks at ${threshold}`,
               className: 'locked-teaser undug',
             }),
           update: (row) => {
             row.dataset.line = category;
-            updateRow(row, { status: 'locked', desc: `Undug — unlocks at ${threshold}` });
+            updateRow(row, { status: 'locked', desc: `Unfiled — unlocks at ${threshold}` });
           },
         });
       }
@@ -1068,7 +1068,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       discovery: 'Discovery',
       litigation: 'Litigation',
       verdict: 'Verdict',
-      keepers: 'Keepers of the Bog',
+      keepers: 'Senior Partners',
       works: 'The Works',
       appeals: 'Appeals',
     };
@@ -1205,7 +1205,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const heading = document.createElement('section');
     heading.className = 'stratum-label';
     heading.dataset.line = line;
-    heading.innerHTML = `<span class="stratum-depth">${index * 4} m</span><h3 class="stratum-name">${label}</h3>`;
+    heading.innerHTML = `<span class="stratum-depth">${index * 4} ms</span><h3 class="stratum-name">${label}</h3>`;
     return heading;
   }
 
@@ -1273,7 +1273,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   function createManifold(lines: ProductionLine[]): HTMLElement {
     const manifold = document.createElement('section');
     manifold.className = 'manifold';
-    manifold.innerHTML = '<h3 class="stratum-name">Still room</h3><ol class="pipe-runs"></ol>';
+    manifold.innerHTML = '<h3 class="stratum-name">Clearing desk</h3><ol class="pipe-runs"></ol>';
     const runs = manifold.querySelector<HTMLOListElement>('.pipe-runs')!;
     for (const line of lines) {
       const run = document.createElement('li');
@@ -1354,12 +1354,12 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   const UPGRADE_KIND_LABELS: Record<string, string> = {
-    click: 'Hand tools',
-    thermal: 'Cooling gear',
-    resource: 'Bog tonics',
+    click: 'Billing tools',
+    thermal: 'Latency gear',
+    resource: 'Firm tonics',
     offline: 'Night shift',
     synergy: 'Rigging',
-    converter: 'Still fittings',
+    converter: 'Mint fittings',
     automation: 'Clockwork',
   };
 
@@ -1499,7 +1499,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       key: 'night-watch',
       create: () => createRow('night-watch', {
         emoji: '🕯️',
-        name: 'Night Watch',
+        name: 'Night Desk',
         desc: '',
         onClick: () => {
           const latest = currentState;
@@ -1521,13 +1521,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const atMax = level >= 49;
         const next = atMax ? '' : ` Next level: +1%.`;
         const charterText = breakdown.charter > 0 ? ` + Charter ${formatNumber(breakdown.charter * 100)}%` : '';
-        const description = `While you are away the cutters keep ${formatNumber(breakdown.total * 100)}% of production going (base 1% + Night Watch ${formatNumber(breakdown.nightWatch * 100)}%${charterText}).${next}`;
+        const description = `While you are away the associates keep ${formatNumber(breakdown.total * 100)}% of production going (base 1% + Night Desk ${formatNumber(breakdown.nightWatch * 100)}%${charterText}).${next}`;
         updateRow(row, {
           costParts: atMax ? [] : costParts(nightWatchCost(level), latest.wallet),
           owned: `Lv ${level}/49`,
           action: atMax ? 'Maxed' : 'Buy',
           disabled: atMax || !canAfford(latest, nightWatchCost(level)),
-          label: atMax ? 'Night Watch maxed' : `Buy Night Watch level ${level + 1}`,
+          label: atMax ? 'Night Desk maxed' : `Buy Night Desk level ${level + 1}`,
           desc: description,
         });
       },
@@ -1875,7 +1875,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   const CHARTER_STATE_LABEL: Record<CharterNodeState, string> = {
     locked: 'Locked',
     purchasable: 'Ready to sign',
-    unaffordable: 'Not enough cores',
+    unaffordable: 'Not enough precedents',
     signed: 'Signed',
   };
 
@@ -2114,7 +2114,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           return intro;
         },
         update: (row) => {
-          row.textContent = `Spend banked Bog Cores on permanent charter terms. Spent cores stop paying their 5%; the terms survive every draining. Banked: ${formatNumber(state.wallet.bogCores)} 💠`;
+          row.textContent = `Spend banked precedents on permanent charter terms. Spent precedents stop paying their 5%; the terms survive every restructure. Banked: ${formatNumber(state.wallet.bogCores)} 💠`;
         },
       },
       {
@@ -2123,7 +2123,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const canvas = document.createElement('div');
           canvas.className = 'charter-canvas';
           canvas.setAttribute('role', 'group');
-          canvas.setAttribute('aria-label', 'Drainage Charter tree. Drag to pan, scroll or pinch to zoom.');
+          canvas.setAttribute('aria-label', 'Restructuring Charter tree. Drag to pan, scroll or pinch to zoom.');
           canvas.tabIndex = 0;
           const sheet = document.createElement('div');
           sheet.className = 'charter-sheet';

@@ -154,13 +154,13 @@ describe('UI overhaul', () => {
 
     ui.renderLists(state);
     const claim = root.querySelector<HTMLButtonElement>('.quest-claim')!;
-    expect(claim.getAttribute('aria-label')).toBe('Claim First Scoop on Record');
+    expect(claim.getAttribute('aria-label')).toBe('Claim First Billing on Record');
     claim.click();
     expect(root.querySelector('.quest-claim')).toBeNull();
     expect(root.textContent).toContain('CLOSED');
   });
 
-  it('renders the Keepers of the Bog docket chapter', () => {
+  it('renders the Senior Partners docket chapter', () => {
     const root = document.createElement('div');
     const state = createInitialState();
     for (const resource of Object.keys(state.wallet) as Array<keyof typeof state.wallet>) {
@@ -170,8 +170,8 @@ describe('UI overhaul', () => {
     const ui = makeUi(root, { initialTab: 'docket' });
     ui.renderLists(state);
     expect(root.textContent).toContain('0/10 closed');
-    expect(root.textContent).toContain('Pierre of the Peat');
-    expect(root.textContent).toContain('Poke, Oracle of the Bog');
+    expect(root.textContent).toContain('Pierre of the Record');
+    expect(root.textContent).toContain('Poke, Oracle of the Book');
   });
 
   it('clamps docket progress text and formats multiplier rewards precisely', () => {
@@ -261,7 +261,7 @@ describe('UI overhaul', () => {
     const researchState = createInitialState();
     researchState.research = RESEARCH.map((research) => research.id);
     researchUi.renderLists(researchState);
-    for (const branch of ['Thermal', 'Extraction', 'Distillation', 'Litigation', 'Celestial']) {
+    for (const branch of ['Latency', 'Discovery', 'Clearing', 'Litigation', 'Celestial']) {
       expect(researchRoot.textContent).toContain(branch);
     }
 
@@ -273,11 +273,11 @@ describe('UI overhaul', () => {
     state.lifetime.peat = state.lifetime.peat.add(25_000);
     docketUi.renderLists(state);
     const claim = docketRoot.querySelector<HTMLButtonElement>(
-      '[aria-label="Claim Peat Delivery Order ×1"]',
+      '[aria-label="Claim Discovery Delivery Order ×1"]',
     );
     expect(claim).not.toBeNull();
     claim!.click();
-    expect(docketRoot.textContent).toContain('Peat Delivery Order ×2');
+    expect(docketRoot.textContent).toContain('Discovery Delivery Order ×2');
   });
 
   it('renders fieldwork controls and resource visibility', () => {
@@ -384,7 +384,7 @@ describe('UI overhaul', () => {
     roots.dispatchEvent(pointerEvent('pointerdown', 20, 20));
     roots.dispatchEvent(pointerEvent('pointerup', 20, 20));
     roots.click();
-    expect(root.querySelector('.charter-detail-name')!.textContent).toBe('Deep Roots');
+    expect(root.querySelector('.charter-detail-name')!.textContent).toBe('Institutional Memory');
     expect(root.querySelector('.charter-sign')!.textContent).toBe('Sign');
     expect(root.querySelector<HTMLButtonElement>('.charter-sign')!.disabled).toBe(true);
   });
@@ -487,13 +487,13 @@ describe('UI overhaul', () => {
     now.mockReturnValue(70);
     btn.click();
     expect(btn.disabled).toBe(false);
-    expect(btn.textContent).toBe('Calibrate');
+    expect(btn.textContent).toBe('File motion');
 
     ui.renderFieldwork(state, 365);
     now.mockReturnValue(370);
     btn.click();
     expect(btn.disabled).toBe(true);
-    expect(btn.textContent).toBe('Cooling down…');
+    expect(btn.textContent).toBe('Recouping…');
     ui.renderFieldwork(state, 5369);
     expect(btn.disabled).toBe(true);
     ui.renderFieldwork(state, 5371);

@@ -150,7 +150,7 @@ describe('economy', () => {
   });
   it('formats the expanded resource cost order', () => {
     expect(formatCost({ broth: 1, peat: 2, sphagnum: 3, methane: 4, compute: 5, evidence: 6 }))
-      .toBe('1 fp16 compute broth · 2 raw peat · 3 sphagnum moss · 4 bog methane · 5 compute · 6 case evidence');
+      .toBe('1 legal-compute tokens · 2 discovery dumps · 3 privilege screens · 4 leaked memos · 5 arbitrage compute · 6 case evidence');
   });
   it('pays sphagnum building costs', () => {
     const state = createInitialState();

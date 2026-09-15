@@ -9,13 +9,13 @@ type ResourceName = (id: string) => string;
 export function formatCharterEffect(effect: CharterEffect, resourceName: ResourceName = (id) => id): string {
   switch (effect.kind) {
     case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target === 'click' ? 'Click power' : resourceName(effect.target)} ×${formatMultiplier(effect.factor)}`;
-    case 'heat': return `Heat ×${formatMultiplier(effect.factor)}`;
-    case 'cooling': return `Cooling ×${formatMultiplier(effect.factor)}`;
+    case 'heat': return `Latency load ×${formatMultiplier(effect.factor)}`;
+    case 'cooling': return `Latency budget ×${formatMultiplier(effect.factor)}`;
     case 'researchSpeed': return `Research speed ×${formatMultiplier(effect.factor)}`;
     case 'offlineRate': return `Offline rate +${Math.round(effect.add * 100)}%`;
     case 'offlineCap': return `Offline cap +${formatDuration(effect.addSeconds)}`;
     case 'offlineMultiplier': return `Offline production ×${formatMultiplier(effect.factor)}`;
-    case 'clickBrothFraction': return `+${Math.round(effect.fraction * 100)}% of click broth as evidence`;
+    case 'clickBrothFraction': return `+${Math.round(effect.fraction * 100)}% of click tokens as evidence`;
     case 'fieldwork': return `Fieldwork rewards ×${formatMultiplier(effect.factor)}`;
     case 'costScale': return `${resourceName(effect.line)} costs ×${formatMultiplier(1 + effect.delta)}`;
     case 'freeBuildings': return `${effect.count} free ${effect.buildingId}`;
@@ -23,8 +23,8 @@ export function formatCharterEffect(effect: CharterEffect, resourceName: Resourc
     case 'byproduct': return `${resourceName(effect.line)} yields ${Math.round(effect.fraction * 100)}% ${resourceName(effect.resource)}`;
     case 'perQuest': return `${effect.target} gains per claimed quest`;
     case 'perAchievement': return `${effect.target} gains per achievement`;
-    case 'coreGain': return `Core award ×${formatMultiplier(effect.factor)}`;
-    case 'startingBroth': return `Start each run with ${formatNumber(effect.amount)} broth`;
+    case 'coreGain': return `Precedent award ×${formatMultiplier(effect.factor)}`;
+    case 'startingBroth': return `Start each run with ${formatNumber(effect.amount)} tokens`;
     case 'starting': return `Start each run with ${formatNumber(effect.amount)} ${effect.resource}`;
   }
 }
@@ -44,7 +44,7 @@ export function formatMultiplier(factor: number): string {
 export function formatQuestReward(reward: QuestReward, resourceName: ResourceName = (id) => id): string {
   if (reward.kind === 'resource') return `+${formatNumber(reward.amount)} ${resourceName(reward.resource)}`;
   if (reward.kind === 'production') return `${reward.seconds} s of ${resourceName(reward.resource)} output`;
-  if (reward.kind === 'cores') return `+${reward.amount} bog core`;
+  if (reward.kind === 'cores') return `+${reward.amount} precedent`;
   if (reward.kind === 'permanent') return `Permanent: ${formatCharterEffect(reward.effect, resourceName)}`;
   if (reward.kind !== 'multiplier') return '';
   const duration = reward.durationSec
@@ -58,8 +58,8 @@ export function formatQuestReward(reward: QuestReward, resourceName: ResourceNam
 export function describeResearchEffect(effect: ResearchEffect, resourceName: ResourceName = (id) => id): string {
   switch (effect.kind) {
     case 'multiplier': return `${effect.target === 'all' ? 'All production' : effect.target === 'click' ? 'Click power' : resourceName(effect.target)} ×${formatMultiplier(effect.factor)}`;
-    case 'heat': return `Heat ×${formatMultiplier(effect.factor)}`;
-    case 'cooling': return `Cooling ×${formatMultiplier(effect.factor)}`;
+    case 'heat': return `Latency load ×${formatMultiplier(effect.factor)}`;
+    case 'cooling': return `Latency budget ×${formatMultiplier(effect.factor)}`;
     case 'clickMultiplier': return `Click power ×${formatMultiplier(effect.factor)}`;
     case 'offlineRate': return `Offline rate +${Math.round(effect.add * 100)}%`;
     case 'converterEfficiency': return `${resourceName(effect.line)} input use ×${formatMultiplier(effect.factor)}`;

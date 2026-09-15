@@ -18,10 +18,10 @@ export interface FieldworkDef {
 /** Fieldwork activities in progression order. */
 export const FIELDWORK: FieldworkDef[] = [
   { id: 'typing', name: 'Docket Typing', resource: 'evidence', unlock: 'evidence', cooldownMs: 30_000 },
-  { id: 'strata', name: 'Strata Cut', resource: 'peat', unlock: 'peat', cooldownMs: 20_000 },
-  { id: 'settle', name: 'Sludge Settling', resource: 'sludge', unlock: 'sludge', cooldownMs: 30_000 },
-  { id: 'still', name: 'Still Room', resource: 'refinedBroth', unlock: 'refinedBroth', cooldownMs: 45_000 },
-  { id: 'press', name: 'Briquette Press', resource: 'briquettes', unlock: 'briquettes', cooldownMs: 45_000 },
+  { id: 'strata', name: 'Discovery Cut', resource: 'peat', unlock: 'peat', cooldownMs: 20_000 },
+  { id: 'settle', name: 'Flow Settling', resource: 'sludge', unlock: 'sludge', cooldownMs: 30_000 },
+  { id: 'still', name: 'Mint Room', resource: 'refinedBroth', unlock: 'refinedBroth', cooldownMs: 45_000 },
+  { id: 'press', name: 'Exhibit Press', resource: 'briquettes', unlock: 'briquettes', cooldownMs: 45_000 },
   { id: 'constellation', name: 'Constellation Trace', resource: 'essence', unlock: 'essence', cooldownMs: 60_000 },
 ];
 

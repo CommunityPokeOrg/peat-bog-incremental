@@ -97,18 +97,18 @@ async function init(): Promise<void> {
     const gain = prestigeGain(state);
     if (!canPrestige(state)) return;
     ui.showModal({
-      title: 'Drain the bog?',
-      body: `Gain ${formatNumber(gain)} Bog Core${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production). The run resets — broth, compute, buildings, upgrades and research — but achievements and Bog Cores remain.`,
+      title: 'File Chapter 11?',
+      body: `Gain ${formatNumber(gain)} precedent${gain.eq(1) ? '' : 's'} (+${formatNumber(gain.mul(5))}% all production). The run resets — tokens, compute, desks, upgrades and research — but achievements and precedents remain.`,
       actions: [
         { label: 'Cancel', onClick: () => ui.closeModal() },
         {
-          label: `Drain for ${formatNumber(gain)} 💠`,
+          label: `Restructure for ${formatNumber(gain)} 💠`,
           danger: true,
           onClick: () => {
             prestige(state);
             ui.closeModal();
             ui.renderLists(state);
-            ui.toast(`The bog drains. +${formatNumber(gain)} Bog Cores.`);
+            ui.toast(`The firm restructures. +${formatNumber(gain)} precedents.`);
             checkAchievementsNow();
             void doSave();
           },
@@ -135,7 +135,7 @@ async function init(): Promise<void> {
     onHardReset: () => {
       ui.showModal({
         title: 'Hard reset?',
-        body: 'This wipes your entire save — broth, buildings, research, achievements, Bog Cores. There is no undo.',
+        body: 'This wipes your entire save — tokens, desks, research, achievements, precedents. There is no undo.',
         actions: [
           { label: 'Cancel', onClick: () => ui.closeModal() },
           {
@@ -144,11 +144,11 @@ async function init(): Promise<void> {
             onClick: () => {
               ui.showModal({
                 title: 'Really sure?',
-                body: 'Second confirmation: the bog will be drained forever.',
+                body: 'Second confirmation: the firm will be dissolved forever.',
                 actions: [
                   { label: 'Back', onClick: () => ui.closeModal() },
                   {
-                    label: 'Drain forever',
+                    label: 'Dissolve forever',
                     danger: true,
                     onClick: () => {
                       void clearState().catch(() => {});
@@ -160,7 +160,7 @@ async function init(): Promise<void> {
                       state = createInitialState();
                       ui.closeModal();
                       ui.renderLists(state);
-                      ui.toast('Fresh bog. Good luck.');
+                      ui.toast('Fresh ledger. Good luck.');
                     },
                   },
                 ],
@@ -299,15 +299,15 @@ async function init(): Promise<void> {
     doHarvest();
   });
 
-  if (corruptSave) ui.toast('Save was unreadable — started a fresh bog.');
+  if (corruptSave) ui.toast('Save was unreadable — started a fresh ledger.');
   const initialOffline = applyOfflineProgress(offlineSeconds);
   if (initialOffline) {
     const lowRateText = initialOffline.rate < 0.1
       ? ' Buy Night Watch levels or sign Charter terms to keep more of it.'
       : '';
     ui.showModal({
-      title: 'Welcome back to the bog',
-      body: `You were away ${formatDuration(initialOffline.seconds)}. Your bog kept simmering at ${formatNumber(initialOffline.rate * 100)}% of full production: ${offlineResourcesText(initialOffline)}.${offlineResearchText()}${lowRateText}`,
+      title: 'Welcome back to the desk',
+      body: `You were away ${formatDuration(initialOffline.seconds)}. Your desks kept billing at ${formatNumber(initialOffline.rate * 100)}% of full production: ${offlineResourcesText(initialOffline)}.${offlineResearchText()}${lowRateText}`,
       actions: [{ label: 'Back to work', onClick: () => ui.closeModal() }],
     });
   }

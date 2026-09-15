@@ -41,20 +41,20 @@ interface GameCard {
 
 const HOW_TO: Record<FieldworkId, string> = {
   typing: 'Type the words as they come. One typo ends the run; speed and streak multiply the evidence.',
-  strata: 'The blade drops one stratum per beat. Cut (Space) on each line; miss the beat and the face collapses.',
-  settle: 'Keep the valve inside the drifting band (slider, or ← →). Sludge settles while you hold it.',
-  still: 'Drips fall from the lyne arm. Tap (Space) when a drop meets the line. Three misses and the still goes cold.',
-  press: 'Pump the pedals alternately (A / L or ← →). Hold pressure in the green band; over-pump and the mould bursts.',
-  constellation: 'Watch the stars light, then trace them in order. Each round adds a star; one wrong star and the sky clouds.',
+  strata: 'The shredder drops one file per beat. Cut (Space) on each line; miss the beat and the stack collapses.',
+  settle: 'Keep the valve inside the drifting band (slider, or ← →). Flow settles while you hold it.',
+  still: 'Drips fall from the clearing arm. Tap (Space) when a drop meets the line. Three misses and the mint goes cold.',
+  press: 'Pump the pedals alternately (A / L or ← →). Hold pressure in the green band; over-pump and the binding bursts.',
+  constellation: 'Watch the signals light, then trace them in order. Each round adds a star; one wrong star and the feed clouds.',
 };
 
 const RESOURCE_LABEL: Record<FieldworkId, string> = {
-  typing: 'evidence',
-  strata: 'peat',
-  settle: 'sludge',
-  still: 'refined broth',
-  press: 'briquettes',
-  constellation: 'essence',
+  typing: 'case evidence',
+  strata: 'discovery dumps',
+  settle: 'dark-pool flow',
+  still: 'certified tokens',
+  press: 'exhibit bundles',
+  constellation: 'alpha essence',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -216,7 +216,7 @@ export function createFieldworkPanel(
         run = startStrata(now);
         cut.disabled = false;
         cut.focus();
-        live.textContent = 'Blade dropping — cut on each line.';
+        live.textContent = 'Files dropping — cut on each line.';
       },
       frame(now) {
         if (!run) return;
@@ -240,7 +240,7 @@ export function createFieldworkPanel(
       run = result.run;
       face.dataset.grade = result.grade;
       if (result.grade === 'miss') {
-        live.textContent = 'Off the beat — the face collapsed.';
+        live.textContent = 'Off the beat — the stack collapsed.';
         game.finish(now);
       }
     };
@@ -264,7 +264,7 @@ export function createFieldworkPanel(
     slider.max = '1000';
     slider.value = '500';
     slider.disabled = true;
-    slider.setAttribute('aria-label', 'Sludge valve');
+    slider.setAttribute('aria-label', 'Flow valve');
     const stop = el('button', 'fieldwork-btn fw-action', 'Stop & collect');
     stop.type = 'button';
     stop.disabled = true;
@@ -353,7 +353,7 @@ export function createFieldworkPanel(
         }
         meter.textContent = `${run.caught} caught · ${run.missed}/3 missed`;
         if (!run.alive) {
-          live.textContent = 'The still went cold.';
+          live.textContent = 'The mint went cold.';
           game.finish(now);
         }
       },

@@ -1,6 +1,6 @@
-# Peat Bog Incremental
+# Wall Street Legal (formerly Peat Bog Incremental)
 
-An incremental/clicker web game about the **Sector 4 Peat Bog Trial**. Harvest fp16 compute broth, cool the racks, and settle **McFly & Chronicler LLP v Burger King Nordic** before Magistrate Reino. Eventually *Drain the Bog* for permanent Bog Cores.
+An incremental/clicker web game about a **predatory ultra-low-latency litigation firm**. Bill legal-compute tokens, provision rack latency budgets, and settle **McFly & Chronicler LLP v Burger King Nordic** before Magistrate Reino. Eventually file *Chapter 11* to bank permanent precedents.
 
 ## Running
 
