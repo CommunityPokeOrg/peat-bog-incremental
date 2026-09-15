@@ -40,6 +40,29 @@ describe('tool-shed upgrades UI', () => {
     expect(root.querySelector('.silhouette[data-key^="soon-"]')).not.toBeNull();
   });
 
+  it('shows emoji cost parts marked by affordability', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.wallet.broth = D(100);
+    state.wallet.peat = D(100);
+    state.lifetime.broth = D(100);
+    state.lifetime.peat = D(100);
+    const ui = makeUi(root);
+
+    ui.renderLists(state);
+
+    const part = root.querySelector<HTMLElement>('[data-key="spade"] .item-cost .cost-part')!;
+    expect(part.dataset.resource).toBe('broth');
+    expect(part.dataset.affordable).toBe('true');
+    expect(part.textContent).toContain('🫧');
+    expect(part.querySelector('.cost-amount')?.textContent).toBe('50');
+    expect(part.querySelector('.sr-only')?.textContent).toContain('fp16 compute broth');
+
+    state.wallet.broth = D(0);
+    ui.renderLists(state);
+    expect(root.querySelector<HTMLElement>('[data-key="spade"] .cost-part')!.dataset.affordable).toBe('false');
+  });
+
   it('moves a bought tool into the owned drawer', () => {
     const root = document.createElement('div');
     const state = createInitialState();

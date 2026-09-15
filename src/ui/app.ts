@@ -39,7 +39,7 @@ import {
   toggleValve,
   upgradeVisible,
 } from '../game/engine';
-import { formatCost, formatDuration, formatNumber } from '../game/format';
+import { costParts, formatCost, formatDuration, formatNumber, type CostPart } from '../game/format';
 import { offlineRateBreakdown } from '../game/save';
 import { D, type Decimal } from '../game/decimal';
 import type { GameState } from '../game/state';
@@ -654,6 +654,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
 
   interface RowUpdate {
     cost?: string;
+    costParts?: CostPart[];
     owned?: string;
     action?: string;
     disabled?: boolean;
@@ -738,8 +739,15 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       desc.textContent = update.desc;
     }
     const cost = row.querySelector<HTMLElement>('.item-cost');
-    const costText = update.cost ?? '';
-    if (cost && cost.textContent !== costText) cost.textContent = costText;
+    if (cost) {
+      if (update.costParts) {
+        renderCostParts(cost, update.costParts);
+      } else {
+        const costText = update.cost ?? '';
+        if (cost.textContent !== costText) cost.textContent = costText;
+        delete cost.dataset.costSig;
+      }
+    }
     const owned = row.querySelector<HTMLElement>('.owned');
     const ownedText = update.owned ?? '';
     if (owned && owned.textContent !== ownedText) owned.textContent = ownedText;
@@ -753,6 +761,32 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       row.classList.add(update.status);
       row.dataset.status = update.status;
     }
+  }
+
+  function renderCostParts(el: HTMLElement, parts: CostPart[]): void {
+    const sig = parts.map((part) => `${part.resource}:${part.required}:${part.affordable}`).join('|');
+    if (el.dataset.costSig === sig) return;
+    el.dataset.costSig = sig;
+    el.replaceChildren(...parts.map((part) => {
+      const span = document.createElement('span');
+      span.className = 'cost-part';
+      span.dataset.resource = part.resource;
+      span.dataset.affordable = String(part.affordable);
+      span.title = part.affordable
+        ? `${part.required} ${part.name}`
+        : `${part.required} ${part.name} — not enough`;
+      const emoji = document.createElement('span');
+      emoji.setAttribute('aria-hidden', 'true');
+      emoji.textContent = part.emoji;
+      const amount = document.createElement('span');
+      amount.className = 'cost-amount';
+      amount.textContent = part.required;
+      const accessible = document.createElement('span');
+      accessible.className = 'sr-only';
+      accessible.textContent = ` ${part.name}${part.affordable ? '' : ' (insufficient)'}`;
+      span.append(emoji, amount, accessible);
+      return span;
+    }));
   }
 
   function reconcileRows(entries: RowEntry[]): void {
@@ -927,7 +961,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             }
             row.dataset.line = category;
             updateRow(row, {
-              cost: formatCost(cost),
+              costParts: costParts(cost, latest.wallet),
               owned: `×${owned}`,
               action: `Buy ×${qty}`,
               disabled: !canAfford(latest, cost),
@@ -1452,7 +1486,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const latest = currentState ?? state;
         const isOwned = latest.upgrades.includes(upgrade.id);
         updateRow(row, {
-          cost: upcoming ? '' : formatCost(upgrade.cost),
+          costParts: upcoming ? [] : costParts(upgrade.cost, latest.wallet),
           owned: isOwned ? '✓ owned' : '',
           action: upcoming ? '' : isOwned ? '' : 'Buy',
           disabled: upcoming ? undefined : isOwned || !canAfford(latest, upgrade.cost),
@@ -1496,7 +1530,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
         const charterText = breakdown.charter > 0 ? ` + Charter ${formatNumber(breakdown.charter * 100)}%` : '';
         const description = `While you are away the cutters keep ${formatNumber(breakdown.total * 100)}% of production going (base 1% + Night Watch ${formatNumber(breakdown.nightWatch * 100)}%${charterText}).${next}`;
         updateRow(row, {
-          cost: atMax ? '' : formatCost(nightWatchCost(level)),
+          costParts: atMax ? [] : costParts(nightWatchCost(level), latest.wallet),
           owned: `Lv ${level}/49`,
           action: atMax ? 'Maxed' : 'Buy',
           disabled: atMax || !canAfford(latest, nightWatchCost(level)),
@@ -1733,7 +1767,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
             <p class="charter-detail-desc"></p>
             <p class="charter-detail-effects"></p>
             <p class="research-requires"></p>
-            <p class="research-cost"></p>
+            <p class="research-cost">Cost: <span class="cost-list"></span></p>
             <p class="research-remaining"></p>
             <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span class="progress-fill"></span></span>
             <div class="charter-detail-foot"><span></span><button type="button" class="btn research-cancel"></button></div>`;
@@ -1772,7 +1806,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           row.querySelector('.research-requires')!.textContent = (research.requires ?? []).length > 0
             ? `Requires: ${(research.requires ?? []).map((id) => RESEARCH_BY_ID[id]?.name ?? id).join(', ')}`
             : 'Requires: none';
-          row.querySelector('.research-cost')!.textContent = `Cost: ${formatCost(research.cost)}`;
+          renderCostParts(
+            row.querySelector<HTMLElement>('.research-cost .cost-list')!,
+            costParts(research.cost, state.wallet),
+          );
           const progress = researchProgress(state, research.id);
           const fraction = progress?.fraction ?? 0;
           const bar = row.querySelector<HTMLElement>('.progress')!;
@@ -2235,7 +2272,10 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           row.querySelector('.charter-detail-effects')!.textContent = node.effects
             .map((effect) => formatCharterEffect(effect, resourceName))
             .join(' · ');
-          row.querySelector('.charter-detail-cost')!.textContent = `${node.cost} 💠`;
+          renderCostParts(
+            row.querySelector<HTMLElement>('.charter-detail-cost')!,
+            costParts({ bogCores: node.cost }, state.wallet, true),
+          );
           const sign = row.querySelector<HTMLButtonElement>('.charter-sign')!;
           sign.textContent = nodeState === 'signed' ? 'Signed ✓' : nodeState === 'locked' ? 'Locked' : 'Sign';
           sign.disabled = nodeState !== 'purchasable';
