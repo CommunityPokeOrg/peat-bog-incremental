@@ -793,6 +793,49 @@ button.item:disabled:hover {
 .item-cost {
   min-width: 12ch;
   color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: .6em;
+}
+
+.cost-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: .6em;
+}
+
+.cost-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .2em;
+  white-space: nowrap;
+}
+
+.cost-part[data-affordable="true"] .cost-amount {
+  color: var(--moss);
+}
+
+.cost-part[data-affordable="false"] {
+  color: var(--danger);
+}
+
+.cost-part[data-affordable="false"] .cost-amount {
+  text-decoration: underline dotted;
+  text-underline-offset: .2em;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .item-action {

@@ -1,4 +1,4 @@
-import { RESOURCES, type ResourceCost, type ResourceCostSpec } from './data';
+import { RESOURCES, type ResourceCost, type ResourceCostSpec, type ResourceId } from './data';
 import { D, Decimal, type Decimal as DecimalType } from './decimal';
 
 const SUFFIXES = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
@@ -27,6 +27,35 @@ export function formatCost(cost: ResourceCost | ResourceCostSpec): string {
     parts.push(`${formatNumber(cost[resource.id]!)} ${resource.name}`);
   }
   return parts.join(' · ');
+}
+
+export interface CostPart {
+  resource: ResourceId;
+  emoji: string;
+  name: string;
+  required: string;
+  affordable: boolean;
+}
+
+/** Per-resource cost segments for shop/upgrade rows, coloured by affordability. */
+export function costParts(
+  cost: Partial<Record<ResourceId, DecimalType | number>>,
+  wallet: Record<ResourceId, DecimalType>,
+  includeBogCores = false,
+): CostPart[] {
+  const parts: CostPart[] = [];
+  for (const resource of RESOURCES) {
+    const amount = cost[resource.id];
+    if (amount === undefined || (resource.id === 'bogCores' && !includeBogCores)) continue;
+    parts.push({
+      resource: resource.id,
+      emoji: resource.emoji,
+      name: resource.name,
+      required: formatNumber(amount),
+      affordable: wallet[resource.id].gte(D(amount)),
+    });
+  }
+  return parts;
 }
 
 export function formatDuration(seconds: number): string {
