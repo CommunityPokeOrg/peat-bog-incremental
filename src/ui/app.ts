@@ -825,6 +825,22 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
   }
 
   const productionCategories = [...new Set(BUILDINGS.map((def) => def.line))] as ProductionLine[];
+
+  const LINE_TAB_LABELS: Record<'all' | ProductionLine, string> = {
+    all: 'All',
+    broth: 'Legal Tokens',
+    peat: 'Discovery',
+    sphagnum: 'Filings',
+    methane: 'Risk / Exposure',
+    cooling: 'Latency',
+    compute: 'Compute',
+    evidence: 'Precedents',
+    sludge: 'Dark-Pool Flow',
+    briquettes: 'Exhibits',
+    refinedBroth: 'Certified',
+    sediment: 'Settlements',
+    essence: 'Alpha',
+  };
   function renderProductionFilters(
     state: GameState,
     rates = productionPerSecond(state),
@@ -863,7 +879,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       const filter = button.dataset.filter as typeof productionFilter;
       const visible = filter === 'all' || filter === 'broth' || visibleCategories.has(filter);
       button.hidden = !visible;
-      button.textContent = filter[0].toUpperCase() + filter.slice(1);
+      button.textContent = LINE_TAB_LABELS[filter] ?? filter;
       button.setAttribute('aria-selected', String(productionFilter === filter));
       button.tabIndex = productionFilter === filter ? 0 : -1;
     });
@@ -907,7 +923,7 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       if ((visible.length > 0 || nextLocked) && productionFilter === 'all') {
         entries.push({
           key: `heading-${category}`,
-          create: () => createStratum(category[0].toUpperCase() + category.slice(1), category, productionCategories.indexOf(category)),
+          create: () => createStratum(LINE_TAB_LABELS[category] ?? category, category, productionCategories.indexOf(category)),
           update: (row) => {
             row.dataset.line = category;
           },
@@ -919,8 +935,8 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           for (const [resource, amount] of Object.entries(def.produces ?? {})) {
             perUnit.push(`+${formatNumber(amount)} ${resourceName(resource)}/s`);
           }
-          if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} cooling`);
-          if (def.heat) perUnit.push(`${formatNumber(def.heat)} heat`);
+          if (def.cooling) perUnit.push(`+${formatNumber(def.cooling)} latency budget`);
+          if (def.heat) perUnit.push(`${formatNumber(def.heat)} latency load`);
           return `${def.description} ${perUnit.join(', ')}.`;
         };
         entries.push({

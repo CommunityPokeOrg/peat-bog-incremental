@@ -104,9 +104,16 @@ describe('UI overhaul', () => {
     const state = createInitialState();
 
     ui.renderLists(state);
+    const labels = [...root.querySelectorAll<HTMLButtonElement>('.filter-tab')]
+      .filter((tab) => !tab.hidden)
+      .map((tab) => tab.textContent);
+    expect(labels).toEqual(['All', 'Legal Tokens', 'Discovery', 'Filings', 'Risk / Exposure', 'Latency', 'Compute']);
+    expect(root.querySelector('[data-key="heading-broth"] .stratum-name')!.textContent).toBe('Legal Tokens');
+
     root.querySelector<HTMLButtonElement>('[data-filter="cooling"]')!.click();
     expect(root.querySelector('[data-key="chiller"]')).not.toBeNull();
     expect(root.querySelector('[data-key="harvester"]')).toBeNull();
+    expect(root.querySelector('[data-key="heading-broth"]')).toBeNull();
 
     root.querySelector<HTMLButtonElement>('[data-filter="all"]')!.click();
     expect(root.querySelector('[data-key="heading-broth"]')).not.toBeNull();
