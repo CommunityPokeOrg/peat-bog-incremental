@@ -63,6 +63,30 @@ describe('tool-shed upgrades UI', () => {
     expect(root.querySelector<HTMLElement>('[data-key="spade"] .cost-part')!.dataset.affordable).toBe('false');
   });
 
+  it('keeps a fixed row order when wallet amounts change', () => {
+    const root = document.createElement('div');
+    const state = createInitialState();
+    state.wallet.broth = D(100);
+    state.wallet.peat = D(100);
+    state.lifetime.broth = D(100);
+    state.lifetime.peat = D(100);
+    const ui = makeUi(root);
+
+    const keys = () =>
+      [...root.querySelectorAll<HTMLElement>('[data-key]')].map((el) => el.dataset.key);
+
+    ui.renderLists(state);
+    const poorOrder = keys();
+
+    state.wallet.broth = D(1e9);
+    ui.renderLists(state);
+    expect(keys()).toEqual(poorOrder);
+
+    state.wallet.broth = D(0);
+    ui.renderLists(state);
+    expect(keys()).toEqual(poorOrder);
+  });
+
   it('moves a bought tool into the owned drawer', () => {
     const root = document.createElement('div');
     const state = createInitialState();

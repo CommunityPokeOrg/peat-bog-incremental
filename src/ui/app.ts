@@ -1387,13 +1387,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     return heading;
   }
 
-  function requirementGap(state: GameState, upgrade: (typeof UPGRADES)[number]): number {
-    return (upgrade.requires ?? []).reduce(
-      (gap, requirement) =>
-        gap + Math.max(0, requirement.count - (state.buildings[requirement.buildingId] ?? 0)),
-      0,
-    );
-  }
 
   function requirementsText(state: GameState, upgrade: (typeof UPGRADES)[number]): string {
     return (upgrade.requires ?? [])
@@ -1545,9 +1538,9 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
     const owned = new Set(state.upgrades);
     const rates = productionPerSecond(state);
     const discovered = discoveredResources(state, rates);
+    // Fixed order: config order only. Cost/wallet state must never reorder rows.
     const available = UPGRADES
-      .filter((u) => !owned.has(u.id) && upgradeVisible(state, u, rates, discovered))
-      .sort((a, b) => (a.cost.broth ?? 0) - (b.cost.broth ?? 0) || (a.cost.compute ?? 0) - (b.cost.compute ?? 0));
+      .filter((u) => !owned.has(u.id) && upgradeVisible(state, u, rates, discovered));
     const upcoming = UPGRADES
       .filter((u) => {
         if (owned.has(u.id) || upgradeVisible(state, u, rates, discovered)) return false;
@@ -1555,14 +1548,6 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
           const building = BUILDING_BY_ID[buildingId];
           return building && buildingVisible(state, building, rates, discovered);
         });
-      })
-      .sort((a, b) => {
-        const aHasRequirements = Boolean(a.requires?.length);
-        const bHasRequirements = Boolean(b.requires?.length);
-        if (aHasRequirements !== bHasRequirements) return aHasRequirements ? -1 : 1;
-        if (aHasRequirements) return requirementGap(state, a) - requirementGap(state, b);
-        return (a.cost.broth ?? 0) - (b.cost.broth ?? 0) ||
-          (a.cost.compute ?? 0) - (b.cost.compute ?? 0);
       })
       .slice(0, 6);
     const entries: RowEntry[] = [createNightWatchEntry(state)];
@@ -1580,25 +1565,13 @@ export function createUi(root: HTMLElement, hooks: UiHooks): Ui {
       bucket.upcoming.push(upgrade);
       grouped.set(group, bucket);
     }
-    const availableOrder = new Map(available.map((upgrade, index) => [upgrade.id, index]));
-    const upcomingOrder = new Map(upcoming.map((upgrade, index) => [upgrade.id, index]));
-    const buildingOrder = new Map(BUILDINGS.map((building, index) => [building.id, index]));
-    const groups = [...grouped.keys()].sort((a, b) => {
-      const aBuilding = buildingOrder.get(a);
-      const bBuilding = buildingOrder.get(b);
-      if (aBuilding !== undefined || bBuilding !== undefined) {
-        if (aBuilding === undefined) return 1;
-        if (bBuilding === undefined) return -1;
-        return aBuilding - bBuilding;
-      }
-      const aIndex = grouped.get(a)?.available[0]
-        ? availableOrder.get(grouped.get(a)!.available[0].id) ?? Number.POSITIVE_INFINITY
-        : available.length + (upcomingOrder.get(grouped.get(a)!.upcoming[0].id) ?? Number.POSITIVE_INFINITY);
-      const bIndex = grouped.get(b)?.available[0]
-        ? availableOrder.get(grouped.get(b)!.available[0].id) ?? Number.POSITIVE_INFINITY
-        : available.length + (upcomingOrder.get(grouped.get(b)!.upcoming[0].id) ?? Number.POSITIVE_INFINITY);
-      return aIndex - bIndex;
+    const groupOrder = new Map<string, number>();
+    UPGRADES.forEach((upgrade, index) => {
+      const group = upgradeGroup(upgrade);
+      if (!groupOrder.has(group)) groupOrder.set(group, index);
     });
+    const groups = [...grouped.keys()].sort((a, b) =>
+      (groupOrder.get(a) ?? Number.POSITIVE_INFINITY) - (groupOrder.get(b) ?? Number.POSITIVE_INFINITY));
     for (const group of groups) {
       const bucket = grouped.get(group)!;
       entries.push({
