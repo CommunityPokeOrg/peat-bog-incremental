@@ -1,17 +1,20 @@
 import { FIELDWORK, fieldworkReady, fieldworkUnlocked, type FieldworkId } from '../game/fieldwork/shared';
-import { endTyping, startTyping, typeChar, typingMultiplier, typingWpm, type TypingRun } from '../game/fieldwork/typing';
-import { bladeDepth, cutStrata, endStrata, startStrata, type StrataRun } from '../game/fieldwork/strata';
+import { endTyping, expireTyping, startTyping, typeChar, typingMultiplier, typingWpm, wordClockMs, type TypingRun } from '../game/fieldwork/typing';
+import { advanceStrata, bladeDepth, cutStrata, endStrata, startStrata, type StrataRun } from '../game/fieldwork/strata';
 import { advanceSettle, endSettle, moveValve, startSettle, type SettleRun } from '../game/fieldwork/settle';
-import { advanceStill, endStill, startStill, tapStill, DROP_FALL_MS, type StillRun } from '../game/fieldwork/still';
-import { advancePress, endPress, pedal, startPress, type PressRun } from '../game/fieldwork/press';
+import { advanceStill, dropFallMs, endStill, setHeat, startStill, tapStill, type StillRun } from '../game/fieldwork/still';
+import { advancePress, endPress, pedal, quench, startPress, type PressRun } from '../game/fieldwork/press';
 import {
   CONSTELLATION_STARS,
   endConstellation,
+  expireConstellation,
   pickStar,
   revealDone,
+  revealMs,
   startConstellation,
   type ConstellationRun,
 } from '../game/fieldwork/constellation';
+import { RESOURCES } from '../game/data';
 import type { GameState } from '../game/state';
 import type { Decimal } from '../game/decimal';
 import { formatNumber } from '../game/format';
@@ -40,12 +43,12 @@ interface GameCard {
 }
 
 const HOW_TO: Record<FieldworkId, string> = {
-  typing: 'Type the words as they come. One typo ends the run; speed and streak multiply the evidence.',
-  strata: 'The shredder drops one file per beat. Cut (Space) on each line; miss the beat and the stack collapses.',
-  settle: 'Keep the valve inside the drifting band (slider, or ← →). Flow settles while you hold it.',
-  still: 'Drips fall from the clearing arm. Tap (Space) when a drop meets the line. Three misses and the mint goes cold.',
-  press: 'Pump the pedals alternately (A / L or ← →). Hold pressure in the green band; over-pump and the binding bursts.',
-  constellation: 'Watch the signals light, then trace them in order. Each round adds a star; one wrong star and the feed clouds.',
+  typing: 'Type the words as they come; every fifth word is gold and each word has its own shrinking clock.',
+  strata: 'Cut peat on the blade line, skip roots for combo, and never let a peat beat pass uncut.',
+  settle: 'Keep the valve inside the drifting band; it narrows over time and gusts jump it after a warning.',
+  still: 'Choose heat to speed the drops; sour drops punish a catch, while missed ordinary drops cool the still.',
+  press: 'Pump alternately to hold pressure; bricks complete every four seconds and Space quenches once per brick.',
+  constellation: 'Watch the stars light, then trace them before the round clock expires; each round reveals one more star.',
 };
 
 const RESOURCE_LABEL: Record<FieldworkId, string> = {
@@ -56,6 +59,19 @@ const RESOURCE_LABEL: Record<FieldworkId, string> = {
   press: 'exhibit bundles',
   constellation: 'alpha essence',
 };
+
+const GAME_GLYPH: Record<FieldworkId, string> = {
+  typing: '📜',
+  strata: '🪓',
+  settle: '🪣',
+  still: '⚗️',
+  press: '🧱',
+  constellation: '✨',
+};
+
+function resourceName(id: string): string {
+  return RESOURCES.find((resource) => resource.id === id)?.name ?? id;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -70,9 +86,26 @@ export function createFieldworkPanel(
   onAward: (amount: Decimal, resource: string) => void,
   rng: () => number = Math.random,
 ): FieldworkPanel {
-  const grid = el('div', 'fieldwork-grid');
-  container.replaceChildren(grid);
+  const root = el('div', 'fw-root');
+  const hub = el('section', 'fw-hub');
+  const hubTitle = el('h2', undefined, 'Fieldwork');
+  const sites = el('ul', 'fw-sites');
+  sites.setAttribute('role', 'list');
+  hub.append(hubTitle, sites);
+  const play = el('section', 'fw-play');
+  play.hidden = true;
+  const playBar = el('div', 'fw-play-bar');
+  const back = el('button', 'btn fw-back', '← Fieldwork');
+  back.type = 'button';
+  const playTitle = el('h2', 'fw-play-title');
+  playBar.append(back, playTitle);
+  const playCardHost = el('div', 'fw-card-host');
+  play.append(playBar, playCardHost);
+  root.append(hub, play);
+  container.replaceChildren(root);
   const cards: GameCard[] = [];
+  let selected: FieldworkId | null = null;
+  let returnFocus: HTMLButtonElement | null = null;
 
   function shell(id: FieldworkId): { card: HTMLElement; live: HTMLElement; start: HTMLButtonElement; stage: HTMLElement } {
     const def = FIELDWORK.find((game) => game.id === id)!;
@@ -92,6 +125,7 @@ export function createFieldworkPanel(
     card.appendChild(heading);
     card.appendChild(el('p', 'fw-howto', HOW_TO[id]));
     const stage = el('div', `fw-stage fw-stage-${id}`);
+    stage.appendChild(el('div', 'fw-clock'));
     card.appendChild(stage);
     const row = el('div', 'fw-controls');
     const start = el('button', 'btn fw-start', 'Start');
@@ -101,7 +135,8 @@ export function createFieldworkPanel(
     live.setAttribute('aria-live', 'polite');
     row.appendChild(live);
     card.appendChild(row);
-    grid.appendChild(card);
+    card.hidden = true;
+    playCardHost.appendChild(card);
     return { card, live, start, stage };
   }
 
@@ -110,6 +145,39 @@ export function createFieldworkPanel(
     game.live.textContent = `${summary} +${formatNumber(amount)} ${RESOURCE_LABEL[game.id]}.`;
     onAward(amount, FIELDWORK.find((def) => def.id === game.id)!.resource);
   }
+
+  function open(id: FieldworkId, source?: HTMLButtonElement): void {
+    selected = id;
+    returnFocus = source ?? sites.querySelector<HTMLButtonElement>(`.fw-site[data-game="${id}"]`);
+    const game = cards.find((candidate) => candidate.id === id);
+    if (!game) return;
+    hub.hidden = true;
+    play.hidden = false;
+    play.dataset.game = id;
+    playTitle.textContent = FIELDWORK.find((def) => def.id === id)?.name ?? id;
+    for (const card of cards) card.card.hidden = card.id !== id;
+    game.card.focus({ preventScroll: true });
+  }
+
+  function backToHub(): void {
+    if (selected) {
+      const game = cards.find((candidate) => candidate.id === selected);
+      if (game?.running()) game.finish(performance.now());
+    }
+    for (const game of cards) game.card.hidden = true;
+    selected = null;
+    play.hidden = true;
+    hub.hidden = false;
+    returnFocus?.focus({ preventScroll: true });
+  }
+
+  back.addEventListener('click', backToHub);
+  play.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      backToHub();
+    }
+  });
 
   // ---- Typing ------------------------------------------------------------
   {
@@ -133,6 +201,7 @@ export function createFieldworkPanel(
         const span = el('span', 'fw-word');
         if (index === 0) {
           span.classList.add('is-current');
+          if (run!.gold) span.classList.add('is-gold');
           const done = el('b', undefined, word.slice(0, run!.typed.length));
           span.append(done, word.slice(run!.typed.length));
         } else {
@@ -141,7 +210,9 @@ export function createFieldworkPanel(
         return span;
       }));
       const wpm = typingWpm(run, now);
-      meter.textContent = `${Math.round(wpm)} wpm · ${run.wordsDone} words · ×${typingMultiplier(wpm, run.wordsDone).toFixed(2)}`;
+      const clock = stage.querySelector<HTMLElement>('.fw-clock');
+      clock?.style.setProperty('--t', String(Math.max(0, run.deadline - now) / wordClockMs(run.wordsDone)));
+      meter.textContent = `${Math.round(wpm)} wpm · ${run.wordsDone} words · streak ${run.streak} · ×${typingMultiplier(wpm, run.streak).toFixed(2)}`;
     };
 
     const game: GameCard = {
@@ -155,7 +226,16 @@ export function createFieldworkPanel(
         live.textContent = 'Run live — type the highlighted word.';
         paint(now);
       },
-      frame(now) { paint(now); },
+      frame(now) {
+        if (!run) return;
+        run = expireTyping(run, now);
+        if (!run.alive) {
+          live.textContent = 'The word clock ran out.';
+          game.finish(now);
+          return;
+        }
+        paint(now);
+      },
       finish(now) {
         if (!run) return undefined;
         const ended = run;
@@ -199,7 +279,11 @@ export function createFieldworkPanel(
   {
     const { card, live, start, stage } = shell('strata');
     const face = el('div', 'fw-face');
-    for (let i = 0; i < 5; i += 1) face.appendChild(el('span', 'fw-stratum'));
+    const strataEls = Array.from({ length: 5 }, () => {
+      const stratum = el('span', 'fw-stratum');
+      face.appendChild(stratum);
+      return stratum;
+    });
     const blade = el('span', 'fw-blade');
     face.appendChild(blade);
     const cut = el('button', 'fieldwork-btn fw-action', 'Cut');
@@ -213,15 +297,27 @@ export function createFieldworkPanel(
       id: 'strata', card, live, start, stage,
       running: () => run !== null && run.alive,
       begin(now) {
-        run = startStrata(now);
+        run = startStrata(now, rng);
         cut.disabled = false;
         cut.focus();
         live.textContent = 'Files dropping — cut on each line.';
       },
       frame(now) {
         if (!run) return;
+        run = advanceStrata(run, now);
+        strataEls.forEach((stratum, index) => {
+          stratum.dataset.layer = run!.layers[index];
+        });
         face.style.setProperty('--depth', String(bladeDepth(run, now)));
         combo.textContent = `${run.cuts} cuts · combo ${run.combo}`;
+        stage.querySelector<HTMLElement>('.fw-clock')?.style.setProperty(
+          '--t',
+          String(1 - (Math.max(0, now - run.startedAt) % run.beatMs) / run.beatMs),
+        );
+        if (!run.alive) {
+          live.textContent = 'A peat beat passed — the face collapsed.';
+          game.finish(now);
+        }
       },
       finish() {
         if (!run) return undefined;
@@ -289,6 +385,11 @@ export function createFieldworkPanel(
         tank.style.setProperty('--band', String(run.band));
         tank.style.setProperty('--half', String(run.bandHalf));
         tank.style.setProperty('--valve', String(run.valve));
+        tank.dataset.gust = now >= run.gustAt - 700 && now < run.gustAt ? 'soon' : '';
+        stage.querySelector<HTMLElement>('.fw-clock')?.style.setProperty(
+          '--t',
+          String(Math.max(0, run.gustAt - now) / 9_000),
+        );
         meter.textContent = `${(run.inBandMs / 1000).toFixed(1)} s settled`;
         if (!run.alive) {
           live.textContent = 'Valve drifted — the tank churned.';
@@ -317,6 +418,22 @@ export function createFieldworkPanel(
   // ---- Still -------------------------------------------------------------
   {
     const { card, live, start, stage } = shell('still');
+    const heatPicker = el('fieldset', 'fw-heat-picker');
+    heatPicker.appendChild(el('legend', undefined, 'Heat'));
+    const heatInputs: HTMLInputElement[] = [];
+    for (const heat of [1, 2, 3] as const) {
+      const label = el('label', 'fw-heat-label');
+      const input = el('input', 'fw-heat') as HTMLInputElement;
+      input.type = 'radio';
+      input.name = 'still-heat';
+      input.value = String(heat);
+      input.disabled = true;
+      input.setAttribute('aria-label', `Heat ${heat}`);
+      if (heat === 1) input.checked = true;
+      heatInputs.push(input);
+      label.append(input, document.createTextNode(` ${heat}`));
+      heatPicker.appendChild(label);
+    }
     const column = el('div', 'fw-column');
     const line = el('span', 'fw-catchline');
     column.appendChild(line);
@@ -324,7 +441,7 @@ export function createFieldworkPanel(
     tap.type = 'button';
     tap.disabled = true;
     const meter = el('div', 'fw-meter');
-    stage.append(column, tap, meter);
+    stage.append(heatPicker, column, tap, meter);
     let run: StillRun | null = null;
     const dropEls = new Map<number, HTMLElement>();
 
@@ -333,6 +450,8 @@ export function createFieldworkPanel(
       running: () => run !== null && run.alive,
       begin(now) {
         run = startStill(now, rng);
+        heatInputs[0].checked = true;
+        heatInputs.forEach((input) => { input.disabled = false; });
         tap.disabled = false;
         tap.focus();
         live.textContent = 'Drips falling — catch them on the line.';
@@ -349,9 +468,14 @@ export function createFieldworkPanel(
             column.appendChild(node);
             dropEls.set(drop.spawnedAt, node);
           }
-          node.style.setProperty('--p', String(Math.min(1.15, (now - drop.spawnedAt) / DROP_FALL_MS)));
+          node.dataset.sour = String(drop.sour);
+          node.style.setProperty('--p', String(Math.min(1.15, (now - drop.spawnedAt) / dropFallMs(run))));
         }
         meter.textContent = `${run.caught} caught · ${run.missed}/3 missed`;
+        stage.querySelector<HTMLElement>('.fw-clock')?.style.setProperty(
+          '--t',
+          String(Math.max(0, dropFallMs(run) - ((now - (run.drops[0]?.spawnedAt ?? now)) % dropFallMs(run))) / dropFallMs(run)),
+        );
         if (!run.alive) {
           live.textContent = 'The mint went cold.';
           game.finish(now);
@@ -362,6 +486,7 @@ export function createFieldworkPanel(
         const ended = run;
         run = null;
         tap.disabled = true;
+        heatInputs.forEach((input) => { input.disabled = true; });
         for (const node of dropEls.values()) node.remove();
         dropEls.clear();
         const broth = mutate((state) => endStill(state, ended));
@@ -369,6 +494,9 @@ export function createFieldworkPanel(
         return broth;
       },
     };
+    heatInputs.forEach((input) => input.addEventListener('change', () => {
+      if (run?.alive && input.checked) setHeat(run, Number(input.value) as 1 | 2 | 3);
+    }));
     const doTap = (): void => {
       if (!run?.alive) return;
       const result = tapStill(run, performance.now());
@@ -400,8 +528,12 @@ export function createFieldworkPanel(
     left.disabled = true;
     right.disabled = true;
     pedals.append(left, right);
+    const quenchButton = el('button', 'fieldwork-btn fw-action fw-quench', 'Quench (Space)');
+    quenchButton.type = 'button';
+    quenchButton.disabled = true;
+    const bricks = el('div', 'fw-bricks');
     const meter = el('div', 'fw-meter');
-    stage.append(gauge, pedals, meter);
+    stage.append(gauge, pedals, quenchButton, bricks, meter);
     let run: PressRun | null = null;
 
     const game: GameCard = {
@@ -411,6 +543,7 @@ export function createFieldworkPanel(
         run = startPress(now);
         left.disabled = false;
         right.disabled = false;
+        quenchButton.disabled = false;
         left.focus();
         live.textContent = 'Pump alternately — hold the green band.';
       },
@@ -419,7 +552,9 @@ export function createFieldworkPanel(
         if (run.alive) run = advancePress(run, now);
         gauge.style.setProperty('--pressure', String(run.pressure));
         gauge.setAttribute('aria-valuenow', String(Math.round(run.pressure * 100)));
-        meter.textContent = `${(run.compressedMs / 1000).toFixed(1)} s compressed`;
+        bricks.replaceChildren(...Array.from({ length: run.bricks }, () => el('span', undefined, '🧱')));
+        meter.textContent = `${(run.compressedMs / 1000).toFixed(1)} s compressed · ${run.bricks} bricks`;
+        stage.querySelector<HTMLElement>('.fw-clock')?.style.setProperty('--t', String((run.compressedMs % 4_000) / 4_000));
         if (!run.alive) {
           live.textContent = 'Over-pumped — the mould burst.';
           game.finish(now);
@@ -431,6 +566,7 @@ export function createFieldworkPanel(
         run = null;
         left.disabled = true;
         right.disabled = true;
+        quenchButton.disabled = true;
         const briquettes = mutate((state) => endPress(state, ended));
         report(game, briquettes, `${(ended.compressedMs / 1000).toFixed(1)} s under pressure.`);
         return briquettes;
@@ -443,10 +579,14 @@ export function createFieldworkPanel(
     };
     left.addEventListener('click', () => doPedal('L'));
     right.addEventListener('click', () => doPedal('R'));
+    quenchButton.addEventListener('click', () => {
+      if (run?.alive) run = quench(run, performance.now());
+    });
     card.addEventListener('keydown', (event) => {
       const key = event.key.toLowerCase();
       if (key === 'a' || key === 'arrowleft') { event.preventDefault(); doPedal('L'); }
       if (key === 'l' || key === 'arrowright') { event.preventDefault(); doPedal('R'); }
+      if (key === ' ') { event.preventDefault(); if (run?.alive) run = quench(run, performance.now()); }
     });
     cards.push(game);
   }
@@ -484,12 +624,17 @@ export function createFieldworkPanel(
         stars.forEach((star) => star.classList.remove('is-lit'));
         if (index >= sequence.length) {
           window.clearInterval(revealTimer);
-          if (run) { run = revealDone(run); setStars(true); stars[0].focus(); live.textContent = 'Your turn — trace the stars.'; }
+          if (run) {
+            run = revealDone(run, performance.now());
+            setStars(true);
+            stars[0].focus();
+            live.textContent = 'Your turn — trace the stars.';
+          }
           return;
         }
         stars[sequence[index]].classList.add('is-lit');
         index += 1;
-      }, 550);
+      }, revealMs(run.round));
     };
 
     const game: GameCard = {
@@ -500,9 +645,18 @@ export function createFieldworkPanel(
         live.textContent = 'Watch the sky.';
         reveal();
       },
-      frame() {
+      frame(now) {
         if (!run) return;
+        run = expireConstellation(run, now);
         meter.textContent = `round ${run.round} · ${run.sequence.length} stars`;
+        stage.querySelector<HTMLElement>('.fw-clock')?.style.setProperty(
+          '--t',
+          run.showing ? '1' : String(Math.max(0, run.inputDeadline - now) / (1_500 * run.sequence.length)),
+        );
+        if (!run.alive) {
+          live.textContent = 'The input clock ran out — the sky clouded.';
+          game.finish(now);
+        }
       },
       finish() {
         if (!run) return undefined;
@@ -532,6 +686,29 @@ export function createFieldworkPanel(
     cards.push(game);
   }
 
+  const siteItems = new Map<FieldworkId, HTMLLIElement>();
+  const siteButtons = new Map<FieldworkId, HTMLButtonElement>();
+  for (const def of FIELDWORK) {
+    const site = el('li', 'fw-site') as HTMLLIElement;
+    const unlockedButton = el('button', 'fw-site') as HTMLButtonElement;
+    unlockedButton.type = 'button';
+    unlockedButton.dataset.game = def.id;
+    const description = el('span', 'fw-site-description');
+    description.id = `fw-site-${def.id}-description`;
+    const eyebrow = el('span', 'fw-site-eyebrow', RESOURCE_LABEL[def.id]);
+    const heading = el('strong', 'fw-site-name', def.name);
+    const glyph = el('span', 'fw-site-glyph', GAME_GLYPH[def.id]);
+    const best = el('span', 'fw-site-best');
+    const status = el('span', 'fw-status');
+    unlockedButton.setAttribute('aria-describedby', description.id);
+    unlockedButton.append(eyebrow, heading, glyph, best, status, description);
+    site.replaceChildren(unlockedButton);
+    sites.appendChild(site);
+    siteItems.set(def.id, site);
+    siteButtons.set(def.id, unlockedButton);
+    unlockedButton.addEventListener('click', () => open(def.id, unlockedButton));
+  }
+
   for (const game of cards) {
     game.start.addEventListener('click', () => {
       const now = performance.now();
@@ -545,9 +722,46 @@ export function createFieldworkPanel(
       const wall = Date.now();
       for (const game of cards) {
         const unlocked = fieldworkUnlocked(state, game.id);
-        game.card.hidden = !unlocked;
-        if (!unlocked) continue;
         const stats = state.fieldwork[game.id];
+        const siteItem = siteItems.get(game.id)!;
+        if (!unlocked) {
+          siteItem.classList.add('is-locked');
+          siteItem.setAttribute('aria-disabled', 'true');
+          siteItem.dataset.lockedGame = game.id;
+          const text = el('span', 'fw-site-description', `Unlocks with ${resourceName(FIELDWORK.find((def) => def.id === game.id)!.unlock)}`);
+          siteItem.replaceChildren(
+            el('span', 'fw-site-eyebrow', RESOURCE_LABEL[game.id]),
+            el('strong', 'fw-site-name', game.card.querySelector('h2')?.textContent ?? game.id),
+            el('span', 'fw-site-glyph', GAME_GLYPH[game.id]),
+            text,
+          );
+          game.card.hidden = true;
+          continue;
+        }
+        if (siteItem.classList.contains('is-locked')) {
+          siteItem.classList.remove('is-locked');
+          siteItem.removeAttribute('aria-disabled');
+          delete siteItem.dataset.lockedGame;
+          const unlockedButton = el('button', 'fw-site') as HTMLButtonElement;
+          unlockedButton.type = 'button';
+          unlockedButton.dataset.game = game.id;
+          const description = el('span', 'fw-site-description');
+          description.id = `fw-site-${game.id}-description`;
+          unlockedButton.setAttribute('aria-describedby', description.id);
+          unlockedButton.append(
+            el('span', 'fw-site-eyebrow', RESOURCE_LABEL[game.id]),
+            el('strong', 'fw-site-name', game.card.querySelector('h2')?.textContent ?? game.id),
+            el('span', 'fw-site-glyph', GAME_GLYPH[game.id]),
+            el('span', 'fw-site-best'),
+            el('span', 'fw-status'),
+            description,
+          );
+          unlockedButton.addEventListener('click', () => open(game.id, unlockedButton));
+          siteItem.replaceChildren(unlockedButton);
+          siteButtons.set(game.id, unlockedButton);
+        }
+        const currentSite = siteButtons.get(game.id);
+        if (!currentSite) continue;
         const best = game.card.querySelector<HTMLElement>('[data-role="best"]')!;
         best.textContent = stats.runs === 0 ? 'no runs yet' : `best ${Math.round(stats.best * 10) / 10}${game.id === 'typing' ? ' wpm' : ''} · ${stats.runs} runs`;
         const live = game.running();
@@ -555,11 +769,21 @@ export function createFieldworkPanel(
         game.start.textContent = live ? 'Stop' : ready ? 'Start' : `Ready in ${Math.ceil((stats.cooldownUntil - wall) / 1000)} s`;
         game.start.disabled = !live && !ready;
         game.card.classList.toggle('is-live', live);
-        if (live) game.frame(now);
+        const siteBest = currentSite.querySelector<HTMLElement>('.fw-site-best')!;
+        siteBest.textContent = best.textContent;
+        const siteStatus = currentSite.querySelector<HTMLElement>('.fw-status')!;
+        siteStatus.textContent = ready ? 'Ready' : `Ready in ${Math.max(1, Math.ceil((stats.cooldownUntil - wall) / 1000))} s`;
+        currentSite.parentElement?.classList.toggle('is-ready', ready);
+        if (selected === game.id && live) game.frame(now);
+      }
+      if (selected) {
+        const game = cards.find((candidate) => candidate.id === selected);
+        if (game) game.card.hidden = false;
       }
     },
     abandon() {
       for (const game of cards) if (game.running()) game.finish(performance.now());
+      selected = null;
     },
   };
 }

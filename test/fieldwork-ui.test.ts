@@ -31,15 +31,16 @@ describe('fieldwork tab', () => {
   it('hides games whose resource is undiscovered and shows the always-available ones', () => {
     const state = createInitialState();
     const { root } = mount(state);
-    expect(root.querySelector<HTMLElement>('[data-game="strata"]')!.hidden).toBe(false);
-    expect(root.querySelector<HTMLElement>('[data-game="constellation"]')!.hidden).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('.fw-site[data-game="strata"]')).not.toBeNull();
+    expect(root.querySelector<HTMLElement>('.fw-sites .is-locked')).not.toBeNull();
   });
 
   it('ends a typing run on the first typo and pays evidence for finished words', () => {
     const state = createInitialState();
     state.lifetime.evidence = D(10);
     const { root, ui } = mount(state);
-    const card = root.querySelector<HTMLElement>('[data-game="typing"]')!;
+    root.querySelector<HTMLButtonElement>('.fw-site[data-game="typing"]')!.click();
+    const card = root.querySelector<HTMLElement>('.fw-play [data-game="typing"]')!;
     card.querySelector<HTMLButtonElement>('.fw-start')!.click();
     const input = card.querySelector<HTMLInputElement>('.fw-input')!;
     const word = card.querySelector('.fw-word.is-current')!.textContent!;
@@ -63,10 +64,38 @@ describe('fieldwork tab', () => {
   it('cuts strata with the Space key', () => {
     const state = createInitialState();
     const { root } = mount(state);
-    const card = root.querySelector<HTMLElement>('[data-game="strata"]')!;
+    root.querySelector<HTMLButtonElement>('.fw-site[data-game="strata"]')!.click();
+    const card = root.querySelector<HTMLElement>('.fw-play [data-game="strata"]')!;
     card.querySelector<HTMLButtonElement>('.fw-start')!.click();
     const face = card.querySelector<HTMLElement>('.fw-face')!;
     face.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     expect(face.dataset.grade).toBeDefined();
+  });
+
+  it('opens one site at a time and returns to the hub', () => {
+    const state = createInitialState();
+    const { root } = mount(state);
+    const site = root.querySelector<HTMLButtonElement>('.fw-site[data-game="strata"]')!;
+    site.click();
+    expect(root.querySelector<HTMLElement>('.fw-play')!.hidden).toBe(false);
+    expect(root.querySelector<HTMLElement>('.fw-play')!.dataset.game).toBe('strata');
+    root.querySelector<HTMLButtonElement>('.fw-back')!.click();
+    expect(root.querySelector<HTMLElement>('.fw-hub')!.hidden).toBe(false);
+  });
+
+  it('cashes out a live run on back and Escape', () => {
+    const state = createInitialState();
+    state.lifetime.evidence = D(10);
+    const { root } = mount(state);
+    root.querySelector<HTMLButtonElement>('.fw-site[data-game="typing"]')!.click();
+    const card = root.querySelector<HTMLElement>('.fw-play [data-game="typing"]')!;
+    card.querySelector<HTMLButtonElement>('.fw-start')!.click();
+    const before = state.wallet.evidence;
+    root.querySelector<HTMLButtonElement>('.fw-back')!.click();
+    expect(state.wallet.evidence.gt(before)).toBe(true);
+    expect(root.querySelector<HTMLElement>('.fw-hub')!.hidden).toBe(false);
+    root.querySelector<HTMLButtonElement>('.fw-site[data-game="typing"]')!.click();
+    root.querySelector<HTMLElement>('.fw-play')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(root.querySelector<HTMLElement>('.fw-hub')!.hidden).toBe(false);
   });
 });

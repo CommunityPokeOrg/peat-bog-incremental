@@ -7,10 +7,15 @@ export interface ConstellationRun {
   input: number[];
   round: number;
   showing: boolean;
+  inputDeadline: number;
   alive: boolean;
 }
 
 export const CONSTELLATION_STARS = 7;
+
+export function revealMs(round: number): number {
+  return Math.max(220, 550 - 40 * (round - 1));
+}
 
 function star(rng: () => number): number {
   return Math.max(0, Math.min(CONSTELLATION_STARS - 1,
@@ -18,11 +23,15 @@ function star(rng: () => number): number {
 }
 
 export function startConstellation(rng = Math.random): ConstellationRun {
-  return { sequence: [star(rng), star(rng)], input: [], round: 1, showing: true, alive: true };
+  return { sequence: [star(rng), star(rng)], input: [], round: 1, showing: true, inputDeadline: 0, alive: true };
 }
 
-export function revealDone(run: ConstellationRun): ConstellationRun {
-  return { ...run, showing: false };
+export function revealDone(run: ConstellationRun, now = Date.now()): ConstellationRun {
+  return { ...run, showing: false, inputDeadline: now + 1_500 * run.sequence.length };
+}
+
+export function expireConstellation(run: ConstellationRun, now: number): ConstellationRun {
+  return run.alive && !run.showing && now > run.inputDeadline ? { ...run, alive: false } : run;
 }
 
 export function pickStar(run: ConstellationRun, value: number, rng = Math.random): ConstellationRun {
@@ -38,6 +47,7 @@ export function pickStar(run: ConstellationRun, value: number, rng = Math.random
     round: run.round + 1,
     sequence: [...run.sequence, star(rng)],
     showing: true,
+    inputDeadline: 0,
   };
 }
 

@@ -5,13 +5,19 @@ import { award, fieldworkDef } from './shared';
 export interface SettleRun {
   valve: number;
   band: number;
-  bandHalf: 0.12;
+  bandHalf: number;
   drift: number;
   startedAt: number;
   inBandMs: number;
   lastAt: number;
   alive: boolean;
   outOfBandMs?: number;
+  gustAt: number;
+  lastGustAt?: number;
+}
+
+function gustDelay(rng: () => number): number {
+  return 6_000 + Math.max(0, Math.min(1, rng())) * 3_000;
 }
 
 export function startSettle(now = Date.now(), rng = Math.random): SettleRun {
@@ -25,6 +31,7 @@ export function startSettle(now = Date.now(), rng = Math.random): SettleRun {
     lastAt: now,
     alive: true,
     outOfBandMs: 0,
+    gustAt: now + gustDelay(rng),
   };
 }
 
@@ -36,18 +43,31 @@ export function advanceSettle(run: SettleRun, now: number, rng = Math.random): S
   if (!run.alive) return run;
   const dtMs = Math.max(0, now - run.lastAt);
   const dt = dtMs / 1_000;
-  const band = Math.max(0, Math.min(1, run.band + run.drift * dt));
+  let band = Math.max(0, Math.min(1, run.band + run.drift * dt));
   const drift = Math.max(-0.08, Math.min(0.08, run.drift + (rng() * 2 - 1) * 0.01 * dt));
-  const inBand = Math.abs(run.valve - band) <= run.bandHalf;
+  const elapsed = Math.max(0, now - run.startedAt);
+  const bandHalf = Math.max(0.06, 0.12 - 0.06 * Math.min(1, elapsed / 30_000));
+  let gustAt = run.gustAt;
+  let lastGustAt = run.lastGustAt;
+  if (now >= gustAt) {
+    band = Math.max(0, Math.min(1, band + (rng() < 0.5 ? -0.25 : 0.25)));
+    lastGustAt = now;
+    gustAt = now + gustDelay(rng);
+  }
+  const inBand = Math.abs(run.valve - band) <= bandHalf;
   const outOfBandMs = inBand ? 0 : (run.outOfBandMs ?? 0) + dtMs;
+  const grace = lastGustAt !== undefined && now < lastGustAt + 1_000 ? 900 : 600;
   return {
     ...run,
     band,
+    bandHalf,
     drift,
     lastAt: now,
     inBandMs: run.inBandMs + (inBand ? dtMs : 0),
     outOfBandMs,
-    alive: outOfBandMs <= 600,
+    gustAt,
+    lastGustAt,
+    alive: outOfBandMs <= grace,
   };
 }
 

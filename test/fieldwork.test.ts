@@ -11,10 +11,12 @@ import {
   endTyping,
   startTyping,
   typeChar,
+  expireTyping,
   typingMultiplier,
   typingWpm,
 } from '../src/game/fieldwork/typing';
 import {
+  advanceStrata,
   bladeDepth,
   cutStrata,
   endStrata,
@@ -28,19 +30,25 @@ import {
 } from '../src/game/fieldwork/settle';
 import {
   advanceStill,
+  dropFallMs,
   endStill,
   startStill,
+  setHeat,
   tapStill,
 } from '../src/game/fieldwork/still';
 import {
+  advancePress,
   endPress,
   pedal,
+  quench,
   startPress,
 } from '../src/game/fieldwork/press';
 import {
   endConstellation,
+  expireConstellation,
   pickStar,
   revealDone,
+  revealMs,
   startConstellation,
 } from '../src/game/fieldwork/constellation';
 import { deserialize, serialize } from '../src/game/save';
@@ -67,12 +75,27 @@ describe('fieldwork engine', () => {
     for (const char of `${typed.queue[0]} `) typed = typeChar(typed, char, 1_500, () => 0);
     expect(typed.alive).toBe(true);
     expect(typed.wordsDone).toBe(1);
+    expect(typed.streak).toBe(1);
     expect(typed.queue).toHaveLength(8);
     expect(typed.correctChars).toBe(typed.queue[0] === 'the' ? 3 : 3);
     expect(typeChar(run, 'x', 1_001).alive).toBe(false);
     expect(typingWpm(typed, 60_000)).toBeGreaterThan(0);
     expect(typingWpm(typed, 1_500)).toBe(0);
     expect(typingMultiplier(1_000, 100)).toBe(60);
+  });
+
+  it('expires typing words and weights gold words twice', () => {
+    let run = startTyping(() => 0, 0);
+    expect(expireTyping(run, 8_001).alive).toBe(false);
+    for (let index = 0; index < 4; index += 1) {
+      const word = run.queue[0];
+      for (const char of `${word} `) run = typeChar(run, char, 500 + index * 500, () => 0);
+    }
+    expect(run.wordsDone).toBe(4);
+    expect(run.gold).toBe(true);
+    const word = run.queue[0];
+    for (const char of `${word} `) run = typeChar(run, char, 3_000, () => 0);
+    expect(run.streak).toBe(6);
   });
 
   it('awards Decimal typing evidence and records the best run', () => {
@@ -103,6 +126,18 @@ describe('fieldwork engine', () => {
     expect(reward.toNumber()).toBeGreaterThan(0);
   });
 
+  it('collapses when peat is skipped, skips roots into combo, and rejects root cuts', () => {
+    expect(advanceStrata(startStrata(0, () => 0), 881).alive).toBe(false);
+    let run = startStrata(0, () => 0);
+    run = cutStrata(run, 0).run;
+    const skipped = advanceStrata(run, 1_400);
+    expect(skipped.alive).toBe(true);
+    expect(skipped.combo).toBe(2);
+    const rootRun = startStrata(0, () => 0);
+    const cutRoot = cutStrata(rootRun, 700);
+    expect(cutRoot.run.alive).toBe(false);
+  });
+
   it('tracks settling time and ends after leaving the band', () => {
     const base = startSettle(0, () => 0.5);
     const inside = advanceSettle(base, 500, () => 0.5);
@@ -113,22 +148,49 @@ describe('fieldwork engine', () => {
     expect(endSettle(state, inside).gt(0)).toBe(true);
   });
 
+  it('shrinks the settle band and jumps it on a gust', () => {
+    const run = startSettle(0, () => 0.5);
+    const shrunk = advanceSettle(run, 15_000, () => 0.5);
+    expect(shrunk.bandHalf).toBeCloseTo(0.09);
+    const gust = advanceSettle(run, run.gustAt, () => 0.5);
+    expect(gust.band).toBeGreaterThan(run.band);
+    expect(gust.lastGustAt).toBe(run.gustAt);
+  });
+
   it('spawns, catches, and counts still-room misses', () => {
-    const started = startStill(0, () => 0);
-    const spawned = advanceStill(started, 600, () => 0);
+    let randomCalls = 0;
+    const started = startStill(0, () => (randomCalls++ === 0 ? 0 : 0.5));
+    const spawned = advanceStill(started, 600, () => 0.5);
     expect(spawned.drops).toHaveLength(1);
     const caught = tapStill(spawned, 1_800);
     expect(caught.hit).toBe(true);
     expect(caught.run.caught).toBe(1);
     const missed = advanceStill({
       ...started,
-      drops: [{ spawnedAt: 0 }, { spawnedAt: 0 }, { spawnedAt: 0 }],
+      drops: [{ spawnedAt: 0, sour: false }, { spawnedAt: 0, sour: false }, { spawnedAt: 0, sour: false }],
       nextSpawnAt: Number.MAX_SAFE_INTEGER,
     }, 1_321, () => 0);
     expect(missed.missed).toBe(3);
     expect(missed.alive).toBe(false);
     const state = createInitialState();
     expect(endStill(state, caught.run).gt(0)).toBe(true);
+  });
+
+  it('treats sour catches as misses but lets sour drops pass harmlessly', () => {
+    const base = startStill(0, () => 0.5);
+    const sour = { ...base, drops: [{ spawnedAt: 0, sour: true }] };
+    const caught = tapStill(sour, 1_200);
+    expect(caught.hit).toBe(false);
+    expect(caught.run.missed).toBe(1);
+    const passed = advanceStill(sour, 1_321, () => 0.5);
+    expect(passed.missed).toBe(0);
+  });
+
+  it('speeds still drops at heat three', () => {
+    const run = startStill(0, () => 0.5);
+    expect(dropFallMs(run)).toBe(1_200);
+    setHeat(run, 3);
+    expect(dropFallMs(run)).toBe(800);
   });
 
   it('raises and decays press pressure, with slips and bursts', () => {
@@ -144,6 +206,15 @@ describe('fieldwork engine', () => {
     expect(endPress(state, slipped).gte(0)).toBe(true);
   });
 
+  it('completes press bricks at four seconds and limits quench uses', () => {
+    const base = { ...startPress(0), pressure: 0.7 };
+    const compressed = advancePress(base, 4_000);
+    expect(compressed.bricks).toBe(1);
+    const quenched = quench(compressed, 4_000);
+    expect(quenched.quenches).toBe(1);
+    expect(quench(quenched, 4_000).quenches).toBe(1);
+  });
+
   it('advances constellation rounds and kills wrong picks', () => {
     const initial = startConstellation(() => 0);
     expect(initial.sequence).toHaveLength(2);
@@ -155,6 +226,12 @@ describe('fieldwork engine', () => {
     expect(pickStar(revealDone(next), 1, () => 0).alive).toBe(false);
     const state = createInitialState();
     expect(endConstellation(state, next).gt(0)).toBe(true);
+  });
+
+  it('expires the constellation input clock', () => {
+    const ready = revealDone(startConstellation(() => 0), 0);
+    expect(revealMs(1)).toBe(550);
+    expect(expireConstellation(ready, 3_001).alive).toBe(false);
   });
 
   it('awards bounded Decimal values from the shared helper at huge rates', () => {

@@ -3086,3 +3086,306 @@ button.item:not(:disabled) .item-action {
     animation: none;
   }
 }
+
+/* ---- Fieldwork hub and play view --------------------------------------- */
+
+.fw-root {
+  min-width: 0;
+}
+
+.fw-hub h2,
+.fw-play-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.fw-sites {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-sites > .fw-site {
+  min-width: 0;
+}
+
+.fw-sites > .fw-site > .fw-site {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "glyph eyebrow status"
+    "glyph name status"
+    "glyph best best";
+  align-items: center;
+  width: 100%;
+  min-height: 112px;
+  gap: var(--sp-1) var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--bog-1) 82%, var(--scene-accent, var(--peat)));
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-sites > .fw-site > .fw-site:hover {
+  border-color: var(--scene-accent, var(--coolant));
+}
+
+.fw-sites > .fw-site > .fw-site:active {
+  transform: translateY(1px);
+}
+
+.fw-sites > .fw-site.is-locked {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "glyph eyebrow"
+    "glyph name"
+    "glyph desc";
+  align-items: center;
+  min-height: 112px;
+  gap: var(--sp-1) var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--bog-0) 88%, #000);
+  color: var(--ink-faint);
+}
+
+.fw-site-glyph {
+  grid-area: glyph;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.fw-site-eyebrow {
+  grid-area: eyebrow;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.fw-site-name {
+  grid-area: name;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+}
+
+.fw-site-best {
+  grid-area: best;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+}
+
+.fw-status {
+  grid-area: status;
+  align-self: start;
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+  white-space: nowrap;
+}
+
+.fw-site.is-ready > .fw-site {
+  border-color: var(--scene-accent, var(--coolant));
+  animation: fw-ready-breathe 2.4s var(--t-ease) infinite;
+}
+
+.fw-site-description {
+  grid-area: desc;
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-body);
+}
+
+.fw-sites > .fw-site > .fw-site .fw-site-description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.fw-play-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.fw-back {
+  min-height: 44px;
+}
+
+.fw-card-host {
+  min-width: 0;
+}
+
+.fw-card-host .fw-card {
+  min-width: 0;
+}
+
+.fw-stage {
+  min-width: 0;
+}
+
+.fw-clock {
+  --t: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bog-2);
+}
+
+.fw-clock::after {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--scene-accent, var(--coolant));
+  content: "";
+  transform: scaleX(var(--t));
+  transform-origin: left center;
+  transition: transform var(--t-duration-sm) linear;
+}
+
+.fw-stage-typing {
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--parchment, #d4b889) 40%, var(--bog-0)) 0 1px, transparent 1px 1.6rem);
+}
+
+.fw-stage-strata {
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: linear-gradient(#5a402c 0 20%, #765137 20% 40%, #3e542f 40% 60%, #47392d 60% 80%, #273241 80%);
+}
+
+.fw-stage-settle {
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: linear-gradient(#102b38, #07151f);
+}
+
+.fw-stage-still {
+  padding: var(--sp-3);
+  border: 1px solid #a26b39;
+  border-radius: var(--r-sm);
+  background: linear-gradient(145deg, rgba(177, 111, 50, .2), rgba(82, 126, 136, .16));
+}
+
+.fw-stage-press {
+  padding: var(--sp-3);
+  border: 1px solid #737b80;
+  border-radius: var(--r-sm);
+  background: linear-gradient(145deg, #30363a, #151a1d);
+}
+
+.fw-stage-constellation {
+  padding: var(--sp-3);
+  border: 1px solid #4c527a;
+  border-radius: var(--r-sm);
+  background: radial-gradient(circle at 50% 35%, #1e2c50, #090d1a);
+}
+
+.fw-word.is-gold {
+  color: #ffd36a;
+  text-shadow: 0 0 8px rgba(255, 211, 106, .45);
+}
+
+.fw-stratum[data-layer="root"] {
+  background: repeating-linear-gradient(45deg, #4c332b 0 8px, #2d2020 8px 12px);
+}
+
+.fw-tank[data-gust="soon"] {
+  animation: fw-gust-flash .3s var(--t-ease);
+}
+
+.fw-column .fw-drop[data-sour="true"] {
+  background: var(--danger);
+}
+
+.fw-heat-picker {
+  display: flex;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-heat-picker legend {
+  float: left;
+  margin-right: var(--sp-2);
+  color: var(--ink-dim);
+  font: var(--fs-xs) var(--font-mono);
+}
+
+.fw-heat-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  gap: var(--sp-1);
+  color: var(--ink);
+  font: var(--fs-sm) var(--font-mono);
+}
+
+.fw-heat {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--danger);
+}
+
+.fw-bricks {
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 1.5rem;
+  gap: 2px;
+  font-size: 1.15rem;
+}
+
+@keyframes fw-ready-breathe {
+  0%, 100% { opacity: .88; }
+  50% { opacity: 1; }
+}
+
+@keyframes fw-gust-flash {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.01); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 600px) {
+  .fw-sites {
+    grid-template-columns: 1fr;
+  }
+
+  .fw-play-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-site.is-ready > .fw-site,
+  .fw-tank[data-gust="soon"] {
+    animation: none;
+  }
+
+  .fw-clock::after {
+    transition: none;
+  }
+}
